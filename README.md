@@ -79,8 +79,11 @@ An action is accepted only if it matches one of `state.validActions` field for f
 The `state` event payload includes `players[]`, each with `library`, `hand`, `graveyard`,
 `landsPlayedThisTurn` and `hasLost`. It also includes `battlefield` (permanents carry
 `controllerId` and `tapped`), `pendingDecision`, `status` (`notStarted` / `inProgress` /
-`gameOver`), `winnerId`, and the turn and priority fields. Hidden information isn't hidden yet:
-the debugger shows everything.
+`gameOver`), `winnerId`, and the turn and priority fields.
+
+The state is deliberately not filtered per player: libraries (in order) and every hand are
+included. The game is single-player and runs entirely in the browser, so there is no one to hide
+information from, and the UI decides what to show.
 
 ### Events
 

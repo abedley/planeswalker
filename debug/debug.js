@@ -1,6 +1,6 @@
 import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
-  LAND_PLAYS_PER_TURN,
+  LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -28,6 +28,7 @@ const ui = {
   showState: $('show-state'),
   clearLog: $('clear-log'),
   stateJson: $('state-json'),
+  stack: $('stack'),
 };
 
 const CONTROLLER_KINDS = {
@@ -97,6 +98,7 @@ function render(state) {
   latestState = state;
   renderStatus(state);
   renderTracker(state);
+  renderStack(state);
   renderPlayers(state);
   ui.stateJson.textContent = JSON.stringify(state, null, 2);
 }
@@ -182,7 +184,7 @@ function renderPlayers(state) {
     const general = actions.filter((a) => !a.cardId).map((a) => actionButton(a, actionLabel(a)));
     const cardActions = (card) => actions
       .filter((a) => a.cardId === card.id)
-      .map((a) => actionButton(a, actionLabel(a)));
+      .map((a) => actionButton(a, actionLabel(a, card)));
 
     let prompt = null;
     if (state.pendingDecision?.playerId === player.id) {
@@ -210,6 +212,7 @@ function renderPlayers(state) {
         zoneCount('Hand', player.hand.length),
         zoneCount('Graveyard', player.graveyard.length),
         zoneCount('Lands played', `${player.landsPlayedThisTurn}/${LAND_PLAYS_PER_TURN}`),
+        zoneCount('Mana pool', manaPoolTotal(player.manaPool) ? formatMana(player.manaPool) : 'empty'),
       ]),
       el('div', { className: 'actions' }, [
         ...general,
@@ -218,7 +221,7 @@ function renderPlayers(state) {
       el('h3', { textContent: `Hand (${player.hand.length})` }),
       cardRow(player.hand, cardActions, 'Empty'),
       el('h3', { textContent: `Battlefield (${permanents.length})` }),
-      cardRow(permanents, () => [], 'No permanents'),
+      cardRow(permanents, cardActions, 'No permanents'),
     ]);
   }));
 }
@@ -242,10 +245,28 @@ function badge(text, kind) {
   return el('span', { className: `badge ${kind}`, textContent: text });
 }
 
-function actionLabel(action) {
+function renderStack(state) {
+  if (state.stack.length === 0) {
+    ui.stack.replaceChildren(el('p', { className: 'muted', textContent: 'The stack is empty.' }));
+    return;
+  }
+  // Last element is the top of the stack; show it first.
+  ui.stack.replaceChildren(el('ol', { className: 'stack-list' }, [...state.stack].reverse().map((object, i) => (
+    el('li', { className: 'stack-object' }, [
+      el('span', { className: 'badge priority', textContent: i === 0 ? 'Top' : `#${state.stack.length - i}` }),
+      el('strong', { textContent: object.sourceName }),
+      el('span', { textContent: object.text }),
+      el('span', { className: 'muted', textContent: `${playerName(object.controllerId)} · ${object.id}` }),
+    ])
+  ))));
+}
+
+function actionLabel(action, card) {
   switch (action.type) {
     case ACTION.PASS_PRIORITY: return 'Pass priority';
     case ACTION.PLAY_LAND: return 'Play';
+    case ACTION.ACTIVATE_ABILITY:
+      return card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId;
     case ACTION.DISCARD: return 'Discard';
     default: return action.type;
   }
@@ -287,12 +308,20 @@ function summarize(name, p) {
     case 'priorityGranted': return `→ ${who(p.playerId)}`;
     case 'priorityPassed': return `${who(p.playerId)} passed`;
     case 'landPlayed': return `${who(p.playerId)} played ${p.card.name} (${p.card.id})`;
+    case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;
+    case 'manaAdded': return `${who(p.playerId)} added ${formatMana(p.mana)} (pool ${formatMana(p.manaPool)})`;
+    case 'manaPoolsEmptied': return p.pools.map((x) => `${who(x.playerId)} lost ${formatMana(x.lost)}`).join(', ');
+    case 'stackObjectResolving': return `${p.stackObject.sourceName}: ${p.stackObject.text}`;
+    case 'stackObjectResolved': return p.stackObjectId;
     case 'decisionRequired': return `${who(p.playerId)} must discard ${p.count}`;
     case 'cardDiscarded': return `${who(p.playerId)} discarded ${p.cardId}`;
     case 'permanentsUntapped': return `${who(p.playerId)} untapped ${p.cardIds.length}`;
     case 'playerLost': return `${who(p.playerId)}: ${p.reason}`;
     case 'gameEnded': return p.winnerId ? `${who(p.winnerId)} won` : 'draw';
-    case 'actionAccepted': return `${p.action.type}${p.action.cardId ? ` ${p.action.cardId}` : ''} by ${who(p.action.playerId)}`;
+    case 'actionAccepted': {
+      const { type, cardId, abilityId, playerId } = p.action;
+      return `${type}${cardId ? ` ${cardId}` : ''}${abilityId ? `:${abilityId}` : ''} by ${who(playerId)}`;
+    }
     case 'actionRejected': return p.reason;
     case 'state': return `v${p.version} · priority: ${who(p.priorityPlayerId)} · ${p.validActions.length} valid action(s)`;
     default: return '';

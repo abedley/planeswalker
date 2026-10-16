@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  Game, GAME_STATUS, ACTION, PHASE, STEP, passPriority, playLand, discard, BasicAIController,
+  Game, GAME_STATUS, ACTION, PHASE, STEP, EFFECT, CARD_TYPE,
+  passPriority, playLand, activateAbility, discard, BasicAIController,
 } from '../src/index.js';
 
 const players = [{ id: 'p1', name: 'Alice' }, { id: 'p2', name: 'Bob' }];
@@ -233,7 +234,7 @@ test('only one land may be played per turn', () => {
   passRound(game);
   const [first, second] = player(game, 'p1').hand;
   game.dispatch(playLand('p1', first.id));
-  assert.deepEqual(game.getState().validActions, [{ type: ACTION.PASS_PRIORITY, playerId: 'p1' }]);
+  assert.deepEqual(game.getState().validActions.filter((a) => a.type === ACTION.PLAY_LAND), []);
   const rejected = game.dispatch(playLand('p1', second.id));
   assert.equal(rejected.ok, false);
   assert.match(rejected.reason, /not a valid action/);
@@ -424,4 +425,206 @@ test('two AIs play a whole game until a player runs out of cards', () => {
   const lands = (id) => state.battlefield.filter((p) => p.controllerId === id).length;
   assert.equal(lands('p1'), 4); // turns 1, 3, 5, 7
   assert.equal(lands('p2'), 3); // turns 2, 4, 6
+});
+
+// -----------------------------------------------------------------------------
+// Activated abilities, the stack and mana
+
+const tapForest = (game, playerId) => {
+  const forest = game.getState().battlefield
+    .find((p) => p.controllerId === playerId && p.cardId === 'forest' && !p.tapped);
+  return game.dispatch(activateAbility(playerId, forest.id, 'tapForG'));
+};
+
+/** Starts a game and plays a Forest for p1 in their first main phase. */
+function startWithForest(options) {
+  const setup = startGame(options);
+  passRound(setup.game);
+  setup.game.dispatch(playLand('p1', player(setup.game, 'p1').hand[0].id));
+  return setup;
+}
+
+test('a Forest on the battlefield offers its mana ability', () => {
+  const { game } = startWithForest();
+  const forest = game.getState().battlefield[0];
+  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.' }]);
+  assert.deepEqual(
+    game.getState().validActions.filter((a) => a.type === ACTION.ACTIVATE_ABILITY),
+    [{ type: ACTION.ACTIVATE_ABILITY, playerId: 'p1', cardId: forest.id, abilityId: 'tapForG' }],
+  );
+  // Cards in hand have no activatable abilities.
+  assert.equal(game.dispatch(activateAbility('p1', player(game, 'p1').hand[0].id, 'tapForG')).ok, false);
+});
+
+test('tapping a Forest adds {G} immediately without using the stack', () => {
+  const { game, events } = startWithForest();
+  game.dispatch(passPriority('p1'));
+  game.dispatch(passPriority('p2'));
+  assert.equal(game.getState().step, STEP.BEGINNING_OF_COMBAT);
+
+  assert.deepEqual(tapForest(game, 'p1'), { ok: true });
+  const state = game.getState();
+  assert.equal(state.battlefield[0].tapped, true);
+  assert.deepEqual(player(game, 'p1').manaPool, { W: 0, U: 0, B: 0, R: 0, G: 1, C: 0 });
+  assert.deepEqual(state.stack, []);
+  // The player keeps priority, and the step continues.
+  assert.equal(state.priorityPlayerId, 'p1');
+  assert.equal(state.step, STEP.BEGINNING_OF_COMBAT);
+  const activated = events.findLast((e) => e.name === 'abilityActivated').payload;
+  assert.equal(activated.usesStack, false);
+  assert.deepEqual(activated.costPaid, { tap: true });
+  assert.ok(events.some((e) => e.name === 'manaAdded'));
+});
+
+test('a tapped Forest cannot be activated again until it untaps', () => {
+  const { game } = startWithForest();
+  const forestId = game.getState().battlefield[0].id;
+  tapForest(game, 'p1');
+  assert.equal(game.dispatch(activateAbility('p1', forestId, 'tapForG')).ok, false);
+  assert.ok(!game.getState().validActions.some((a) => a.type === ACTION.ACTIVATE_ABILITY));
+
+  // p2's untap step doesn't untap p1's Forest; p1's does.
+  advanceTo(game, { turn: 2, phase: PHASE.BEGINNING });
+  assert.equal(game.getState().battlefield[0].tapped, true);
+  advanceTo(game, { turn: 3, phase: PHASE.BEGINNING });
+  assert.equal(game.getState().battlefield[0].tapped, false);
+  assert.deepEqual(tapForest(game, 'p1'), { ok: true });
+});
+
+test('only the controller can activate a permanent\'s abilities, and only with priority', () => {
+  const { game } = startWithForest();
+  const forestId = game.getState().battlefield[0].id;
+  assert.equal(game.dispatch(activateAbility('p2', forestId, 'tapForG')).ok, false);
+  game.dispatch(passPriority('p1'));
+  assert.equal(game.dispatch(activateAbility('p1', forestId, 'tapForG')).ok, false);
+  assert.equal(game.dispatch(activateAbility('p1', forestId, 'madeUp')).ok, false);
+});
+
+test('mana pools empty as each step and phase ends', () => {
+  const { game, events } = startWithForest();
+  tapForest(game, 'p1');
+  assert.equal(player(game, 'p1').manaPool.G, 1);
+  // Mana stays while the phase continues, including after passing.
+  game.dispatch(passPriority('p1'));
+  assert.equal(player(game, 'p1').manaPool.G, 1);
+  game.dispatch(passPriority('p2'));
+
+  assert.equal(game.getState().phase, PHASE.COMBAT);
+  assert.equal(player(game, 'p1').manaPool.G, 0);
+  const emptied = events.findLast((e) => e.name === 'manaPoolsEmptied').payload;
+  assert.deepEqual(emptied.pools, [{ playerId: 'p1', lost: { W: 0, U: 0, B: 0, R: 0, G: 1, C: 0 } }]);
+  // The pool emptied before the precombat main phase ended.
+  const index = (name) => events.findLastIndex((e) => e.name === name);
+  assert.ok(index('manaPoolsEmptied') < index('phaseEnded'));
+});
+
+test('activating a mana ability resets the run of passes', () => {
+  const { game } = startWithForest();
+  game.dispatch(passPriority('p1'));
+  game.dispatch(passPriority('p2'));
+  // Beginning of combat: p1 has priority again.
+  game.dispatch(passPriority('p1'));
+  assert.deepEqual(game.getState().playersPassed, ['p1']);
+  game.dispatch(passPriority('p2'));
+  assert.equal(game.getState().step, STEP.DECLARE_ATTACKERS);
+  tapForest(game, 'p1');
+  assert.deepEqual(game.getState().playersPassed, []);
+});
+
+// A test-only card whose ability uses the stack: "{T}, {G}: Draw a card."
+const LIBRARY_GROVE = {
+  id: 'libraryGrove',
+  name: 'Library Grove',
+  types: [CARD_TYPE.LAND],
+  abilities: [{
+    id: 'draw',
+    text: '{T}, {G}: Draw a card.',
+    cost: { tap: true, mana: { G: 1 } },
+    effect: { type: EFFECT.DRAW_CARDS, count: 1 },
+  }],
+};
+
+function startWithGrove() {
+  const deck = [...Array(8).fill('forest'), 'libraryGrove', 'libraryGrove'];
+  const setup = startGame({
+    cards: { libraryGrove: LIBRARY_GROVE },
+    decks: { p1: deck },
+    seed: 3,
+  });
+  const { game } = setup;
+  // Put a Forest and a Grove onto p1's battlefield over turns 1 and 3.
+  const find = (cardId) => player(game, 'p1').hand.find((c) => c.cardId === cardId);
+  passRound(game);
+  game.dispatch(playLand('p1', find('libraryGrove').id));
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  game.dispatch(playLand('p1', find('forest').id));
+  return setup;
+}
+
+test('a non-mana ability needs its mana cost paid', () => {
+  const { game } = startWithGrove();
+  const grove = game.getState().battlefield.find((p) => p.cardId === 'libraryGrove');
+  const activations = () => game.getState().validActions.filter((a) => a.type === ACTION.ACTIVATE_ABILITY);
+  // No {G} in the pool yet: only the Forest's ability is available.
+  assert.deepEqual(activations().map((a) => a.abilityId), ['tapForG']);
+  assert.equal(game.dispatch(activateAbility('p1', grove.id, 'draw')).ok, false);
+
+  tapForest(game, 'p1');
+  assert.deepEqual(activations().map((a) => a.cardId), [grove.id]);
+});
+
+test('a non-mana ability goes on the stack and resolves when all players pass', () => {
+  const { game, events } = startWithGrove();
+  const grove = game.getState().battlefield.find((p) => p.cardId === 'libraryGrove');
+  const handBefore = player(game, 'p1').hand.length;
+  tapForest(game, 'p1');
+  assert.deepEqual(game.dispatch(activateAbility('p1', grove.id, 'draw')), { ok: true });
+
+  let state = game.getState();
+  assert.equal(player(game, 'p1').manaPool.G, 0); // {G} paid
+  assert.equal(state.battlefield.find((p) => p.id === grove.id).tapped, true);
+  assert.equal(state.stack.length, 1);
+  assert.deepEqual(
+    { ...state.stack[0], id: undefined },
+    {
+      id: undefined, kind: 'activatedAbility', controllerId: 'p1', sourceId: grove.id,
+      sourceName: 'Library Grove', abilityId: 'draw', text: '{T}, {G}: Draw a card.',
+      effect: { type: EFFECT.DRAW_CARDS, count: 1 },
+    },
+  );
+  assert.equal(state.priorityPlayerId, 'p1'); // 117.3c
+  assert.equal(player(game, 'p1').hand.length, handBefore); // not resolved yet
+  // Lands can't be played while the stack isn't empty.
+  assert.ok(!state.validActions.some((a) => a.type === ACTION.PLAY_LAND));
+
+  game.dispatch(passPriority('p1'));
+  game.dispatch(passPriority('p2'));
+  state = game.getState();
+  assert.deepEqual(state.stack, []);
+  assert.equal(player(game, 'p1').hand.length, handBefore + 1);
+  // Still the same main phase; the active player gets priority after resolution.
+  assert.equal(state.phase, PHASE.PRECOMBAT_MAIN);
+  assert.equal(state.priorityPlayerId, 'p1');
+  assert.deepEqual(state.playersPassed, []);
+  assert.deepEqual(
+    events.filter((e) => ['abilityActivated', 'stackObjectResolving', 'cardsDrawn', 'stackObjectResolved']
+      .includes(e.name)).slice(-4).map((e) => e.name),
+    ['abilityActivated', 'stackObjectResolving', 'cardsDrawn', 'stackObjectResolved'],
+  );
+
+  // With the stack empty, passing again ends the phase as usual.
+  passRound(game);
+  assert.equal(game.getState().phase, PHASE.COMBAT);
+});
+
+test('the opponent can respond while an ability is on the stack', () => {
+  const { game } = startWithGrove();
+  const grove = game.getState().battlefield.find((p) => p.cardId === 'libraryGrove');
+  tapForest(game, 'p1');
+  game.dispatch(activateAbility('p1', grove.id, 'draw'));
+  game.dispatch(passPriority('p1'));
+  const state = game.getState();
+  assert.equal(state.priorityPlayerId, 'p2');
+  assert.equal(state.stack.length, 1);
+  assert.deepEqual(state.playersPassed, ['p1']);
 });

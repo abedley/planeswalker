@@ -6,7 +6,8 @@ JavaScript (ES modules, no build step) and hosted on GitHub Pages.
 So far the engine models the **turn structure** (phases and steps), **priority**, a library,
 hand, battlefield and graveyard for each player, and one card: **Forest**. Each player starts with
 a deck of 10 Forests, shuffles it, and draws 7 cards. Players can **pass priority**, **play a land**,
-and **discard** when the cleanup step asks them to.
+**activate abilities** (tap a Forest for {G}), and **discard** when the cleanup step asks them to.
+Each player has a **mana pool**, and the engine has a **stack** where activated abilities resolve.
 
 - `index.html`: landing page
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
@@ -52,6 +53,7 @@ const game = new Game({
   players: [{ id: 'p1', name: 'You' }, { id: 'p2', name: 'Opponent' }],
   // decks: { p1: ['forest', ...] }, // optional; defaults to 10 Forests each
   // seed: 42,                       // optional; makes shuffles reproducible
+  // cards: { myCard: {...} },        // optional; extra card definitions (used by the tests)
 });
 
 game.on('state', (state) => {
@@ -70,6 +72,7 @@ game.dispatch(playLand('p1', 'p1-3'));             // card ids are `${ownerId}-$
 | --- | --- |
 | `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
 | `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
+| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId }` | the player has priority, controls the permanent, and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). There is one entry per ability that can be activated |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
 
 An action is accepted only if it matches one of `state.validActions` field for field.
@@ -77,8 +80,9 @@ An action is accepted only if it matches one of `state.validActions` field for f
 ### State
 
 The `state` event payload includes `players[]`, each with `library`, `hand`, `graveyard`,
-`landsPlayedThisTurn` and `hasLost`. It also includes `battlefield` (permanents carry
-`controllerId` and `tapped`), `pendingDecision`, `status` (`notStarted` / `inProgress` /
+`manaPool` (`{ W, U, B, R, G, C }`), `landsPlayedThisTurn` and `hasLost`. It also includes
+`battlefield` (permanents carry `controllerId`, `tapped` and `abilities`), `stack` (the last
+element is the top), `pendingDecision`, `status` (`notStarted` / `inProgress` /
 `gameOver`), `winnerId`, and the turn and priority fields.
 
 The state is deliberately not filtered per player: libraries (in order) and every hand are
@@ -101,6 +105,10 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `libraryShuffled` | `playerId` | at game start |
 | `cardsDrawn` | `playerId`, `cardIds`, `librarySize` | opening hand, draw step |
 | `landPlayed` | `playerId`, `card` | a land enters the battlefield |
+| `abilityActivated` | `playerId`, `cardId`, `abilityId`, `text`, `costPaid`, `usesStack`, `stackObjectId?` | an ability is activated and its cost is paid |
+| `manaAdded` | `playerId`, `mana`, `manaPool` | mana is added to a pool |
+| `stackObjectResolving` / `stackObjectResolved` | `stackObject` / `stackObjectId` | the top of the stack resolves |
+| `manaPoolsEmptied` | `pools: [{ playerId, lost }]` | a step or phase ends with mana in a pool |
 | `permanentsUntapped` | `playerId`, `cardIds` | untap step, if anything was tapped |
 | `decisionRequired` | `type`, `playerId`, `count` | cleanup step: discard to hand size |
 | `cardDiscarded` | `playerId`, `cardId` | a card is discarded |
@@ -130,12 +138,25 @@ Every payload carries a `seq` number that increases for each event the game emit
   it in their main phase while they have priority and the stack is empty (305.1, 505.6b), once
   per turn (305.2). Afterwards the same player gets priority again (117.3c), and the run of
   passes starts over (117.4).
+- Activated abilities (602): the player needs priority and must be able to pay the whole cost.
+  The cost (tapping and/or mana) is paid automatically. A non-mana ability goes on the stack, and
+  the player who activated it gets priority (117.3c). When all players pass in succession with
+  something on the stack, the top object resolves (117.4, 608). Then the active player gets
+  priority (117.3b), and the step continues.
+- Mana abilities (605): an ability that adds mana doesn't use the stack. It resolves as soon as
+  it's activated (605.3b), and the player keeps priority. Forest's "{T}: Add {G}." works this
+  way, so it never appears on the stack.
+- Mana pools empty as each step and phase ends (500.4). When an ability's mana cost is paid,
+  specific colors are used first; any generic part is then paid from colorless mana, then
+  colored.
 - State-based actions are checked before a player receives priority (117.5). A player who tried
   to draw from an empty library loses (704.5b). The game ends as soon as any player loses,
   because multiplayer elimination isn't modelled.
 
-Cards are defined in `src/cards/cards.js`. Forest's mana ability is listed in its text but
-doesn't work yet, because mana isn't implemented.
+Cards are defined in `src/cards/cards.js`. An activated ability is data:
+`{ id, text, cost: { tap?, mana? }, effect }`. The supported effects are `addMana` (which makes it
+a mana ability) and `drawCards`. Forest is the only real card. The tests add a test-only card,
+"{T}, {G}: Draw a card.", to cover abilities that go on the stack.
 
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.

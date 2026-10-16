@@ -2,7 +2,8 @@ import { EventEmitter } from './EventEmitter.js';
 import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
-import { CARDS, DEFAULT_DECK, isLand } from '../cards/cards.js';
+import { CARDS, DEFAULT_DECK, EFFECT, isLand, isManaAbility } from '../cards/cards.js';
+import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
 
 export const GAME_STATUS = Object.freeze({
   NOT_STARTED: 'notStarted',
@@ -31,7 +32,8 @@ const MAIN_PHASES = new Set([PHASE.PRECOMBAT_MAIN, PHASE.POSTCOMBAT_MAIN]);
  */
 export class Game extends EventEmitter {
   #players;
-  #zones = new Map(); // playerId -> { library, hand, graveyard, landsPlayedThisTurn, ... }
+  #cardDefinitions;
+  #zones = new Map(); // playerId -> { library, hand, graveyard, manaPool, landsPlayedThisTurn, ... }
   #battlefield = [];
   #startingPlayerId;
   #random;
@@ -43,7 +45,8 @@ export class Game extends EventEmitter {
   #pendingDecision = null;
   #segmentIndex = -1;
   #playersPassed = [];
-  #stack = [];
+  #stack = []; // last element is the top of the stack
+  #nextStackObjectId = 1;
   #combat = { attackers: [] };
   #version = 0;
   #eventSeq = 0;
@@ -57,8 +60,9 @@ export class Game extends EventEmitter {
    * @param {Record<string, string[]>} [options.decks] Card ids per player id.
    *   Players without a deck get DEFAULT_DECK (10 Forests).
    * @param {number} [options.seed] Seed for shuffling; random when omitted.
+   * @param {Record<string, object>} [options.cards] Extra card definitions, merged over CARDS.
    */
-  constructor({ players, startingPlayerId, decks = {}, seed } = {}) {
+  constructor({ players, startingPlayerId, decks = {}, seed, cards = {} } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
       throw new Error('A game needs at least two players.');
@@ -71,6 +75,7 @@ export class Game extends EventEmitter {
       throw new Error(`Unknown starting player: ${this.#startingPlayerId}`);
     }
     this.#random = seededRandom(seed ?? Math.floor(Math.random() * 2 ** 32));
+    this.#cardDefinitions = { ...CARDS, ...cards };
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
@@ -79,6 +84,7 @@ export class Game extends EventEmitter {
         library,
         hand: [],
         graveyard: [],
+        manaPool: emptyManaPool(),
         landsPlayedThisTurn: 0,
         attemptedDrawFromEmptyLibrary: false,
         hasLost: false,
@@ -142,6 +148,18 @@ export class Game extends EventEmitter {
           actions.push({ type: ACTION.PLAY_LAND, playerId: holder, cardId: card.id });
         }
       }
+      // 602.2 / 605.3a: a player with priority may activate abilities of permanents
+      // they control, as long as they can pay the cost.
+      for (const permanent of this.#battlefield) {
+        if (permanent.controllerId !== holder) continue;
+        for (const ability of this.#abilitiesOf(permanent)) {
+          if (this.#canPayCost(holder, permanent, ability.cost)) {
+            actions.push({
+              type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: permanent.id, abilityId: ability.id,
+            });
+          }
+        }
+      }
     }
     return playerId === undefined ? actions : actions.filter((a) => a.playerId === playerId);
   }
@@ -160,6 +178,7 @@ export class Game extends EventEmitter {
           library: zone.library,
           hand: zone.hand,
           graveyard: zone.graveyard,
+          manaPool: zone.manaPool,
           landsPlayedThisTurn: zone.landsPlayedThisTurn,
           hasLost: zone.hasLost,
         };
@@ -218,6 +237,9 @@ export class Game extends EventEmitter {
       case ACTION.PLAY_LAND:
         this.#playLand(action.playerId, action.cardId);
         break;
+      case ACTION.ACTIVATE_ABILITY:
+        this.#activateAbility(action.playerId, action.cardId, action.abilityId);
+        break;
       case ACTION.DISCARD:
         this.#discardToHandSize(action.playerId, action.cardId);
         break;
@@ -252,10 +274,14 @@ export class Game extends EventEmitter {
       return;
     }
 
-    // 117.4: all players passed in succession. With an empty stack the step or
-    // phase ends. (Resolving the top of a non-empty stack is not implemented yet.)
+    // 117.4: all players passed in succession. The top object of the stack
+    // resolves; with an empty stack the step or phase ends.
     this.#priorityPlayerId = null;
-    this.#advance();
+    if (this.#stack.length > 0) {
+      this.#resolveTopOfStack();
+    } else {
+      this.#advance();
+    }
   }
 
   /** Returns false if state-based actions ended the game instead. */
@@ -271,15 +297,20 @@ export class Game extends EventEmitter {
   // Cards and zones
 
   #createCard(cardId, ownerId, number) {
-    const definition = CARDS[cardId];
+    const definition = this.#cardDefinitions[cardId];
     if (!definition) throw new Error(`Unknown card: ${cardId}`);
     return {
       id: `${ownerId}-${number}`,
       cardId,
       name: definition.name,
       types: [...definition.types],
+      abilities: (definition.abilities ?? []).map(({ id, text }) => ({ id, text })),
       ownerId,
     };
+  }
+
+  #abilitiesOf(card) {
+    return this.#cardDefinitions[card.cardId].abilities ?? [];
   }
 
   #drawCards(playerId, count) {
@@ -337,6 +368,93 @@ export class Game extends EventEmitter {
     if (this.#pendingDecision.count > 0) return;
     this.#pendingDecision = null;
     this.#advance();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Activated abilities and the stack (Comprehensive Rules 602, 605, 608)
+
+  #canPayCost(playerId, permanent, cost) {
+    if (cost.tap && permanent.tapped) return false;
+    if (cost.mana && !planManaPayment(this.#zones.get(playerId).manaPool, cost.mana)) return false;
+    return true;
+  }
+
+  /** 601.2h / 602.2b: pay the cost. Returns what was paid. */
+  #payCost(playerId, permanent, cost) {
+    const paid = {};
+    if (cost.tap) {
+      permanent.tapped = true;
+      paid.tap = true;
+    }
+    if (cost.mana) {
+      const pool = this.#zones.get(playerId).manaPool;
+      const payment = planManaPayment(pool, cost.mana);
+      for (const type of MANA_TYPES) pool[type] -= payment[type];
+      paid.mana = payment;
+    }
+    return paid;
+  }
+
+  #activateAbility(playerId, cardId, abilityId) {
+    const permanent = this.#battlefield.find((p) => p.id === cardId);
+    const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
+    const costPaid = this.#payCost(playerId, permanent, ability.cost);
+    const activation = {
+      playerId, cardId, cardName: permanent.name, abilityId, text: ability.text, costPaid,
+    };
+    // 117.4: taking an action breaks the run of passes.
+    this.#playersPassed = [];
+
+    if (isManaAbility(ability)) {
+      // 605.3b: a mana ability doesn't use the stack; it resolves immediately and
+      // the player keeps priority.
+      this.#emitEvent('abilityActivated', { ...activation, usesStack: false });
+      this.#applyEffect(ability.effect, playerId);
+      return;
+    }
+
+    // 602.2a: the ability goes on the stack, then (602.2b) its costs are paid.
+    const stackObject = {
+      id: `s${this.#nextStackObjectId++}`,
+      kind: 'activatedAbility',
+      controllerId: playerId,
+      sourceId: cardId,
+      sourceName: permanent.name,
+      abilityId,
+      text: ability.text,
+      effect: structuredClone(ability.effect),
+    };
+    this.#stack.push(stackObject);
+    this.#emitEvent('abilityActivated', { ...activation, usesStack: true, stackObjectId: stackObject.id });
+    // 117.3c: the player who activated the ability receives priority.
+    this.#givePriority(playerId);
+  }
+
+  #resolveTopOfStack() {
+    // 608.2: the top object resolves and its effect happens.
+    const stackObject = this.#stack.pop();
+    this.#emitEvent('stackObjectResolving', { stackObject: structuredClone(stackObject) });
+    this.#applyEffect(stackObject.effect, stackObject.controllerId);
+    this.#emitEvent('stackObjectResolved', { stackObjectId: stackObject.id });
+    // 117.3b: after resolution, the active player receives priority.
+    this.#playersPassed = [];
+    this.#givePriority(this.#activePlayerId);
+  }
+
+  #applyEffect(effect, controllerId) {
+    switch (effect.type) {
+      case EFFECT.ADD_MANA: {
+        const pool = this.#zones.get(controllerId).manaPool;
+        addMana(pool, effect.mana);
+        this.#emitEvent('manaAdded', { playerId: controllerId, mana: { ...effect.mana }, manaPool: { ...pool } });
+        break;
+      }
+      case EFFECT.DRAW_CARDS:
+        this.#drawCards(controllerId, effect.count);
+        break;
+      default:
+        throw new Error(`Unknown effect type: ${effect.type}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -464,8 +582,15 @@ export class Game extends EventEmitter {
   }
 
   #leaveSegment(current, next) {
-    // 500.4: mana pools empty at the end of each step and phase (no mana exists yet).
     this.#priorityPlayerId = null;
+    // 500.4: mana empties from each player's mana pool as each step and phase ends.
+    const emptied = [];
+    for (const [playerId, zone] of this.#zones) {
+      if (manaPoolTotal(zone.manaPool) === 0) continue;
+      emptied.push({ playerId, lost: zone.manaPool });
+      zone.manaPool = emptyManaPool();
+    }
+    if (emptied.length) this.#emitEvent('manaPoolsEmptied', { pools: emptied });
     if (current.step) this.#emitEvent('stepEnded', this.#describe(current));
     if (!next || next.phase !== current.phase) {
       this.#emitEvent('phaseEnded', this.#describe({ phase: current.phase, step: null }));

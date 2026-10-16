@@ -1,0 +1,15 @@
+{
+  "name": "planeswalker",
+  "version": "0.1.0",
+  "description": "A single-player game built on a subset of Magic: The Gathering rules.",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "serve": "python3 -m http.server 8000"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

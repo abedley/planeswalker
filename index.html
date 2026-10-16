@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planeswalker</title>
+  <style>
+    :root { --bg: #f6f7f9; --text: #1c2026; --muted: #69717d; --accent: #6b4fd8; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #14161a; --text: #e4e7ec; --muted: #8e96a3; --accent: #a08bff; color-scheme: dark; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 640px; margin: 15vh auto 0; padding: 0 16px; }
+    h1 { margin: 0 0 8px; }
+    p { color: var(--muted); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Planeswalker</h1>
+    <p>A single-player game built on a subset of Magic: The Gathering rules. Under construction:
+      the engine currently models the turn structure and priority.</p>
+    <p><a href="debug/">Open the engine debugger →</a></p>
+  </main>
+</body>
+</html>

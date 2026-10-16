@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planeswalker Debugger</title>
+  <link rel="stylesheet" href="debug.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Planeswalker <span>engine debugger</span></h1>
+    <form id="setup" class="controls">
+      <label>Starting player
+        <select id="starting-player">
+          <option value="p1">You</option>
+          <option value="p2">Opponent</option>
+        </select>
+      </label>
+      <label>AI delay (ms)
+        <input id="ai-delay" type="number" min="0" step="50" value="400">
+      </label>
+      <button type="submit">New game</button>
+    </form>
+  </header>
+
+  <main>
+    <section class="status" id="status" aria-live="polite"></section>
+
+    <section class="panel">
+      <h2>Turn structure</h2>
+      <div class="tracker" id="tracker"></div>
+    </section>
+
+    <section class="players" id="players"></section>
+
+    <div class="columns">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Event log</h2>
+          <div class="controls">
+            <label><input type="checkbox" id="show-state"> state events</label>
+            <button type="button" id="clear-log">Clear</button>
+          </div>
+        </div>
+        <ol class="log" id="log" reversed></ol>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Latest <code>state</code> event</h2>
+        </div>
+        <pre class="json" id="state-json"></pre>
+      </section>
+    </div>
+
+    <p class="hint">Press <kbd>Space</kbd> to pass priority for the human player who holds it.
+      The game is also available as <code>window.game</code> in the console.</p>
+  </main>
+
+  <script type="module" src="debug.js"></script>
+</body>
+</html>

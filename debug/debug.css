@@ -131,3 +131,39 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16p
 
 .hint { color: var(--muted); margin: 0; }
 kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+
+#seed { width: 8em; }
+
+.status .game-over strong { color: var(--warn); }
+.badge.lost { background: var(--warn); color: #fff; }
+
+.zones { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.zones strong { color: var(--text); }
+
+.player h3 { margin: 14px 0 6px; }
+.cards { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cards-empty { font-size: 12px; }
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 84px;
+  min-height: 64px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--forest-bg);
+  color: var(--forest-text);
+}
+.card.playable { border-color: var(--accent); }
+.card.tapped { transform: rotate(8deg); opacity: .7; }
+.card-name { font-weight: 600; font-size: 12px; }
+.card-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; opacity: .75; }
+.card button { margin-top: auto; padding: 1px 8px; font-size: 12px; }
+.card button:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+:root { --forest-bg: #e4efe2; --forest-text: #23432a; }
+@media (prefers-color-scheme: dark) {
+  :root { --forest-bg: #1f3324; --forest-text: #bfe0c3; }
+}

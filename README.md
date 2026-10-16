@@ -3,8 +3,10 @@
 A single-player game built on a subset of the Magic: The Gathering rules, written in plain
 JavaScript (ES modules, no build step) and hosted on GitHub Pages.
 
-So far the engine models the **turn structure** (phases and steps) and **priority**. The only
-player action is **passing priority**.
+So far the engine models the **turn structure** (phases and steps), **priority**, a library,
+hand, battlefield and graveyard for each player, and one card: **Forest**. Each player starts with
+a deck of 10 Forests, shuffles it, and draws 7 cards. Players can **pass priority**, **play a land**,
+and **discard** when the cleanup step asks them to.
 
 - `index.html`: landing page
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
@@ -44,18 +46,41 @@ The `Game` emits events and also listens for them:
   the current action has finished, so listeners never re-enter the engine.
 
 ```js
-import { Game, AutoPassController } from './src/index.js';
+import { Game, BasicAIController, passPriority, playLand } from './src/index.js';
 
-const game = new Game({ players: [{ id: 'p1', name: 'You' }, { id: 'p2', name: 'Opponent' }] });
+const game = new Game({
+  players: [{ id: 'p1', name: 'You' }, { id: 'p2', name: 'Opponent' }],
+  // decks: { p1: ['forest', ...] }, // optional; defaults to 10 Forests each
+  // seed: 42,                       // optional; makes shuffles reproducible
+});
 
 game.on('state', (state) => {
   console.log(state.turn, state.phase, state.step, state.priorityPlayerId, state.validActions);
 });
-new AutoPassController({ game, playerId: 'p2', delayMs: 300 }); // listens to state, emits action
+new BasicAIController({ game, playerId: 'p2', delayMs: 300 }); // listens to state, emits action
 
 game.start();
-game.dispatch({ type: 'PASS_PRIORITY', playerId: 'p1' });
+game.dispatch(passPriority('p1'));                 // upkeep → precombat main
+game.dispatch(playLand('p1', 'p1-3'));             // card ids are `${ownerId}-${n}`
 ```
+
+### Actions
+
+| Action | Valid when |
+| --- | --- |
+| `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
+| `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
+| `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
+
+An action is accepted only if it matches one of `state.validActions` field for field.
+
+### State
+
+The `state` event payload includes `players[]`, each with `library`, `hand`, `graveyard`,
+`landsPlayedThisTurn` and `hasLost`. It also includes `battlefield` (permanents carry
+`controllerId` and `tapped`), `pendingDecision`, `status` (`notStarted` / `inProgress` /
+`gameOver`), `winnerId`, and the turn and priority fields. Hidden information isn't hidden yet:
+the debugger shows everything.
 
 ### Events
 
@@ -70,6 +95,13 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `stepSkipped` | `step`, `stepName`, ... | a step is skipped (see below) |
 | `priorityGranted` | `playerId` | a player receives priority |
 | `priorityPassed` | `playerId` | a player passes priority |
+| `libraryShuffled` | `playerId` | at game start |
+| `cardsDrawn` | `playerId`, `cardIds`, `librarySize` | opening hand, draw step |
+| `landPlayed` | `playerId`, `card` | a land enters the battlefield |
+| `permanentsUntapped` | `playerId`, `cardIds` | untap step, if anything was tapped |
+| `decisionRequired` | `type`, `playerId`, `count` | cleanup step: discard to hand size |
+| `cardDiscarded` | `playerId`, `cardId` | a card is discarded |
+| `drawFromEmptyLibrary` / `playerLost` / `gameEnded` | `playerId` / `reason` / `winnerId` | a player decks out |
 | `actionAccepted` / `actionRejected` | `action` (+ `reason`) | an action is processed |
 | `state` | full snapshot incl. `validActions`, `version` | the game is waiting for input |
 
@@ -87,6 +119,20 @@ Every payload carries a `seq` number that increases for each event the game emit
 - The player who goes first skips the draw step of turn 1 (103.8a).
 - Declare blockers and combat damage are skipped when no creatures attack (508.8). For now,
   nothing can attack.
+- Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5). Mulligans aren't
+  implemented yet.
+- Turn-based actions: the active player untaps their permanents (502.3), draws in the draw step
+  (504.1), and discards down to the maximum hand size of 7 in cleanup (514.1, 402.2).
+- Playing lands: a special action that doesn't use the stack (116.2a). The active player can do
+  it in their main phase while they have priority and the stack is empty (305.1, 505.6b), once
+  per turn (305.2). Afterwards the same player gets priority again (117.3c), and the run of
+  passes starts over (117.4).
+- State-based actions are checked before a player receives priority (117.5). A player who tried
+  to draw from an empty library loses (704.5b). The game ends as soon as any player loses,
+  because multiplayer elimination isn't modelled.
+
+Cards are defined in `src/cards/cards.js`. Forest's mana ability is listed in its text but
+doesn't work yet, because mana isn't implemented.
 
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.

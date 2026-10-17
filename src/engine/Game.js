@@ -2,7 +2,9 @@ import { EventEmitter } from './EventEmitter.js';
 import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
-import { CARDS, DEFAULT_DECK, EFFECT, isLand, isManaAbility } from '../cards/cards.js';
+import {
+  CARDS, DEFAULT_DECK, EFFECT, isLand, isCreature, isManaAbility,
+} from '../cards/cards.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
 
 export const GAME_STATUS = Object.freeze({
@@ -11,19 +13,50 @@ export const GAME_STATUS = Object.freeze({
   GAME_OVER: 'gameOver',
 });
 
+export const DECISION = Object.freeze({
+  DISCARD_TO_HAND_SIZE: 'discardToHandSize',
+  DECLARE_ATTACKERS: 'declareAttackers',
+  DECLARE_BLOCKERS: 'declareBlockers',
+  ASSIGN_COMBAT_DAMAGE: 'assignCombatDamage',
+});
+
+export const STARTING_LIFE = 20; // 103.4
 export const OPENING_HAND_SIZE = 7; // 103.5
 export const MAX_HAND_SIZE = 7; // 402.2
 export const LAND_PLAYS_PER_TURN = 1; // 305.2
 
 const MAIN_PHASES = new Set([PHASE.PRECOMBAT_MAIN, PHASE.POSTCOMBAT_MAIN]);
 
+/** Recursive structural equality for plain JSON-like values. */
+function deepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => deepEqual(a[key], b[key]));
+}
+
+/** Every way to split `amount` among `ids`, as `{ [id]: n }` objects. */
+function distributions(amount, ids) {
+  if (ids.length === 1) return [{ [ids[0]]: amount }];
+  const [first, ...rest] = ids;
+  const result = [];
+  for (let n = amount; n >= 0; n--) {
+    for (const tail of distributions(amount - n, rest)) result.push({ [first]: n, ...tail });
+  }
+  return result;
+}
+
 /**
  * The game engine.
  *
  * Output: the game is an EventEmitter. Fine-grained events (`turnStarted`,
- * `stepStarted`, `cardsDrawn`, `landPlayed`, ...) describe each transition, and a
- * `state` event is emitted whenever the game settles and waits for player input.
- * Every `state` payload is a full snapshot that includes `validActions`.
+ * `stepStarted`, `cardsDrawn`, `spellCast`, `combatDamageDealt`, ...) describe each
+ * transition, and a `state` event is emitted whenever the game settles and waits
+ * for player input. Every `state` payload is a full snapshot that includes
+ * `validActions`.
+ *
+ * The game waits for input in one of two ways: a player has priority, or a player
+ * must make a decision (`pendingDecision`), such as declaring attackers.
  *
  * Input: player actions arrive through `dispatch(action)`, or by having the game
  * listen to any emitter that emits `action` events (see `listenTo`). Actions
@@ -33,7 +66,7 @@ const MAIN_PHASES = new Set([PHASE.PRECOMBAT_MAIN, PHASE.POSTCOMBAT_MAIN]);
 export class Game extends EventEmitter {
   #players;
   #cardDefinitions;
-  #zones = new Map(); // playerId -> { library, hand, graveyard, manaPool, landsPlayedThisTurn, ... }
+  #zones = new Map(); // playerId -> { library, hand, graveyard, manaPool, life, ... }
   #battlefield = [];
   #startingPlayerId;
   #random;
@@ -58,7 +91,7 @@ export class Game extends EventEmitter {
    * @param {{id: string, name?: string}[]} options.players Players in turn order.
    * @param {string} [options.startingPlayerId] Defaults to the first player.
    * @param {Record<string, string[]>} [options.decks] Card ids per player id.
-   *   Players without a deck get DEFAULT_DECK (10 Forests).
+   *   Players without a deck get DEFAULT_DECK (5 Forests, 5 Llanowar Elves).
    * @param {number} [options.seed] Seed for shuffling; random when omitted.
    * @param {Record<string, object>} [options.cards] Extra card definitions, merged over CARDS.
    */
@@ -85,6 +118,7 @@ export class Game extends EventEmitter {
         hand: [],
         graveyard: [],
         manaPool: emptyManaPool(),
+        life: STARTING_LIFE,
         landsPlayedThisTurn: 0,
         attemptedDrawFromEmptyLibrary: false,
         hasLost: false,
@@ -132,34 +166,12 @@ export class Game extends EventEmitter {
   }
 
   getValidActions(playerId) {
-    const actions = [];
+    let actions = [];
     if (this.#status !== GAME_STATUS.IN_PROGRESS) return actions;
-
-    if (this.#pendingDecision?.type === 'discardToHandSize') {
-      const { playerId: chooser } = this.#pendingDecision;
-      for (const card of this.#zones.get(chooser).hand) {
-        actions.push({ type: ACTION.DISCARD, playerId: chooser, cardId: card.id });
-      }
+    if (this.#pendingDecision) {
+      actions = this.#decisionActions(this.#pendingDecision);
     } else if (this.#priorityPlayerId) {
-      const holder = this.#priorityPlayerId;
-      actions.push({ type: ACTION.PASS_PRIORITY, playerId: holder });
-      if (this.#canPlayLand(holder)) {
-        for (const card of this.#zones.get(holder).hand.filter(isLand)) {
-          actions.push({ type: ACTION.PLAY_LAND, playerId: holder, cardId: card.id });
-        }
-      }
-      // 602.2 / 605.3a: a player with priority may activate abilities of permanents
-      // they control, as long as they can pay the cost.
-      for (const permanent of this.#battlefield) {
-        if (permanent.controllerId !== holder) continue;
-        for (const ability of this.#abilitiesOf(permanent)) {
-          if (this.#canPayCost(holder, permanent, ability.cost)) {
-            actions.push({
-              type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: permanent.id, abilityId: ability.id,
-            });
-          }
-        }
-      }
+      actions = this.#priorityActions(this.#priorityPlayerId);
     }
     return playerId === undefined ? actions : actions.filter((a) => a.playerId === playerId);
   }
@@ -175,6 +187,7 @@ export class Game extends EventEmitter {
         const zone = this.#zones.get(player.id);
         return {
           ...player,
+          life: zone.life,
           library: zone.library,
           hand: zone.hand,
           graveyard: zone.graveyard,
@@ -198,6 +211,75 @@ export class Game extends EventEmitter {
       combat: this.#combat,
       validActions: this.getValidActions(),
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Valid actions
+
+  #priorityActions(holder) {
+    const actions = [{ type: ACTION.PASS_PRIORITY, playerId: holder }];
+    const hand = this.#zones.get(holder).hand;
+    if (this.#canPlayLand(holder)) {
+      for (const card of hand.filter(isLand)) {
+        actions.push({ type: ACTION.PLAY_LAND, playerId: holder, cardId: card.id });
+      }
+    }
+    if (this.#hasSorceryTiming(holder)) {
+      const pool = this.#zones.get(holder).manaPool;
+      for (const card of hand.filter((c) => !isLand(c))) {
+        if (planManaPayment(pool, card.manaCost)) {
+          actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id });
+        }
+      }
+    }
+    // 602.2 / 605.3a: a player with priority may activate abilities of permanents
+    // they control, as long as they can pay the cost.
+    for (const permanent of this.#battlefield) {
+      if (permanent.controllerId !== holder) continue;
+      for (const ability of this.#abilitiesOf(permanent)) {
+        if (this.#canPayCost(holder, permanent, ability.cost)) {
+          actions.push({
+            type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: permanent.id, abilityId: ability.id,
+          });
+        }
+      }
+    }
+    return actions;
+  }
+
+  #decisionActions(decision) {
+    const { playerId } = decision;
+    switch (decision.type) {
+      case DECISION.DISCARD_TO_HAND_SIZE:
+        return this.#zones.get(playerId).hand
+          .map((card) => ({ type: ACTION.DISCARD, playerId, cardId: card.id }));
+      case DECISION.DECLARE_ATTACKERS:
+        return [
+          ...this.#eligibleAttackers(playerId)
+            .map((creature) => ({ type: ACTION.TOGGLE_ATTACKER, playerId, cardId: creature.id })),
+          { type: ACTION.CONFIRM_ATTACKERS, playerId },
+        ];
+      case DECISION.DECLARE_BLOCKERS: {
+        const actions = [];
+        for (const blocker of this.#eligibleBlockers(playerId)) {
+          const current = decision.blocks[blocker.id] ?? null;
+          for (const { cardId: attackerId } of this.#combat.attackers) {
+            if (attackerId !== current) {
+              actions.push({ type: ACTION.SET_BLOCKER, playerId, cardId: blocker.id, attackerId });
+            }
+          }
+          if (current) actions.push({ type: ACTION.SET_BLOCKER, playerId, cardId: blocker.id, attackerId: null });
+        }
+        actions.push({ type: ACTION.CONFIRM_BLOCKERS, playerId });
+        return actions;
+      }
+      case DECISION.ASSIGN_COMBAT_DAMAGE:
+        return distributions(decision.power, decision.blockerIds).map((assignment) => ({
+          type: ACTION.ASSIGN_COMBAT_DAMAGE, playerId, attackerId: decision.attackerId, assignment,
+        }));
+      default:
+        throw new Error(`Unknown decision type: ${decision.type}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -230,19 +312,18 @@ export class Game extends EventEmitter {
       return { ok: false, reason };
     }
     this.#emitEvent('actionAccepted', { action });
+    const { playerId, cardId } = action;
     switch (action.type) {
-      case ACTION.PASS_PRIORITY:
-        this.#passPriority(action.playerId);
-        break;
-      case ACTION.PLAY_LAND:
-        this.#playLand(action.playerId, action.cardId);
-        break;
-      case ACTION.ACTIVATE_ABILITY:
-        this.#activateAbility(action.playerId, action.cardId, action.abilityId);
-        break;
-      case ACTION.DISCARD:
-        this.#discardToHandSize(action.playerId, action.cardId);
-        break;
+      case ACTION.PASS_PRIORITY: this.#passPriority(playerId); break;
+      case ACTION.PLAY_LAND: this.#playLand(playerId, cardId); break;
+      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId); break;
+      case ACTION.ACTIVATE_ABILITY: this.#activateAbility(playerId, cardId, action.abilityId); break;
+      case ACTION.TOGGLE_ATTACKER: this.#toggleAttacker(cardId); break;
+      case ACTION.CONFIRM_ATTACKERS: this.#confirmAttackers(); break;
+      case ACTION.SET_BLOCKER: this.#setBlocker(cardId, action.attackerId); break;
+      case ACTION.CONFIRM_BLOCKERS: this.#confirmBlockers(); break;
+      case ACTION.ASSIGN_COMBAT_DAMAGE: this.#assignCombatDamage(action.assignment); break;
+      case ACTION.DISCARD: this.#discardToHandSize(playerId, cardId); break;
     }
     this.#emitState();
     return { ok: true };
@@ -254,9 +335,8 @@ export class Game extends EventEmitter {
     if (!Object.values(ACTION).includes(action.type)) return `Unknown action type: ${action.type}`;
     if (!this.#zones.has(action.playerId)) return `Unknown player: ${action.playerId}`;
 
-    // An action is valid when it matches one of the valid actions field for field.
-    const matches = (valid) => Object.keys(valid).every((key) => valid[key] === action[key]);
-    if (this.getValidActions(action.playerId).some(matches)) return null;
+    // An action is valid when it equals one of the valid actions.
+    if (this.getValidActions(action.playerId).some((valid) => deepEqual(valid, action))) return null;
     const target = action.cardId ? ` with card ${action.cardId}` : '';
     return `${action.type}${target} is not a valid action for ${action.playerId} right now.`;
   }
@@ -293,24 +373,58 @@ export class Game extends EventEmitter {
     return true;
   }
 
+  /** 117.4: taking an action breaks the run of passes. */
+  #resetPasses() {
+    this.#playersPassed = [];
+  }
+
   // ---------------------------------------------------------------------------
   // Cards and zones
 
   #createCard(cardId, ownerId, number) {
     const definition = this.#cardDefinitions[cardId];
     if (!definition) throw new Error(`Unknown card: ${cardId}`);
-    return {
+    const card = {
       id: `${ownerId}-${number}`,
       cardId,
       name: definition.name,
+      manaCost: definition.manaCost ?? null,
+      supertypes: [...(definition.supertypes ?? [])],
       types: [...definition.types],
-      abilities: (definition.abilities ?? []).map(({ id, text }) => ({ id, text })),
+      subtypes: [...(definition.subtypes ?? [])],
+      abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => (
+        { id, text, isManaAbility: isManaAbility(ability) }
+      )),
       ownerId,
     };
+    if (isCreature(definition)) Object.assign(card, { power: definition.power, toughness: definition.toughness });
+    return card;
   }
 
   #abilitiesOf(card) {
     return this.#cardDefinitions[card.cardId].abilities ?? [];
+  }
+
+  #permanent(id) {
+    return this.#battlefield.find((p) => p.id === id) ?? null;
+  }
+
+  #putOntoBattlefield(card, controllerId) {
+    const permanent = { ...card, controllerId, tapped: false, summoningSick: true, damage: 0 };
+    this.#battlefield.push(permanent);
+    return permanent;
+  }
+
+  /** Moves a permanent to its owner's graveyard, stripping battlefield-only state. */
+  #putIntoGraveyard(permanent) {
+    this.#battlefield.splice(this.#battlefield.indexOf(permanent), 1);
+    const { controllerId, tapped, summoningSick, damage, ...card } = permanent;
+    this.#zones.get(card.ownerId).graveyard.push(card);
+    // 506.4: a permanent that leaves the battlefield is removed from combat.
+    this.#combat.attackers = this.#combat.attackers.filter((a) => a.cardId !== permanent.id);
+    for (const attacker of this.#combat.attackers) {
+      attacker.blockerIds = attacker.blockerIds.filter((id) => id !== permanent.id);
+    }
   }
 
   #drawCards(playerId, count) {
@@ -332,14 +446,20 @@ export class Game extends EventEmitter {
     }
   }
 
-  #canPlayLand(playerId) {
-    // 305.1 / 505.6b: a player may play a land during their own main phase,
-    // while they have priority and the stack is empty, ...
-    // 305.2: ... if they haven't used their land play for the turn.
+  /**
+   * Sorcery timing (307.1): the player's own main phase, with priority and an
+   * empty stack. Lands (305.1) and creature spells (302.1) use it.
+   */
+  #hasSorceryTiming(playerId) {
     return playerId === this.#activePlayerId
       && playerId === this.#priorityPlayerId
       && MAIN_PHASES.has(this.#segment?.phase)
-      && this.#stack.length === 0
+      && this.#stack.length === 0;
+  }
+
+  #canPlayLand(playerId) {
+    // 305.2: one land per turn.
+    return this.#hasSorceryTiming(playerId)
       && this.#zones.get(playerId).landsPlayedThisTurn < LAND_PLAYS_PER_TURN;
   }
 
@@ -347,14 +467,12 @@ export class Game extends EventEmitter {
     // 116.2a: playing a land is a special action; it doesn't use the stack.
     const zone = this.#zones.get(playerId);
     const [card] = zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1);
-    const permanent = { ...card, controllerId: playerId, tapped: false };
-    this.#battlefield.push(permanent);
+    const permanent = this.#putOntoBattlefield(card, playerId);
     zone.landsPlayedThisTurn += 1;
     this.#emitEvent('landPlayed', { playerId, card: structuredClone(permanent) });
 
-    // 117.4: taking an action breaks the run of passes. 117.3c: after a special
-    // action the same player receives priority again.
-    this.#playersPassed = [];
+    // 117.3c: after a special action the same player receives priority again.
+    this.#resetPasses();
     this.#givePriority(playerId);
   }
 
@@ -371,39 +489,69 @@ export class Game extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
-  // Activated abilities and the stack (Comprehensive Rules 602, 605, 608)
+  // Spells, activated abilities and the stack (Comprehensive Rules 601, 602, 605, 608)
+
+  #payMana(playerId, cost) {
+    const pool = this.#zones.get(playerId).manaPool;
+    const payment = planManaPayment(pool, cost);
+    for (const type of MANA_TYPES) pool[type] -= payment[type];
+    return payment;
+  }
+
+  #castSpell(playerId, cardId) {
+    // 601.2a: the card moves from hand to the stack; 601.2h: its cost is paid.
+    // (Mana must already be in the pool; activating mana abilities mid-cast isn't modelled.)
+    const zone = this.#zones.get(playerId);
+    const [card] = zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1);
+    const stackObject = {
+      id: `s${this.#nextStackObjectId++}`,
+      kind: 'spell',
+      controllerId: playerId,
+      sourceId: card.id,
+      sourceName: card.name,
+      text: card.name,
+      card,
+    };
+    this.#stack.push(stackObject);
+    const manaPaid = this.#payMana(playerId, card.manaCost);
+    this.#emitEvent('spellCast', {
+      playerId, cardId, cardName: card.name, manaPaid, stackObjectId: stackObject.id,
+    });
+    // 117.3c: the caster receives priority.
+    this.#resetPasses();
+    this.#givePriority(playerId);
+  }
 
   #canPayCost(playerId, permanent, cost) {
-    if (cost.tap && permanent.tapped) return false;
+    if (cost.tap) {
+      if (permanent.tapped) return false;
+      // 302.6: a creature's {T} abilities can't be activated unless its controller
+      // has controlled it continuously since their most recent turn began.
+      if (isCreature(permanent) && permanent.summoningSick) return false;
+    }
     if (cost.mana && !planManaPayment(this.#zones.get(playerId).manaPool, cost.mana)) return false;
     return true;
   }
 
-  /** 601.2h / 602.2b: pay the cost. Returns what was paid. */
+  /** 602.2b: pay the cost. Returns what was paid. */
   #payCost(playerId, permanent, cost) {
     const paid = {};
     if (cost.tap) {
       permanent.tapped = true;
       paid.tap = true;
     }
-    if (cost.mana) {
-      const pool = this.#zones.get(playerId).manaPool;
-      const payment = planManaPayment(pool, cost.mana);
-      for (const type of MANA_TYPES) pool[type] -= payment[type];
-      paid.mana = payment;
-    }
+    if (cost.mana) paid.mana = this.#payMana(playerId, cost.mana);
     return paid;
   }
 
   #activateAbility(playerId, cardId, abilityId) {
-    const permanent = this.#battlefield.find((p) => p.id === cardId);
+    const permanent = this.#permanent(cardId);
     const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
     const costPaid = this.#payCost(playerId, permanent, ability.cost);
     const activation = {
       playerId, cardId, cardName: permanent.name, abilityId, text: ability.text, costPaid,
     };
-    // 117.4: taking an action breaks the run of passes.
-    this.#playersPassed = [];
+    this.#resetPasses();
 
     if (isManaAbility(ability)) {
       // 605.3b: a mana ability doesn't use the stack; it resolves immediately and
@@ -431,13 +579,19 @@ export class Game extends EventEmitter {
   }
 
   #resolveTopOfStack() {
-    // 608.2: the top object resolves and its effect happens.
+    // 608.2: the top object resolves.
     const stackObject = this.#stack.pop();
     this.#emitEvent('stackObjectResolving', { stackObject: structuredClone(stackObject) });
-    this.#applyEffect(stackObject.effect, stackObject.controllerId);
+    if (stackObject.kind === 'spell') {
+      // 608.3: a permanent spell enters the battlefield under its controller's control.
+      const permanent = this.#putOntoBattlefield(stackObject.card, stackObject.controllerId);
+      this.#emitEvent('permanentEntered', { playerId: stackObject.controllerId, card: structuredClone(permanent) });
+    } else {
+      this.#applyEffect(stackObject.effect, stackObject.controllerId);
+    }
     this.#emitEvent('stackObjectResolved', { stackObjectId: stackObject.id });
     // 117.3b: after resolution, the active player receives priority.
-    this.#playersPassed = [];
+    this.#resetPasses();
     this.#givePriority(this.#activePlayerId);
   }
 
@@ -458,22 +612,192 @@ export class Game extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
-  // State-based actions (Comprehensive Rules 704)
+  // Combat (Comprehensive Rules 506–511)
 
-  /** Returns true if the game ended. */
-  #checkStateBasedActions() {
-    let someoneLost = false;
-    for (const { id } of this.#players) {
-      const zone = this.#zones.get(id);
-      if (zone.attemptedDrawFromEmptyLibrary && !zone.hasLost) {
-        // 704.5b: a player who attempted to draw from an empty library loses.
-        zone.hasLost = true;
-        someoneLost = true;
-        this.#emitEvent('playerLost', { playerId: id, reason: 'Attempted to draw from an empty library.' });
+  #defendingPlayerId() {
+    // 506.2: in a two-player game, the defending player is the nonactive player.
+    return this.#nextPlayerId(this.#activePlayerId);
+  }
+
+  #eligibleAttackers(playerId) {
+    // 508.1a: untapped creatures the player has controlled continuously since
+    // their turn began.
+    return this.#battlefield.filter((p) => (
+      p.controllerId === playerId && isCreature(p) && !p.tapped && !p.summoningSick
+    ));
+  }
+
+  #eligibleBlockers(playerId) {
+    // 509.1a: untapped creatures the defending player controls.
+    return this.#battlefield.filter((p) => p.controllerId === playerId && isCreature(p) && !p.tapped);
+  }
+
+  #beginDeclareAttackers() {
+    // 508.1: the active player declares attackers (a turn-based action).
+    const playerId = this.#activePlayerId;
+    if (this.#eligibleAttackers(playerId).length === 0) {
+      this.#emitEvent('attackersDeclared', { playerId, attackers: [], defendingPlayerId: this.#defendingPlayerId() });
+      return;
+    }
+    this.#requireDecision({ type: DECISION.DECLARE_ATTACKERS, playerId, attackers: [] });
+  }
+
+  #toggleAttacker(cardId) {
+    const decision = this.#pendingDecision;
+    decision.attackers = decision.attackers.includes(cardId)
+      ? decision.attackers.filter((id) => id !== cardId)
+      : [...decision.attackers, cardId];
+  }
+
+  #confirmAttackers() {
+    const { playerId, attackers } = this.#pendingDecision;
+    this.#pendingDecision = null;
+    const defendingPlayerId = this.#defendingPlayerId();
+    // 508.1f: attacking creatures become tapped.
+    for (const id of attackers) this.#permanent(id).tapped = true;
+    this.#combat.attackers = attackers.map((cardId) => (
+      { cardId, defendingPlayerId, blocked: false, blockerIds: [], damageAssignment: null }
+    ));
+    this.#emitEvent('attackersDeclared', { playerId, attackers: [...attackers], defendingPlayerId });
+    // 508.2: the active player then receives priority.
+    this.#givePriority(this.#activePlayerId);
+  }
+
+  #beginDeclareBlockers() {
+    // 509.1: the defending player declares blockers (a turn-based action).
+    const playerId = this.#defendingPlayerId();
+    if (this.#eligibleBlockers(playerId).length === 0) {
+      this.#emitEvent('blockersDeclared', { playerId, blocks: [] });
+      return;
+    }
+    this.#requireDecision({ type: DECISION.DECLARE_BLOCKERS, playerId, blocks: {} });
+  }
+
+  #setBlocker(cardId, attackerId) {
+    const { blocks } = this.#pendingDecision;
+    if (attackerId === null) delete blocks[cardId];
+    else blocks[cardId] = attackerId;
+  }
+
+  #confirmBlockers() {
+    const { playerId, blocks } = this.#pendingDecision;
+    this.#pendingDecision = null;
+    // 509.1g / 509.1h: each blocker blocks one attacker, which becomes blocked.
+    for (const [blockerId, attackerId] of Object.entries(blocks)) {
+      const attacker = this.#combat.attackers.find((a) => a.cardId === attackerId);
+      attacker.blocked = true;
+      attacker.blockerIds.push(blockerId);
+    }
+    this.#emitEvent('blockersDeclared', {
+      playerId,
+      blocks: Object.entries(blocks).map(([blockerId, attackerId]) => ({ blockerId, attackerId })),
+    });
+    // 509.2: the active player then receives priority.
+    this.#givePriority(this.#activePlayerId);
+  }
+
+  /**
+   * 510.1c: an attacker blocked by more than one creature has its damage divided
+   * among them by the attacking player. Asks for the next such division, if any.
+   */
+  #requestDamageAssignment() {
+    for (const attacker of this.#combat.attackers) {
+      const creature = this.#permanent(attacker.cardId);
+      if (attacker.damageAssignment || creature.power <= 0 || attacker.blockerIds.length < 2) continue;
+      this.#requireDecision({
+        type: DECISION.ASSIGN_COMBAT_DAMAGE,
+        playerId: this.#activePlayerId,
+        attackerId: attacker.cardId,
+        power: creature.power,
+        blockerIds: [...attacker.blockerIds],
+      });
+      return true;
+    }
+    return false;
+  }
+
+  #assignCombatDamage(assignment) {
+    const { attackerId } = this.#pendingDecision;
+    this.#pendingDecision = null;
+    this.#combat.attackers.find((a) => a.cardId === attackerId).damageAssignment = { ...assignment };
+    if (this.#requestDamageAssignment()) return;
+    this.#dealCombatDamage();
+    this.#givePriority(this.#activePlayerId);
+  }
+
+  #dealCombatDamage() {
+    // 510.1: work out all combat damage first; 510.2: then deal it simultaneously.
+    const damage = [];
+    const hit = (sourceId, target, amount) => { if (amount > 0) damage.push({ sourceId, ...target, amount }); };
+    for (const attacker of this.#combat.attackers) {
+      const creature = this.#permanent(attacker.cardId);
+      if (!attacker.blocked) {
+        // 510.1a: an unblocked creature deals damage to the player it's attacking.
+        hit(creature.id, { targetPlayerId: attacker.defendingPlayerId }, creature.power);
+      } else if (attacker.blockerIds.length === 1) {
+        hit(creature.id, { targetCardId: attacker.blockerIds[0] }, creature.power);
+      } else {
+        // 510.1c: divided as assigned. A blocked creature with no blockers left deals no damage.
+        for (const [blockerId, amount] of Object.entries(attacker.damageAssignment ?? {})) {
+          hit(creature.id, { targetCardId: blockerId }, amount);
+        }
+      }
+      // 510.1d: each blocker deals its damage to the creature it blocks.
+      for (const blockerId of attacker.blockerIds) {
+        const blocker = this.#permanent(blockerId);
+        hit(blocker.id, { targetCardId: creature.id }, blocker.power);
       }
     }
-    if (!someoneLost) return false;
+    for (const { targetPlayerId, targetCardId, amount } of damage) {
+      // 120.3a / 120.3e: damage to a player causes life loss; damage to a creature is marked on it.
+      if (targetPlayerId) this.#zones.get(targetPlayerId).life -= amount;
+      else this.#permanent(targetCardId).damage += amount;
+    }
+    this.#emitEvent('combatDamageDealt', {
+      damage,
+      life: Object.fromEntries([...this.#zones].map(([id, zone]) => [id, zone.life])),
+    });
+  }
 
+  // ---------------------------------------------------------------------------
+  // State-based actions (Comprehensive Rules 704)
+
+  /** Performs state-based actions until there are none. Returns true if the game ended. */
+  #checkStateBasedActions() {
+    for (;;) {
+      const losers = this.#players.filter(({ id }) => {
+        const zone = this.#zones.get(id);
+        // 704.5a: 0 or less life; 704.5b: attempted to draw from an empty library.
+        return !zone.hasLost && (zone.life <= 0 || zone.attemptedDrawFromEmptyLibrary);
+      });
+      // 704.5f: toughness 0 or less; 704.5g: lethal damage.
+      const dying = this.#battlefield.filter((p) => isCreature(p) && (p.toughness <= 0 || p.damage >= p.toughness));
+      if (losers.length === 0 && dying.length === 0) return false;
+
+      // 704.3: all applicable state-based actions happen simultaneously.
+      for (const permanent of dying) {
+        this.#putIntoGraveyard(permanent);
+        this.#emitEvent('creatureDied', {
+          cardId: permanent.id,
+          cardName: permanent.name,
+          controllerId: permanent.controllerId,
+          reason: permanent.toughness <= 0 ? 'zeroToughness' : 'lethalDamage',
+        });
+      }
+      for (const { id } of losers) {
+        const zone = this.#zones.get(id);
+        zone.hasLost = true;
+        const reason = zone.life <= 0 ? 'Life total reached 0.' : 'Attempted to draw from an empty library.';
+        this.#emitEvent('playerLost', { playerId: id, reason });
+      }
+      if (losers.length > 0) {
+        this.#endGame();
+        return true;
+      }
+    }
+  }
+
+  #endGame() {
     // Multiplayer elimination isn't modelled: the game ends as soon as anyone loses.
     const remaining = this.#players.filter((p) => !this.#zones.get(p.id).hasLost);
     this.#status = GAME_STATUS.GAME_OVER;
@@ -481,7 +805,6 @@ export class Game extends EventEmitter {
     this.#priorityPlayerId = null;
     this.#pendingDecision = null;
     this.#emitEvent('gameEnded', { winnerId: this.#winnerId });
-    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -489,6 +812,11 @@ export class Game extends EventEmitter {
 
   get #segment() {
     return TURN_STRUCTURE[this.#segmentIndex] ?? null;
+  }
+
+  #requireDecision(decision) {
+    this.#pendingDecision = decision;
+    this.#emitEvent('decisionRequired', structuredClone(decision));
   }
 
   /**
@@ -536,6 +864,10 @@ export class Game extends EventEmitter {
     this.#segmentIndex = -1;
     this.#combat = { attackers: [] };
     for (const zone of this.#zones.values()) zone.landsPlayedThisTurn = 0;
+    // 302.6: the active player has now controlled their permanents since the turn began.
+    for (const permanent of this.#battlefield) {
+      if (permanent.controllerId === activePlayerId) permanent.summoningSick = false;
+    }
     this.#emitEvent('turnStarted', { turn: this.#turn, activePlayerId });
   }
 
@@ -543,7 +875,7 @@ export class Game extends EventEmitter {
     const previous = this.#segment;
     const segment = TURN_STRUCTURE[index];
     this.#segmentIndex = index;
-    this.#playersPassed = [];
+    this.#resetPasses();
     this.#priorityPlayerId = null;
 
     if (!previous || previous.phase !== segment.phase) {
@@ -569,13 +901,23 @@ export class Game extends EventEmitter {
         // 504.1: the active player draws a card.
         this.#drawCards(active, 1);
         break;
+      case STEP.DECLARE_ATTACKERS:
+        this.#beginDeclareAttackers();
+        break;
+      case STEP.DECLARE_BLOCKERS:
+        this.#beginDeclareBlockers();
+        break;
+      case STEP.COMBAT_DAMAGE:
+        if (!this.#requestDamageAssignment()) this.#dealCombatDamage();
+        break;
       case STEP.CLEANUP: {
         // 514.1: the active player discards down to their maximum hand size.
         const excess = this.#zones.get(active).hand.length - MAX_HAND_SIZE;
         if (excess > 0) {
-          this.#pendingDecision = { type: 'discardToHandSize', playerId: active, count: excess };
-          this.#emitEvent('decisionRequired', structuredClone(this.#pendingDecision));
+          this.#requireDecision({ type: DECISION.DISCARD_TO_HAND_SIZE, playerId: active, count: excess });
         }
+        // 514.2: damage wears off.
+        for (const permanent of this.#battlefield) permanent.damage = 0;
         break;
       }
     }
@@ -591,6 +933,9 @@ export class Game extends EventEmitter {
       zone.manaPool = emptyManaPool();
     }
     if (emptied.length) this.#emitEvent('manaPoolsEmptied', { pools: emptied });
+    // 511.3: creatures are removed from combat as the end of combat step ends.
+    if (current.step === STEP.END_OF_COMBAT) this.#combat = { attackers: [] };
+
     if (current.step) this.#emitEvent('stepEnded', this.#describe(current));
     if (!next || next.phase !== current.phase) {
       this.#emitEvent('phaseEnded', this.#describe({ phase: current.phase, step: null }));

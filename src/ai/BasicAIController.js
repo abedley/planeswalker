@@ -1,14 +1,20 @@
 import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
+import { DECISION } from '../engine/Game.js';
+import { isCreature } from '../cards/cards.js';
+import { manaPoolTotal } from '../engine/mana.js';
+
+export const AI_STRATEGY = Object.freeze({
+  /** Plays lands, casts creatures, attacks when it has more creatures, blocks to trade. */
+  BASIC: 'basic',
+  /** Never acts on its own: passes priority and makes empty declarations. */
+  PASSIVE: 'passive',
+});
 
 /**
  * A simple computer player. It listens to the game's `state` events and, when it
  * has something to do, emits an `action` event that the game listens to. It never
- * touches the game directly.
- *
- * Strategy: play a land if it can (unless `playLands` is false), otherwise pass
- * priority. For any other decision (e.g. discarding to hand size) it takes the
- * first valid action.
+ * touches the game directly, and it only ever sends actions from `validActions`.
  *
  * `delayMs: null` acts synchronously (the game queues the action); any number
  * schedules the action with setTimeout so a viewer can follow along.
@@ -17,16 +23,16 @@ export class BasicAIController extends EventEmitter {
   #game;
   #playerId;
   #delayMs;
-  #playLands;
+  #strategy;
   #timer = null;
   #unsubscribers;
 
-  constructor({ game, playerId, delayMs = 0, playLands = true }) {
+  constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC }) {
     super();
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;
-    this.#playLands = playLands;
+    this.#strategy = strategy;
     this.#unsubscribers = [
       game.on('state', (state) => this.#onState(state)),
       game.listenTo(this),
@@ -48,18 +54,87 @@ export class BasicAIController extends EventEmitter {
     this.#onState(this.#game.getState());
   }
 
-  chooseAction(validActions) {
-    const mine = validActions.filter((a) => a.playerId === this.#playerId);
-    const byType = (type) => mine.find((a) => a.type === type);
-    return (this.#playLands && byType(ACTION.PLAY_LAND))
-      ?? byType(ACTION.PASS_PRIORITY)
-      ?? mine[0]
-      ?? null;
+  chooseAction(state) {
+    const mine = state.validActions.filter((a) => a.playerId === this.#playerId);
+    if (mine.length === 0) return null;
+    const find = (type, predicate = () => true) => mine.find((a) => a.type === type && predicate(a));
+    const passive = this.#strategy === AI_STRATEGY.PASSIVE;
+
+    switch (state.pendingDecision?.type) {
+      case DECISION.DECLARE_ATTACKERS:
+        return this.#moveTowards(state.pendingDecision.attackers, passive ? [] : this.#planAttack(state), find,
+          ACTION.TOGGLE_ATTACKER, ACTION.CONFIRM_ATTACKERS);
+      case DECISION.DECLARE_BLOCKERS:
+        return this.#chooseBlock(state, passive ? {} : this.#planBlocks(state), find);
+      case undefined:
+        break;
+      default:
+        // Discarding, dividing combat damage, ...: any choice will do.
+        return mine[0];
+    }
+    if (passive) return find(ACTION.PASS_PRIORITY);
+
+    const permanents = state.battlefield.filter((p) => p.controllerId === this.#playerId);
+    const me = state.players.find((p) => p.id === this.#playerId);
+    const isManaSource = (a) => permanents.find((p) => p.id === a.cardId)
+      ?.abilities.find((ab) => ab.id === a.abilityId)?.isManaAbility;
+    const castable = me.hand.filter((c) => isCreature(c));
+    const wantsToCast = castable.length > 0
+      && state.activePlayerId === this.#playerId
+      && [ 'precombatMain', 'postcombatMain' ].includes(state.phase)
+      && state.stack.length === 0;
+
+    return find(ACTION.PLAY_LAND)
+      ?? find(ACTION.CAST_SPELL)
+      // Only make mana when there's a creature to spend it on.
+      ?? (wantsToCast && manaPoolTotal(me.manaPool) === 0 ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
+      ?? find(ACTION.PASS_PRIORITY);
+  }
+
+  /** Attack with everything if we have more ready creatures than they have untapped blockers. */
+  #planAttack(state) {
+    const ready = state.validActions
+      .filter((a) => a.playerId === this.#playerId && a.type === ACTION.TOGGLE_ATTACKER)
+      .map((a) => a.cardId);
+    const theirBlockers = state.battlefield
+      .filter((p) => p.controllerId !== this.#playerId && isCreature(p) && !p.tapped);
+    return ready.length > theirBlockers.length ? ready : [];
+  }
+
+  /** Block each attacker with one creature, while creatures last. */
+  #planBlocks(state) {
+    const blockers = [...new Set(state.validActions
+      .filter((a) => a.playerId === this.#playerId && a.type === ACTION.SET_BLOCKER)
+      .map((a) => a.cardId))];
+    const plan = {};
+    state.combat.attackers.forEach(({ cardId }, i) => {
+      if (blockers[i]) plan[blockers[i]] = cardId;
+    });
+    return plan;
+  }
+
+  /** Toggle the first creature that differs from the plan, or confirm once they match. */
+  #moveTowards(current, wanted, find, toggleType, confirmType) {
+    const differs = (id) => current.includes(id) !== wanted.includes(id);
+    const next = [...current, ...wanted].find(differs);
+    return (next && find(toggleType, (a) => a.cardId === next)) || find(confirmType);
+  }
+
+  #chooseBlock(state, plan, find) {
+    const { blocks } = state.pendingDecision;
+    for (const blockerId of new Set([...Object.keys(blocks), ...Object.keys(plan)])) {
+      const wanted = plan[blockerId] ?? null;
+      if ((blocks[blockerId] ?? null) !== wanted) {
+        const action = find(ACTION.SET_BLOCKER, (a) => a.cardId === blockerId && a.attackerId === wanted);
+        if (action) return action;
+      }
+    }
+    return find(ACTION.CONFIRM_BLOCKERS);
   }
 
   #onState(state) {
     clearTimeout(this.#timer);
-    const action = this.chooseAction(state.validActions);
+    const action = this.chooseAction(state);
     if (!action) return;
 
     if (this.#delayMs === null) {

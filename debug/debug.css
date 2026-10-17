@@ -172,3 +172,11 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 .stack-object { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
 .card { width: auto; min-width: 84px; max-width: 140px; }
 .card button { white-space: nowrap; }
+
+.zones .life strong { font-size: 15px; }
+.card.creature { background: var(--creature-bg); color: var(--creature-text); }
+.card-status { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--panel); color: var(--muted); }
+:root { --creature-bg: #ece6d6; --creature-text: #4a3a12; }
+@media (prefers-color-scheme: dark) {
+  :root { --creature-bg: #33301f; --creature-text: #e7dcb5; }
+}

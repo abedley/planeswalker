@@ -1,14 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  Game, GAME_STATUS, ACTION, PHASE, STEP, EFFECT, CARD_TYPE,
-  passPriority, playLand, activateAbility, discard, BasicAIController,
+  Game, GAME_STATUS, DECISION, ACTION, PHASE, STEP, EFFECT, CARD_TYPE, AI_STRATEGY,
+  passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
+  setBlocker, confirmBlockers, assignCombatDamage, discard, BasicAIController,
 } from '../src/index.js';
 
 const players = [{ id: 'p1', name: 'Alice' }, { id: 'p2', name: 'Bob' }];
+const FORESTS = Array(10).fill('forest');
 
-function startGame(options = {}) {
-  const game = new Game({ players, seed: 1, ...options });
+/** Starts a game. Unless `decks` says otherwise, both players get 10 Forests. */
+function startGame({ decks, ...options } = {}) {
+  const game = new Game({ players, seed: 1, decks: { p1: FORESTS, p2: FORESTS, ...decks }, ...options });
   const events = [];
   game.onAny((name, payload) => events.push({ name, payload }));
   game.start();
@@ -25,11 +28,12 @@ function passRound(game) {
   }
 }
 
-/** Pass priority, or discard the first card when a discard decision is pending. */
+/** Pass priority; for decisions, confirm (no attackers/blockers) or take the first choice. */
 function proceed(game) {
   const { pendingDecision, validActions } = game.getState();
   if (pendingDecision) {
-    assert.deepEqual(game.dispatch(validActions[0]), { ok: true });
+    const confirm = validActions.find((a) => a.type.startsWith('CONFIRM_'));
+    assert.deepEqual(game.dispatch(confirm ?? validActions[0]), { ok: true });
   } else {
     passRound(game);
   }
@@ -54,16 +58,24 @@ test('requires at least two players with unique ids and known cards', () => {
   assert.throws(() => new Game({ players, decks: { p1: ['black-lotus'] } }));
 });
 
-test('each player starts with 10 Forests, shuffles and draws 7', () => {
-  const { game, events } = startGame();
+test('by default each player has 5 Forests and 5 Llanowar Elves, shuffles and draws 7', () => {
+  const game = new Game({ players, seed: 1 });
+  game.start();
   for (const id of ['p1', 'p2']) {
     const p = player(game, id);
+    const cards = [...p.hand, ...p.library];
     assert.equal(p.hand.length, 7);
     assert.equal(p.library.length, 3);
-    assert.ok([...p.hand, ...p.library].every((c) => c.cardId === 'forest' && c.name === 'Forest'));
-    assert.equal(new Set([...p.hand, ...p.library].map((c) => c.id)).size, 10);
+    assert.equal(p.life, 20);
+    assert.equal(cards.filter((c) => c.name === 'Forest').length, 5);
+    assert.equal(cards.filter((c) => c.name === 'Llanowar Elves').length, 5);
+    assert.equal(new Set(cards.map((c) => c.id)).size, 10);
     assert.deepEqual(p.graveyard, []);
   }
+});
+
+test('shuffles and draws are reported as events', () => {
+  const { game, events } = startGame();
   assert.deepEqual(game.getState().battlefield, []);
 
   assert.deepEqual(events.map((e) => e.name).slice(0, 5), [
@@ -410,8 +422,8 @@ test('the AI plays a land each turn and can act asynchronously', async () => {
   assert.deepEqual(game.getState().battlefield.map((p) => p.controllerId), ['p2']);
 });
 
-test('two AIs play a whole game until a player runs out of cards', () => {
-  const game = new Game({ players, seed: 7 });
+test('two land-only AIs play a whole game until a player runs out of cards', () => {
+  const game = new Game({ players, seed: 7, decks: { p1: FORESTS, p2: FORESTS } });
   const ais = players.map(({ id }) => new BasicAIController({ game, playerId: id, delayMs: null }));
   game.start();
   ais.forEach((ai) => ai.detach());
@@ -447,7 +459,7 @@ function startWithForest(options) {
 test('a Forest on the battlefield offers its mana ability', () => {
   const { game } = startWithForest();
   const forest = game.getState().battlefield[0];
-  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.' }]);
+  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true }]);
   assert.deepEqual(
     game.getState().validActions.filter((a) => a.type === ACTION.ACTIVATE_ABILITY),
     [{ type: ACTION.ACTIVATE_ABILITY, playerId: 'p1', cardId: forest.id, abilityId: 'tapForG' }],
@@ -627,4 +639,358 @@ test('the opponent can respond while an ability is on the stack', () => {
   assert.equal(state.priorityPlayerId, 'p2');
   assert.equal(state.stack.length, 1);
   assert.deepEqual(state.playersPassed, ['p1']);
+});
+
+// -----------------------------------------------------------------------------
+// Creatures
+
+const ELF_DECK = [...Array(5).fill('forest'), ...Array(5).fill('llanowarElves')];
+const card = (game, playerId, name) => player(game, playerId).hand.find((c) => c.name === name);
+const permanent = (game, id) => game.getState().battlefield.find((p) => p.id === id);
+
+/**
+ * In the player's main phase: make {G} (playing a Forest if none is untapped),
+ * cast a creature, and let it resolve. Returns the creature's id.
+ */
+function castCreature(game, playerId, name = 'Llanowar Elves') {
+  const untappedForest = () => game.getState().battlefield
+    .find((p) => p.controllerId === playerId && p.cardId === 'forest' && !p.tapped);
+  if (!untappedForest()) assert.deepEqual(game.dispatch(playLand(playerId, card(game, playerId, 'Forest').id)), { ok: true });
+  game.dispatch(activateAbility(playerId, untappedForest().id, 'tapForG'));
+  const { id } = card(game, playerId, name);
+  assert.deepEqual(game.dispatch(castSpell(playerId, id)), { ok: true });
+  passRound(game); // both pass: the spell resolves
+  assert.ok(permanent(game, id), `${name} should be on the battlefield`);
+  return id;
+}
+
+/** p1 casts a creature on turn 1, p2 on turn 2; returns at p1's turn 3 precombat main. */
+function creaturesOnBothSides({ p1 = 'Llanowar Elves', p2 = 'Llanowar Elves', decks, cards } = {}) {
+  const setup = startGame({ decks: { p1: ELF_DECK, p2: ELF_DECK, ...decks }, cards });
+  const { game } = setup;
+  passRound(game);
+  const attacker = castCreature(game, 'p1', p1);
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  const defender = p2 ? castCreature(game, 'p2', p2) : null;
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  return { ...setup, attacker, defender };
+}
+
+/** From a main phase, pass into the declare attackers step. */
+function toDeclareAttackers(game) {
+  passRound(game); // -> beginning of combat
+  passRound(game); // -> declare attackers
+  assert.equal(game.getState().step, STEP.DECLARE_ATTACKERS);
+}
+
+test('Llanowar Elves is a 1/1 for {G} with "{T}: Add {G}."', () => {
+  const { game } = startGame({ decks: { p1: ELF_DECK } });
+  const elves = card(game, 'p1', 'Llanowar Elves');
+  assert.deepEqual(
+    { manaCost: elves.manaCost, types: elves.types, subtypes: elves.subtypes, power: elves.power, toughness: elves.toughness },
+    { manaCost: { G: 1 }, types: ['Creature'], subtypes: ['Elf', 'Druid'], power: 1, toughness: 1 },
+  );
+  assert.deepEqual(elves.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true }]);
+});
+
+test('casting a creature needs {G} in the pool and sorcery timing', () => {
+  const { game } = startGame({ decks: { p1: ELF_DECK, p2: ELF_DECK } });
+  const elves = card(game, 'p1', 'Llanowar Elves');
+  const casts = () => game.getState().validActions.filter((a) => a.type === ACTION.CAST_SPELL);
+  assert.deepEqual(casts(), []); // upkeep
+  passRound(game);
+  assert.deepEqual(casts(), []); // main phase, but no mana
+  assert.equal(game.dispatch(castSpell('p1', elves.id)).ok, false);
+
+  game.dispatch(playLand('p1', card(game, 'p1', 'Forest').id));
+  game.dispatch(activateAbility('p1', game.getState().battlefield[0].id, 'tapForG'));
+  assert.ok(casts().length > 0);
+  assert.ok(casts().every((a) => player(game, 'p1').hand.find((c) => c.id === a.cardId).name === 'Llanowar Elves'));
+
+  // Not while the opponent has priority, even with mana.
+  game.dispatch(passPriority('p1'));
+  assert.equal(game.dispatch(castSpell('p2', card(game, 'p2', 'Llanowar Elves').id)).ok, false);
+});
+
+test('a creature spell goes on the stack and enters the battlefield when it resolves', () => {
+  const { game, events } = startGame({ decks: { p1: ELF_DECK } });
+  passRound(game);
+  game.dispatch(playLand('p1', card(game, 'p1', 'Forest').id));
+  game.dispatch(activateAbility('p1', game.getState().battlefield[0].id, 'tapForG'));
+  const elves = card(game, 'p1', 'Llanowar Elves');
+  game.dispatch(castSpell('p1', elves.id));
+
+  let state = game.getState();
+  assert.equal(player(game, 'p1').manaPool.G, 0);
+  assert.ok(!player(game, 'p1').hand.some((c) => c.id === elves.id));
+  assert.deepEqual(
+    state.stack.map((o) => [o.kind, o.sourceId, o.controllerId]),
+    [['spell', elves.id, 'p1']],
+  );
+  assert.equal(state.priorityPlayerId, 'p1');
+  assert.ok(!permanent(game, elves.id));
+  // Can't cast another spell or play a land while the stack isn't empty.
+  assert.ok(!state.validActions.some((a) => [ACTION.CAST_SPELL, ACTION.PLAY_LAND].includes(a.type)));
+
+  passRound(game);
+  state = game.getState();
+  assert.deepEqual(state.stack, []);
+  assert.equal(state.phase, PHASE.PRECOMBAT_MAIN);
+  const creature = permanent(game, elves.id);
+  assert.deepEqual(
+    [creature.controllerId, creature.tapped, creature.summoningSick, creature.damage],
+    ['p1', false, true, 0],
+  );
+  assert.ok(events.some((e) => e.name === 'spellCast' && e.payload.cardId === elves.id));
+  assert.ok(events.some((e) => e.name === 'permanentEntered' && e.payload.card.id === elves.id));
+});
+
+test('summoning sickness stops a new creature tapping for mana until its controller\'s next turn', () => {
+  const { game, attacker } = creaturesOnBothSides();
+  // Turn 3: p1's Elves have been under p1's control since the turn began.
+  assert.equal(permanent(game, attacker).summoningSick, false);
+  assert.deepEqual(game.dispatch(activateAbility('p1', attacker, 'tapForG')), { ok: true });
+});
+
+test('a creature that just arrived can\'t tap for mana', () => {
+  const { game } = startGame({ decks: { p1: ELF_DECK } });
+  passRound(game);
+  const elves = castCreature(game, 'p1');
+  assert.equal(game.dispatch(activateAbility('p1', elves, 'tapForG')).ok, false);
+  // Still sick during the opponent's turn.
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  assert.equal(permanent(game, elves).summoningSick, true);
+});
+
+// -----------------------------------------------------------------------------
+// Combat
+
+test('creatures with summoning sickness can\'t attack, so there is no declaration', () => {
+  const { game, events } = startGame({ decks: { p1: ELF_DECK } });
+  passRound(game);
+  castCreature(game, 'p1');
+  toDeclareAttackers(game);
+  const state = game.getState();
+  assert.equal(state.pendingDecision, null);
+  assert.equal(state.priorityPlayerId, 'p1');
+  assert.deepEqual(events.findLast((e) => e.name === 'attackersDeclared').payload.attackers, []);
+});
+
+test('declaring attackers: toggle creatures, then confirm', () => {
+  const { game, attacker } = creaturesOnBothSides();
+  toDeclareAttackers(game);
+  let state = game.getState();
+  assert.deepEqual(state.pendingDecision, { type: DECISION.DECLARE_ATTACKERS, playerId: 'p1', attackers: [] });
+  assert.equal(state.priorityPlayerId, null);
+  assert.deepEqual(state.validActions, [
+    { type: ACTION.TOGGLE_ATTACKER, playerId: 'p1', cardId: attacker },
+    { type: ACTION.CONFIRM_ATTACKERS, playerId: 'p1' },
+  ]);
+
+  game.dispatch(toggleAttacker('p1', attacker));
+  assert.deepEqual(game.getState().pendingDecision.attackers, [attacker]);
+  game.dispatch(toggleAttacker('p1', attacker));
+  assert.deepEqual(game.getState().pendingDecision.attackers, []);
+  game.dispatch(toggleAttacker('p1', attacker));
+  assert.equal(game.dispatch(confirmAttackers('p2')).ok, false);
+  assert.deepEqual(game.dispatch(confirmAttackers('p1')), { ok: true });
+
+  state = game.getState();
+  assert.equal(permanent(game, attacker).tapped, true);
+  assert.deepEqual(state.combat.attackers, [
+    { cardId: attacker, defendingPlayerId: 'p2', blocked: false, blockerIds: [], damageAssignment: null },
+  ]);
+  assert.equal(state.step, STEP.DECLARE_ATTACKERS);
+  assert.equal(state.priorityPlayerId, 'p1');
+});
+
+test('declaring no attackers skips the blockers and damage steps', () => {
+  const { game } = creaturesOnBothSides();
+  toDeclareAttackers(game);
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  assert.equal(game.getState().step, STEP.END_OF_COMBAT);
+});
+
+test('an unblocked attacker deals damage to the defending player', () => {
+  const { game, attacker, events } = creaturesOnBothSides({ p2: null });
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game); // -> declare blockers: p2 has no creatures, so no declaration
+  assert.equal(game.getState().step, STEP.DECLARE_BLOCKERS);
+  assert.equal(game.getState().pendingDecision, null);
+  passRound(game); // -> combat damage
+
+  assert.equal(game.getState().step, STEP.COMBAT_DAMAGE);
+  assert.equal(player(game, 'p2').life, 19);
+  assert.deepEqual(events.findLast((e) => e.name === 'combatDamageDealt').payload.damage,
+    [{ sourceId: attacker, targetPlayerId: 'p2', amount: 1 }]);
+
+  // Creatures leave combat when the end of combat step ends; the attacker stays tapped.
+  advanceTo(game, { turn: 3, phase: PHASE.POSTCOMBAT_MAIN });
+  assert.deepEqual(game.getState().combat.attackers, []);
+  assert.equal(permanent(game, attacker).tapped, true);
+  // It untaps in p1's next untap step.
+  advanceTo(game, { turn: 5, phase: PHASE.BEGINNING });
+  assert.equal(permanent(game, attacker).tapped, false);
+});
+
+test('declaring blockers: the defending player assigns blockers, then confirms', () => {
+  const { game, attacker, defender } = creaturesOnBothSides();
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+
+  let state = game.getState();
+  assert.equal(state.step, STEP.DECLARE_BLOCKERS);
+  assert.deepEqual(state.pendingDecision, { type: DECISION.DECLARE_BLOCKERS, playerId: 'p2', blocks: {} });
+  assert.deepEqual(state.validActions, [
+    { type: ACTION.SET_BLOCKER, playerId: 'p2', cardId: defender, attackerId: attacker },
+    { type: ACTION.CONFIRM_BLOCKERS, playerId: 'p2' },
+  ]);
+  game.dispatch(setBlocker('p2', defender, attacker));
+  assert.deepEqual(game.getState().pendingDecision.blocks, { [defender]: attacker });
+  // The block can be undone before confirming.
+  assert.ok(game.getState().validActions.some((a) => a.type === ACTION.SET_BLOCKER && a.attackerId === null));
+  game.dispatch(confirmBlockers('p2'));
+
+  state = game.getState();
+  assert.deepEqual(state.combat.attackers[0].blockerIds, [defender]);
+  assert.equal(state.combat.attackers[0].blocked, true);
+  assert.equal(state.priorityPlayerId, 'p1');
+});
+
+test('blocked creatures trade damage, and lethal damage puts them in the graveyard', () => {
+  const { game, attacker, defender, events } = creaturesOnBothSides();
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  game.dispatch(setBlocker('p2', defender, attacker));
+  game.dispatch(confirmBlockers('p2'));
+  passRound(game); // -> combat damage
+
+  const state = game.getState();
+  assert.equal(state.step, STEP.COMBAT_DAMAGE);
+  assert.equal(player(game, 'p2').life, 20);
+  assert.ok(!permanent(game, attacker));
+  assert.ok(!permanent(game, defender));
+  assert.ok(player(game, 'p1').graveyard.some((c) => c.id === attacker));
+  assert.ok(player(game, 'p2').graveyard.some((c) => c.id === defender));
+  // Cards in the graveyard lose battlefield-only state.
+  assert.equal(player(game, 'p1').graveyard.find((c) => c.id === attacker).damage, undefined);
+  assert.deepEqual(state.combat.attackers, []);
+  assert.deepEqual(events.filter((e) => e.name === 'creatureDied').map((e) => e.payload.cardId).sort(),
+    [attacker, defender].sort());
+});
+
+test('an attacker blocked by two creatures divides its damage as its controller chooses', () => {
+  const { game, attacker, defender } = creaturesOnBothSides();
+  // p2 gets a second Elves on turn 4; p1 attacks on turn 5.
+  advanceTo(game, { turn: 4, phase: PHASE.PRECOMBAT_MAIN });
+  const second = castCreature(game, 'p2');
+  advanceTo(game, { turn: 5, phase: PHASE.PRECOMBAT_MAIN });
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  game.dispatch(setBlocker('p2', defender, attacker));
+  game.dispatch(setBlocker('p2', second, attacker));
+  game.dispatch(confirmBlockers('p2'));
+  passRound(game); // -> combat damage: p1 must divide 1 damage
+
+  const state = game.getState();
+  assert.deepEqual(state.pendingDecision, {
+    type: DECISION.ASSIGN_COMBAT_DAMAGE, playerId: 'p1', attackerId: attacker, power: 1, blockerIds: [defender, second],
+  });
+  assert.deepEqual(state.validActions.map((a) => a.assignment), [
+    { [defender]: 1, [second]: 0 },
+    { [defender]: 0, [second]: 1 },
+  ]);
+  assert.equal(game.dispatch(assignCombatDamage('p1', attacker, { [defender]: 1, [second]: 1 })).ok, false);
+  assert.deepEqual(game.dispatch(assignCombatDamage('p1', attacker, { [defender]: 0, [second]: 1 })), { ok: true });
+
+  assert.ok(!permanent(game, attacker)); // took 2
+  assert.ok(permanent(game, defender)); // took none
+  assert.ok(!permanent(game, second)); // took 1
+  assert.equal(game.getState().priorityPlayerId, 'p1');
+});
+
+const WALL = {
+  id: 'testWall', name: 'Test Wall', manaCost: { G: 1 }, types: [CARD_TYPE.CREATURE], power: 0, toughness: 3,
+};
+const GIANT = {
+  id: 'testGiant', name: 'Test Giant', manaCost: { G: 1 }, types: [CARD_TYPE.CREATURE], power: 20, toughness: 20,
+};
+
+test('damage that isn\'t lethal stays marked until the cleanup step', () => {
+  const { game, attacker, defender } = creaturesOnBothSides({
+    p2: 'Test Wall',
+    cards: { testWall: WALL },
+    decks: { p2: [...Array(5).fill('forest'), ...Array(5).fill('testWall')] },
+  });
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  game.dispatch(setBlocker('p2', defender, attacker));
+  game.dispatch(confirmBlockers('p2'));
+  passRound(game);
+
+  assert.equal(permanent(game, defender).damage, 1);
+  assert.equal(permanent(game, attacker).damage, 0); // a 0-power blocker deals no damage
+  advanceTo(game, { turn: 3, phase: PHASE.ENDING });
+  assert.equal(permanent(game, defender).damage, 1);
+  advanceTo(game, { turn: 4, phase: PHASE.BEGINNING });
+  assert.equal(permanent(game, defender).damage, 0);
+});
+
+test('a player at 0 life loses', () => {
+  const { game, attacker, events } = creaturesOnBothSides({
+    p1: 'Test Giant',
+    p2: null,
+    cards: { testGiant: GIANT },
+    decks: { p1: [...Array(5).fill('forest'), ...Array(5).fill('testGiant')] },
+  });
+  toDeclareAttackers(game);
+  game.dispatch(toggleAttacker('p1', attacker));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  passRound(game);
+
+  const state = game.getState();
+  assert.equal(player(game, 'p2').life, 0);
+  assert.equal(state.status, GAME_STATUS.GAME_OVER);
+  assert.equal(state.winnerId, 'p1');
+  assert.equal(events.findLast((e) => e.name === 'playerLost').payload.reason, 'Life total reached 0.');
+});
+
+test('two basic AIs with the default decks play a game to the end', () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const game = new Game({ players, seed });
+    const ais = players.map(({ id }) => new BasicAIController({ game, playerId: id, delayMs: null }));
+    const events = [];
+    game.onAny((name) => events.push(name));
+    game.start();
+    ais.forEach((ai) => ai.detach());
+
+    const state = game.getState();
+    assert.equal(state.status, GAME_STATUS.GAME_OVER, `seed ${seed}`);
+    assert.ok(state.winnerId, `seed ${seed}`);
+    assert.ok(events.includes('spellCast'), `seed ${seed}: the AIs cast creatures`);
+  }
+});
+
+test('a passive AI never casts, attacks or blocks', () => {
+  const game = new Game({ players, seed: 1 });
+  const ais = players.map(({ id }) => new BasicAIController({
+    game, playerId: id, delayMs: null, strategy: AI_STRATEGY.PASSIVE,
+  }));
+  game.start();
+  ais.forEach((ai) => ai.detach());
+  const state = game.getState();
+  assert.equal(state.status, GAME_STATUS.GAME_OVER);
+  assert.deepEqual(state.battlefield, []);
 });

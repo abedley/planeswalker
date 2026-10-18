@@ -29,6 +29,42 @@ npm run serve        # python3 -m http.server 8000
 npm test             # node --test (Node 18+)
 ```
 
+## Importing cards from Scryfall
+
+`tools/import-cards.js` is a Node command-line tool (Node 18+, no dependencies) that pulls card
+definitions from the [Scryfall API](https://scryfall.com/docs/api) into
+`src/cards/importedCards.js`. That file is merged into `CARDS`. The site never loads anything
+from `tools/`.
+
+```sh
+npm run import-cards -- "Serra Angel" "Vampire Nighthawk"
+npm run import-cards -- --file my-cards.txt                # one name per line, # for comments
+npm run import-cards -- --query "set:fdn t:creature c:g"   # any Scryfall search
+npm run import-cards -- --dry-run "Birds of Paradise"      # report only, write nothing
+```
+
+A card is only imported if the engine supports everything it does:
+- It's a single-faced creature or land with no supertype other than Basic.
+- Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
+- Its power and toughness are fixed numbers.
+- Its rules text is only supported keywords and "{T}: Add …" mana abilities.
+
+Every other card is skipped, and the report says what isn't supported, for example:
+
+```
+Not imported — uses things the game doesn't support yet (2):
+  - Birds of Paradise
+      Unsupported rules text: "{T}: Add one mana of any color."
+  - Thalia, Guardian of Thraben
+      Unsupported supertype: Legendary.
+      Unsupported rules text: "Noncreature spells cost {1} more to cast."
+```
+
+The exit code is 1 when anything was skipped or not found. Re-importing a card updates it. Cards
+defined by hand in `src/cards/cards.js` (Forest, Llanowar Elves) aren't overwritten. The
+importer's tests use hand-written card objects in Scryfall's format
+(`test/fixtures/scryfallCards.js`), so they don't need network access.
+
 ## GitHub Pages
 
 The site is served from the root of the `main` branch. To turn it on, go to
@@ -227,7 +263,8 @@ Every payload carries a `seq` number that increases for each event the game emit
   A player loses at 0 life (704.5a), or after trying to draw from an empty library (704.5b). The
   game ends as soon as any player loses, because multiplayer elimination isn't modelled.
 
-Cards are defined in `src/cards/cards.js`: a mana cost, types, power and toughness for creatures,
+Cards are defined in `src/cards/cards.js` (by hand) and `src/cards/importedCards.js` (generated
+from Scryfall, see above): a mana cost, types, power and toughness for creatures,
 and activated abilities as data (`{ id, text, cost: { tap?, mana? }, effect }`). The supported
 effects are `addMana` (which makes it a mana ability) and `drawCards`. Creatures can list
 `keywords`. The tests add test-only cards through the `cards` option, including free (0-cost)

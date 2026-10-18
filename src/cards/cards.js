@@ -9,6 +9,8 @@
  *   - `cost`: `{ tap?: true, mana?: { G: 1, ... } }`
  *   - `effect`: `{ type: 'addMana', mana }` or `{ type: 'drawCards', count }`
  */
+import { IMPORTED_CARDS } from './importedCards.js';
+
 export const CARD_TYPE = Object.freeze({
   LAND: 'Land',
   CREATURE: 'Creature',
@@ -41,7 +43,8 @@ const deepFreeze = (value) => {
 
 const TAP_FOR_G = { id: 'tapForG', text: '{T}: Add {G}.', cost: { tap: true }, effect: { type: EFFECT.ADD_MANA, mana: { G: 1 } } };
 
-export const CARDS = deepFreeze({
+/** Cards defined in this file. Imported cards can't replace these. */
+export const HAND_WRITTEN_CARDS = deepFreeze({
   forest: {
     id: 'forest',
     name: 'Forest',
@@ -64,6 +67,9 @@ export const CARDS = deepFreeze({
 });
 
 /** 40 cards: 20 Forests and 20 Llanowar Elves. */
+/** Every card: imported from Scryfall (src/cards/importedCards.js) plus the hand-written ones. */
+export const CARDS = deepFreeze({ ...structuredClone(IMPORTED_CARDS), ...HAND_WRITTEN_CARDS });
+
 export const DEFAULT_DECK = Object.freeze([...Array(20).fill('forest'), ...Array(20).fill('llanowarElves')]);
 
 export const isLand = (card) => card.types.includes(CARD_TYPE.LAND);

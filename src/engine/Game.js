@@ -138,10 +138,13 @@ export class Game extends EventEmitter {
   get turn() { return this.#turn; }
   get combat() { return this.#combat; }
 
-  /** 510.4: whether an attacking or blocking creature has first strike. */
+  /** 510.4: whether an attacking or blocking creature has first strike or double strike. */
   get combatHasFirstStrike() {
     const ids = this.#combat.attackers.flatMap((a) => [a.cardId, ...a.blockerIds]);
-    return ids.some((id) => hasKeyword(this.#permanent(id), KEYWORD.FIRST_STRIKE));
+    return ids.some((id) => {
+      const creature = this.#permanent(id);
+      return hasKeyword(creature, KEYWORD.FIRST_STRIKE) || hasKeyword(creature, KEYWORD.DOUBLE_STRIKE);
+    });
   }
 
   start() {
@@ -747,10 +750,12 @@ export class Game extends EventEmitter {
   }
 
   /**
-   * 510.4: with first strike in combat there are two combat damage steps. Creatures
-   * with first strike deal damage in the first; the rest deal damage in the second.
+   * 510.4: with first strike or double strike in combat there are two combat damage
+   * steps. Creatures with first strike deal damage in the first, creatures without
+   * it in the second, and creatures with double strike (702.4b) in both.
    */
   #dealsDamageThisStep(creature) {
+    if (hasKeyword(creature, KEYWORD.DOUBLE_STRIKE)) return true;
     return hasKeyword(creature, KEYWORD.FIRST_STRIKE) === (this.#segment.step === STEP.FIRST_STRIKE_DAMAGE);
   }
 

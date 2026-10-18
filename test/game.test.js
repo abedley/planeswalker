@@ -58,18 +58,18 @@ test('requires at least two players with unique ids and known cards', () => {
   assert.throws(() => new Game({ players, decks: { p1: ['black-lotus'] } }));
 });
 
-test('by default each player has 5 Forests and 5 Llanowar Elves, shuffles and draws 7', () => {
+test('by default each player has 20 Forests and 20 Llanowar Elves, shuffles and draws 7', () => {
   const game = new Game({ players, seed: 1 });
   game.start();
   for (const id of ['p1', 'p2']) {
     const p = player(game, id);
     const cards = [...p.hand, ...p.library];
     assert.equal(p.hand.length, 7);
-    assert.equal(p.library.length, 3);
+    assert.equal(p.library.length, 33);
     assert.equal(p.life, 20);
-    assert.equal(cards.filter((c) => c.name === 'Forest').length, 5);
-    assert.equal(cards.filter((c) => c.name === 'Llanowar Elves').length, 5);
-    assert.equal(new Set(cards.map((c) => c.id)).size, 10);
+    assert.equal(cards.filter((c) => c.name === 'Forest').length, 20);
+    assert.equal(cards.filter((c) => c.name === 'Llanowar Elves').length, 20);
+    assert.equal(new Set(cards.map((c) => c.id)).size, 40);
     assert.deepEqual(p.graveyard, []);
   }
 });
@@ -1011,6 +1011,8 @@ const KEYWORD_CARDS = Object.fromEntries([
   ['Deathtouch Asp', 1, 1, 'deathtouch'], ['Lifelink Bat', 2, 2, 'lifelink'],
   ['First Strike Elk', 2, 2, 'first strike'], ['First Strike Mouse', 1, 1, 'first strike'],
   ['Trample Rhino', 3, 3, 'trample'], ['Deathtouch Trampler', 3, 3, 'trample', 'deathtouch'],
+  ['Double Striker', 2, 2, 'double strike'], ['Double Strike Mouse', 1, 1, 'double strike'],
+  ['Double Strike Trampler', 3, 3, 'double strike', 'trample'],
 ].map(([name, power, toughness, ...keywords]) => [name, {
   id: name, name, manaCost: {}, types: [CARD_TYPE.CREATURE], power, toughness, keywords,
 }]));
@@ -1246,6 +1248,87 @@ test('trample with deathtouch: 1 damage counts as lethal', () => {
   game.dispatch(assignCombatDamage('p1', mine['Deathtouch Trampler'], options.at(-1)));
   assert.ok(!permanent(game, theirs.Ox));
   assert.equal(life(game, 'p2'), 18);
+});
+
+const damageSteps = (events) => events.filter((e) => e.name === 'combatDamageDealt')
+  .map((e) => [e.payload.step, e.payload.damage.map((d) => [d.sourceId, d.targetPlayerId ?? d.targetCardId, d.amount])]);
+
+test('double strike: deals damage in both the first-strike and regular damage steps', () => {
+  const { game, mine, events } = battle({ p1: ['Double Striker'] });
+  attackWith(game, [mine['Double Striker']]);
+  passRound(game); // p2 has no creatures, so nothing to declare in the blockers step
+  assert.equal(game.getState().step, STEP.FIRST_STRIKE_DAMAGE);
+  assert.equal(life(game, 'p2'), 18);
+  passRound(game);
+  assert.equal(game.getState().step, STEP.COMBAT_DAMAGE);
+  assert.equal(life(game, 'p2'), 16);
+  assert.deepEqual(damageSteps(events), [
+    [STEP.FIRST_STRIKE_DAMAGE, [[mine['Double Striker'], 'p2', 2]]],
+    [STEP.COMBAT_DAMAGE, [[mine['Double Striker'], 'p2', 2]]],
+  ]);
+});
+
+test('double strike: a blocker that dies in the first step deals no damage back', () => {
+  const { game, mine, theirs } = battle({ p1: ['Double Striker'], p2: ['Bear'] });
+  attackWith(game, [mine['Double Striker']]);
+  blockWith(game, [[theirs.Bear, mine['Double Striker']]]);
+  assert.ok(!permanent(game, theirs.Bear));
+  passRound(game);
+  // Still blocked, with no blocker left and no trample: no damage to anyone.
+  assert.equal(permanent(game, mine['Double Striker']).damage, 0);
+  assert.equal(life(game, 'p2'), 20);
+});
+
+test('double strike: a double-strike blocker hits in both steps', () => {
+  const { game, mine, theirs } = battle({ p1: ['Bear'], p2: ['Double Strike Mouse'] });
+  attackWith(game, [mine.Bear]);
+  blockWith(game, [[theirs['Double Strike Mouse'], mine.Bear]]);
+  assert.equal(permanent(game, mine.Bear).damage, 1);
+  passRound(game);
+  // Regular step: the Bear and the Mouse hit each other at the same time.
+  assert.ok(!permanent(game, mine.Bear));
+  assert.ok(!permanent(game, theirs['Double Strike Mouse']));
+});
+
+test('double strike with trample: with its blocker gone, all its damage goes to the player', () => {
+  const { game, mine, theirs } = battle({ p1: ['Double Strike Trampler'], p2: ['Bear'] });
+  const trampler = mine['Double Strike Trampler'];
+  attackWith(game, [trampler]);
+  blockWith(game, [[theirs.Bear, trampler]]);
+  // First-strike step: 2 is lethal for the Bear, so up to 1 can trample over.
+  assert.deepEqual(game.getState().validActions.map((a) => a.assignment), [
+    { [theirs.Bear]: 3, p2: 0 },
+    { [theirs.Bear]: 2, p2: 1 },
+  ]);
+  game.dispatch(assignCombatDamage('p1', trampler, { [theirs.Bear]: 2, p2: 1 }));
+  assert.ok(!permanent(game, theirs.Bear));
+  assert.equal(life(game, 'p2'), 19);
+  passRound(game);
+  // Regular step: no blockers left, so all 3 trample through (702.19e) without a choice.
+  assert.equal(game.getState().pendingDecision, null);
+  assert.equal(life(game, 'p2'), 16);
+});
+
+test('trample counts damage already marked on a blocker', () => {
+  const { game, mine, theirs } = battle({ p1: ['Double Strike Trampler'], p2: ['Ox'] });
+  const trampler = mine['Double Strike Trampler'];
+  attackWith(game, [trampler]);
+  blockWith(game, [[theirs.Ox, trampler]]);
+  // First-strike step: 3 isn't lethal for a 4/4, so it all goes to the Ox automatically.
+  assert.equal(game.getState().pendingDecision, null);
+  assert.equal(permanent(game, theirs.Ox).damage, 3);
+  passRound(game);
+  // Regular step: the Ox needs only 1 more, so up to 2 can trample over.
+  assert.deepEqual(game.getState().validActions.map((a) => a.assignment), [
+    { [theirs.Ox]: 3, p2: 0 },
+    { [theirs.Ox]: 2, p2: 1 },
+    { [theirs.Ox]: 1, p2: 2 },
+  ]);
+  game.dispatch(assignCombatDamage('p1', trampler, { [theirs.Ox]: 1, p2: 2 }));
+  assert.ok(!permanent(game, theirs.Ox));
+  assert.equal(life(game, 'p2'), 18);
+  // The Ox hit back in the regular step: 4 damage kills the 3/3 trampler.
+  assert.ok(!permanent(game, trampler));
 });
 
 test('the AI makes legal blocks against flying and menace', () => {

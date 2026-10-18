@@ -5,15 +5,16 @@ JavaScript (ES modules, no build step) and hosted on GitHub Pages.
 
 So far the engine models the **turn structure** (phases and steps), **priority**, the **stack**,
 **mana pools**, **life totals**, and **combat**. There are two cards: **Forest** and **Llanowar
-Elves** (a 1/1 for {G} with "{T}: Add {G}."). Each player starts at 20 life with a deck of
-5 Forests and 5 Elves, shuffles it, and draws 7 cards.
+Elves** (a 1/1 for {G} with "{T}: Add {G}."). Each player starts at 20 life with a 40-card deck
+of 20 Forests and 20 Elves, shuffles it, and draws 7 cards.
 
 Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
 blockers, divide combat damage, and discard when the cleanup step asks them to.
 
-The combat keywords **haste, first strike, trample, menace, deathtouch, flying, reach, lifelink,
-defender and vigilance** are implemented. No real card has them yet, so a **keyword sampler** deck
-(`SAMPLE_CARDS` / `SAMPLE_DECK`, with one {G} creature per keyword) can be picked in the debugger.
+The combat keywords **haste, first strike, double strike, trample, menace, deathtouch, flying,
+reach, lifelink, defender and vigilance** are implemented. No real card has them yet, so a
+40-card **keyword sampler** deck (`SAMPLE_CARDS` / `SAMPLE_DECK`: 18 Forests and two each of
+eleven {G} creatures, one per keyword) can be picked in the debugger.
 
 - `index.html`: landing page
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
@@ -57,7 +58,7 @@ import { Game, BasicAIController, passPriority, playLand, activateAbility, castS
 
 const game = new Game({
   players: [{ id: 'p1', name: 'You' }, { id: 'p2', name: 'Opponent' }],
-  // decks: { p1: ['forest', ...] }, // optional; defaults to 5 Forests + 5 Llanowar Elves
+  // decks: { p1: ['forest', ...] }, // optional; defaults to 20 Forests + 20 Llanowar Elves
   // seed: 42,                       // optional; makes shuffles reproducible
   // cards: { myCard: {...} },        // optional; extra card definitions (e.g. SAMPLE_CARDS)
   // shuffleLibraries: false,        // optional; keep decks in order (first 7 = opening hand)
@@ -203,8 +204,12 @@ Every payload carries a `seq` number that increases for each event the game emit
     - **Menace:** it can't be blocked by just one creature (702.111). Each `SET_BLOCKER` is offered
       on its own, but `CONFIRM_BLOCKERS` only appears once no menace attacker has exactly one
       blocker.
-    - **First strike:** if any attacking or blocking creature has first strike, there's an extra
-      first-strike damage step before the regular one. Players get priority in between (510.4).
+    - **First strike:** if any attacking or blocking creature has first strike or double strike,
+      there's an extra first-strike damage step before the regular one. Players get priority in
+      between (510.4).
+    - **Double strike:** the creature deals damage in both the first-strike and regular damage
+      steps (702.4). A blocked double striker whose blockers died in the first step deals no
+      more damage, unless it has trample.
     - **Trample:** the attacker can assign damage to the player only after every blocker is
       assigned lethal damage. That counts damage already marked, and deathtouch makes 1 lethal
       (702.19). If all its blockers are gone, all its damage goes to the player.
@@ -215,7 +220,7 @@ Every payload carries a `seq` number that increases for each event the game emit
     more than one, the attacking player chooses (`ASSIGN_COMBAT_DAMAGE`); when there's exactly
     one, it's applied automatically. Splits are keyed by blocker id, plus the defending player's
     id for trample.
-  - Double strike and other keywords aren't implemented.
+  - Other keywords aren't implemented yet.
 - Damage on creatures wears off in the cleanup step (514.2).
 - State-based actions are checked before a player receives priority (117.5), and repeated until
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).

@@ -11,6 +11,7 @@ const creature = (id, name, power, toughness, keywords) => Object.freeze({
 export const SAMPLE_CARDS = Object.freeze({
   hasteWolf: creature('hasteWolf', 'Haste Wolf', 2, 1, [KEYWORD.HASTE]),
   firstStrikeElk: creature('firstStrikeElk', 'First Strike Elk', 2, 2, [KEYWORD.FIRST_STRIKE]),
+  doubleStrikeFencer: creature('doubleStrikeFencer', 'Double Strike Fencer', 1, 2, [KEYWORD.DOUBLE_STRIKE]),
   trampleRhino: creature('trampleRhino', 'Trample Rhino', 3, 3, [KEYWORD.TRAMPLE]),
   menaceLynx: creature('menaceLynx', 'Menace Lynx', 2, 1, [KEYWORD.MENACE]),
   deathtouchAsp: creature('deathtouchAsp', 'Deathtouch Asp', 1, 1, [KEYWORD.DEATHTOUCH]),
@@ -21,5 +22,8 @@ export const SAMPLE_CARDS = Object.freeze({
   vigilanceBear: creature('vigilanceBear', 'Vigilance Bear', 2, 2, [KEYWORD.VIGILANCE]),
 });
 
-/** 10 Forests and one of each sample creature. */
-export const SAMPLE_DECK = Object.freeze([...Array(10).fill('forest'), ...Object.keys(SAMPLE_CARDS)]);
+/** 40 cards: 18 Forests and two of each of the 11 sample creatures. */
+export const SAMPLE_DECK = Object.freeze([
+  ...Array(18).fill('forest'),
+  ...Object.keys(SAMPLE_CARDS).flatMap((id) => [id, id]),
+]);

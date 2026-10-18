@@ -18,6 +18,7 @@ export const CARD_TYPE = Object.freeze({
 export const KEYWORD = Object.freeze({
   DEATHTOUCH: 'deathtouch', // 702.2
   DEFENDER: 'defender', // 702.3
+  DOUBLE_STRIKE: 'double strike', // 702.4
   FIRST_STRIKE: 'first strike', // 702.7
   FLYING: 'flying', // 702.9
   HASTE: 'haste', // 702.10
@@ -62,7 +63,8 @@ export const CARDS = deepFreeze({
   },
 });
 
-export const DEFAULT_DECK = Object.freeze([...Array(5).fill('forest'), ...Array(5).fill('llanowarElves')]);
+/** 40 cards: 20 Forests and 20 Llanowar Elves. */
+export const DEFAULT_DECK = Object.freeze([...Array(20).fill('forest'), ...Array(20).fill('llanowarElves')]);
 
 export const isLand = (card) => card.types.includes(CARD_TYPE.LAND);
 export const isCreature = (card) => card.types.includes(CARD_TYPE.CREATURE);

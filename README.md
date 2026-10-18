@@ -11,6 +11,10 @@ Elves** (a 1/1 for {G} with "{T}: Add {G}."). Each player starts at 20 life with
 Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
 blockers, divide combat damage, and discard when the cleanup step asks them to.
 
+The combat keywords **haste, first strike, trample, menace, deathtouch, flying, reach, lifelink,
+defender and vigilance** are implemented. No real card has them yet, so a **keyword sampler** deck
+(`SAMPLE_CARDS` / `SAMPLE_DECK`, with one {G} creature per keyword) can be picked in the debugger.
+
 - `index.html`: landing page
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
 
@@ -55,7 +59,8 @@ const game = new Game({
   players: [{ id: 'p1', name: 'You' }, { id: 'p2', name: 'Opponent' }],
   // decks: { p1: ['forest', ...] }, // optional; defaults to 5 Forests + 5 Llanowar Elves
   // seed: 42,                       // optional; makes shuffles reproducible
-  // cards: { myCard: {...} },        // optional; extra card definitions (used by the tests)
+  // cards: { myCard: {...} },        // optional; extra card definitions (e.g. SAMPLE_CARDS)
+  // shuffleLibraries: false,        // optional; keep decks in order (first 7 = opening hand)
 });
 
 game.on('state', (state) => {
@@ -82,7 +87,7 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | `{ type: 'CONFIRM_ATTACKERS', playerId }` | declare attackers step: locks in the attack, which can be empty |
 | `{ type: 'SET_BLOCKER', playerId, cardId, attackerId }` | declare blockers step (`'declareBlockers'`): the creature blocks that attacker, or blocks nothing when `attackerId` is `null`. Updates `pendingDecision.blocks` |
 | `{ type: 'CONFIRM_BLOCKERS', playerId }` | declare blockers step: locks in the blocks |
-| `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | combat damage step (`'assignCombatDamage'`), when an attacker is blocked by more than one creature. `assignment` maps blocker ids to damage, and there is one entry per possible split |
+| `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | a combat damage step (`'assignCombatDamage'`), when an attacker has more than one legal split: several blockers, or trample. `assignment` maps blocker ids (and, with trample, the defending player's id) to damage. There is one entry per legal split |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
 
 An action is accepted only if it equals one of `state.validActions`.
@@ -96,10 +101,11 @@ counts once it's confirmed.
 
 The `state` event payload includes `players[]`, each with `life`, `library`, `hand`, `graveyard`,
 `manaPool` (`{ W, U, B, R, G, C }`), `landsPlayedThisTurn` and `hasLost`. It also includes:
-- `battlefield`: permanents carry `controllerId`, `tapped`, `summoningSick`, `damage` and
-  `abilities`, and creatures also carry `power` and `toughness`
+- `battlefield`: permanents carry `controllerId`, `tapped`, `summoningSick`, `damage`,
+  `damagedByDeathtouch`, `abilities` and `keywords`, and creatures also carry `power` and
+  `toughness`
 - `stack`: spells and abilities; the last element is the top
-- `combat.attackers`: `[{ cardId, defendingPlayerId, blocked, blockerIds, damageAssignment }]`
+- `combat`: `declaredAttackers` (ids), and `attackers: [{ cardId, defendingPlayerId, blocked, blockerIds, damageAssignment }]`
 - `pendingDecision` `status` (`notStarted` / `inProgress` /
 `gameOver`), `winnerId`, and the turn and priority fields.
 
@@ -125,8 +131,8 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `landPlayed` | `playerId`, `card` | a land enters the battlefield |
 | `spellCast` / `permanentEntered` | `playerId`, `cardId`, `manaPaid`, `stackObjectId` / `card` | a spell is cast / resolves onto the battlefield |
 | `attackersDeclared` / `blockersDeclared` | `attackers`, `defendingPlayerId` / `blocks: [{ blockerId, attackerId }]` | a declaration is confirmed (or there was nothing to declare) |
-| `combatDamageDealt` | `damage: [{ sourceId, targetPlayerId \| targetCardId, amount }]`, `life` | combat damage step |
-| `creatureDied` | `cardId`, `cardName`, `controllerId`, `reason` | lethal damage or 0 toughness |
+| `combatDamageDealt` | `step`, `damage: [{ sourceId, targetPlayerId \| targetCardId, amount }]`, `lifeGained`, `life` | each combat damage step (first-strike and regular) |
+| `creatureDied` | `cardId`, `cardName`, `controllerId`, `reason` (`lethalDamage` / `deathtouch` / `zeroToughness`) | a creature dies from a state-based action |
 | `abilityActivated` | `playerId`, `cardId`, `abilityId`, `text`, `costPaid`, `usesStack`, `stackObjectId?` | an ability is activated and its cost is paid |
 | `manaAdded` | `playerId`, `mana`, `manaPool` | mana is added to a pool |
 | `stackObjectResolving` / `stackObjectResolved` | `stackObject` / `stackObjectId` | the top of the stack resolves |
@@ -189,7 +195,27 @@ Every payload carries a `seq` number that increases for each event the game emit
     blocked attacker whose blockers are gone deals no damage.
   - If nobody attacks, the declare blockers and combat damage steps are skipped (508.8).
     Creatures leave combat as the end of combat step ends (511.3).
-  - First strike, trample and other combat keywords aren't implemented.
+  - Keywords (702):
+    - **Haste:** the creature can attack and use {T} abilities despite summoning sickness (702.10).
+    - **Defender:** the creature can't attack (702.3).
+    - **Vigilance:** attacking doesn't tap the creature (702.20).
+    - **Flying:** only creatures with flying or reach can block it (702.9, 702.17).
+    - **Menace:** it can't be blocked by just one creature (702.111). Each `SET_BLOCKER` is offered
+      on its own, but `CONFIRM_BLOCKERS` only appears once no menace attacker has exactly one
+      blocker.
+    - **First strike:** if any attacking or blocking creature has first strike, there's an extra
+      first-strike damage step before the regular one. Players get priority in between (510.4).
+    - **Trample:** the attacker can assign damage to the player only after every blocker is
+      assigned lethal damage. That counts damage already marked, and deathtouch makes 1 lethal
+      (702.19). If all its blockers are gone, all its damage goes to the player.
+    - **Deathtouch:** any damage it deals to a creature destroys it, as a state-based action
+      (702.2, 704.5h).
+    - **Lifelink:** damage it deals also gains its controller that much life (702.15).
+  - Damage assignment: for each attacker, the engine works out every legal split. When there's
+    more than one, the attacking player chooses (`ASSIGN_COMBAT_DAMAGE`); when there's exactly
+    one, it's applied automatically. Splits are keyed by blocker id, plus the defending player's
+    id for trample.
+  - Double strike and other keywords aren't implemented.
 - Damage on creatures wears off in the cleanup step (514.2).
 - State-based actions are checked before a player receives priority (117.5), and repeated until
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).
@@ -198,12 +224,15 @@ Every payload carries a `seq` number that increases for each event the game emit
 
 Cards are defined in `src/cards/cards.js`: a mana cost, types, power and toughness for creatures,
 and activated abilities as data (`{ id, text, cost: { tap?, mana? }, effect }`). The supported
-effects are `addMana` (which makes it a mana ability) and `drawCards`. The tests add test-only
-cards through the `cards` option: an ability that goes on the stack, a 0/3, and a 20/20.
+effects are `addMana` (which makes it a mana ability) and `drawCards`. Creatures can list
+`keywords`. The tests add test-only cards through the `cards` option, including free (0-cost)
+creatures for building combat scenarios.
 
 The basic AI (`BasicAIController`, `strategy: 'basic'`) plays lands and casts Elves. It attacks
 with everything when it has more creatures ready than the opponent has untapped blockers, and
-otherwise blocks one-for-one to trade. `strategy: 'passive'` only passes and makes empty
+otherwise blocks one-for-one to trade. It only makes legal blocks: flyers only with flying or
+reach, and menace with two blockers or none. With trample, it sends as much damage to the player
+as it can. `strategy: 'passive'` only passes and makes empty
 declarations.
 
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main

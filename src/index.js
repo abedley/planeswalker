@@ -8,8 +8,9 @@ export {
 } from './engine/actions.js';
 export { PHASE, STEP, PHASE_NAMES, STEP_NAMES, TURN_STRUCTURE } from './engine/turnStructure.js';
 export {
-  CARDS, CARD_TYPE, EFFECT, DEFAULT_DECK, isLand, isCreature, isManaAbility,
+  CARDS, CARD_TYPE, EFFECT, KEYWORD, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
 } from './cards/cards.js';
+export { SAMPLE_CARDS, SAMPLE_DECK } from './cards/sampleCards.js';
 export {
   MANA_TYPES, emptyManaPool, addMana, planManaPayment, manaPoolTotal, formatMana,
 } from './engine/mana.js';

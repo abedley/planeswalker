@@ -4,6 +4,7 @@
  *
  * - `manaCost`: `{ G: 1, generic: 2, ... }` (lands have none)
  * - `power` / `toughness`: creatures only
+ * - `keywords`: keyword abilities from KEYWORD, e.g. `['flying', 'lifelink']`
  * - `abilities`: activated abilities (602), written as `{ id, text, cost, effect }`
  *   - `cost`: `{ tap?: true, mana?: { G: 1, ... } }`
  *   - `effect`: `{ type: 'addMana', mana }` or `{ type: 'drawCards', count }`
@@ -11,6 +12,20 @@
 export const CARD_TYPE = Object.freeze({
   LAND: 'Land',
   CREATURE: 'Creature',
+});
+
+/** Keyword abilities (702). */
+export const KEYWORD = Object.freeze({
+  DEATHTOUCH: 'deathtouch', // 702.2
+  DEFENDER: 'defender', // 702.3
+  FIRST_STRIKE: 'first strike', // 702.7
+  FLYING: 'flying', // 702.9
+  HASTE: 'haste', // 702.10
+  LIFELINK: 'lifelink', // 702.15
+  REACH: 'reach', // 702.17
+  TRAMPLE: 'trample', // 702.19
+  VIGILANCE: 'vigilance', // 702.20
+  MENACE: 'menace', // 702.111
 });
 
 export const EFFECT = Object.freeze({
@@ -51,6 +66,7 @@ export const DEFAULT_DECK = Object.freeze([...Array(5).fill('forest'), ...Array(
 
 export const isLand = (card) => card.types.includes(CARD_TYPE.LAND);
 export const isCreature = (card) => card.types.includes(CARD_TYPE.CREATURE);
+export const hasKeyword = (card, keyword) => (card.keywords ?? []).includes(keyword);
 
 /**
  * 605.1a: an activated ability is a mana ability if it could add mana, has no

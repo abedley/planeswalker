@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   Game, GAME_STATUS, DECISION, ACTION, PHASE, STEP, EFFECT, CARD_TYPE, AI_STRATEGY,
   passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
-  setBlocker, confirmBlockers, assignCombatDamage, discard, BasicAIController,
+  setBlocker, confirmBlockers, assignCombatDamage, discard, BasicAIController, SAMPLE_DECK, SAMPLE_CARDS,
 } from '../src/index.js';
 
 const players = [{ id: 'p1', name: 'Alice' }, { id: 'p2', name: 'Bob' }];
@@ -170,7 +170,7 @@ test('emits turn, phase and step transitions in order', () => {
     'phaseStarted:precombatMain', 'phaseEnded:precombatMain',
     'phaseStarted:combat', 'stepStarted:beginningOfCombat', 'stepEnded:beginningOfCombat',
     'stepStarted:declareAttackers', 'stepEnded:declareAttackers',
-    'stepSkipped:declareBlockers', 'stepSkipped:combatDamage',
+    'stepSkipped:declareBlockers', 'stepSkipped:firstStrikeDamage', 'stepSkipped:combatDamage',
     'stepStarted:endOfCombat', 'stepEnded:endOfCombat', 'phaseEnded:combat',
     'phaseStarted:postcombatMain',
   ]);
@@ -903,7 +903,12 @@ test('an attacker blocked by two creatures divides its damage as its controller 
 
   const state = game.getState();
   assert.deepEqual(state.pendingDecision, {
-    type: DECISION.ASSIGN_COMBAT_DAMAGE, playerId: 'p1', attackerId: attacker, power: 1, blockerIds: [defender, second],
+    type: DECISION.ASSIGN_COMBAT_DAMAGE,
+    playerId: 'p1',
+    attackerId: attacker,
+    power: 1,
+    blockerIds: [defender, second],
+    trample: false,
   });
   assert.deepEqual(state.validActions.map((a) => a.assignment), [
     { [defender]: 1, [second]: 0 },
@@ -993,4 +998,265 @@ test('a passive AI never casts, attacks or blocks', () => {
   const state = game.getState();
   assert.equal(state.status, GAME_STATUS.GAME_OVER);
   assert.deepEqual(state.battlefield, []);
+});
+
+// -----------------------------------------------------------------------------
+// Combat keywords
+
+/** Free test creatures, so a whole board can be cast in one main phase. */
+const KEYWORD_CARDS = Object.fromEntries([
+  ['Bear', 2, 2], ['Ox', 4, 4], ['Mouse', 1, 1], ['Giant', 5, 5],
+  ['Haste Wolf', 2, 1, 'haste'], ['Defender Wall', 0, 4, 'defender'], ['Vigilance Bear', 2, 2, 'vigilance'],
+  ['Flying Owl', 1, 1, 'flying'], ['Reach Spider', 1, 3, 'reach'], ['Menace Lynx', 2, 1, 'menace'],
+  ['Deathtouch Asp', 1, 1, 'deathtouch'], ['Lifelink Bat', 2, 2, 'lifelink'],
+  ['First Strike Elk', 2, 2, 'first strike'], ['First Strike Mouse', 1, 1, 'first strike'],
+  ['Trample Rhino', 3, 3, 'trample'], ['Deathtouch Trampler', 3, 3, 'trample', 'deathtouch'],
+].map(([name, power, toughness, ...keywords]) => [name, {
+  id: name, name, manaCost: {}, types: [CARD_TYPE.CREATURE], power, toughness, keywords,
+}]));
+KEYWORD_CARDS['Haste Druid'] = {
+  ...KEYWORD_CARDS.Bear, id: 'Haste Druid', name: 'Haste Druid', keywords: ['haste'],
+  abilities: [{ id: 'tapForG', text: '{T}: Add {G}.', cost: { tap: true }, effect: { type: EFFECT.ADD_MANA, mana: { G: 1 } } }],
+};
+
+const deckOf = (names) => [...names, ...Array(10 - names.length).fill('forest')];
+
+/** Casts every creature in the player's hand (they're free). Returns name -> id. */
+function castAll(game, playerId) {
+  const ids = {};
+  for (const c of player(game, playerId).hand.filter((x) => x.cardId !== 'forest')) {
+    assert.deepEqual(game.dispatch(castSpell(playerId, c.id)), { ok: true }, `cast ${c.name}`);
+    passRound(game);
+    ids[c.name] = c.id;
+  }
+  return ids;
+}
+
+/**
+ * p1 casts `p1` creatures on turn 1 and p2 casts `p2` on turn 2. Returns at p1's
+ * turn 3 precombat main (or turn 1 when `stopOnTurn1`), with name -> id maps.
+ */
+function battle({ p1 = [], p2 = [], stopOnTurn1 = false }) {
+  const game = new Game({
+    players, seed: 1, cards: KEYWORD_CARDS, shuffleLibraries: false, decks: { p1: deckOf(p1), p2: deckOf(p2) },
+  });
+  const events = [];
+  game.onAny((name, payload) => events.push({ name, payload }));
+  game.start();
+  passRound(game);
+  const mine = castAll(game, 'p1');
+  if (stopOnTurn1) return { game, events, mine, theirs: {} };
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  const theirs = castAll(game, 'p2');
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  return { game, events, mine, theirs };
+}
+
+function attackWith(game, ids) {
+  toDeclareAttackers(game);
+  for (const id of ids) assert.deepEqual(game.dispatch(toggleAttacker('p1', id)), { ok: true });
+  assert.deepEqual(game.dispatch(confirmAttackers('p1')), { ok: true });
+  passRound(game); // -> declare blockers
+}
+
+/** Declares blocks as [blockerId, attackerId] pairs, then passes into the next damage step. */
+function blockWith(game, pairs) {
+  for (const [blocker, attacker] of pairs) {
+    assert.deepEqual(game.dispatch(setBlocker('p2', blocker, attacker)), { ok: true });
+  }
+  assert.deepEqual(game.dispatch(confirmBlockers('p2')), { ok: true });
+  passRound(game);
+}
+
+const blockOptions = (game, blockerId) => game.getState().validActions
+  .filter((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId).map((a) => a.attackerId);
+const canConfirmBlocks = (game) => game.getState().validActions.some((a) => a.type === ACTION.CONFIRM_BLOCKERS);
+const life = (game, id) => player(game, id).life;
+
+test('keywords are part of the card', () => {
+  const { game, mine } = battle({ p1: ['Deathtouch Trampler'], stopOnTurn1: true });
+  assert.deepEqual(permanent(game, mine['Deathtouch Trampler']).keywords, ['trample', 'deathtouch']);
+});
+
+test('haste: attacks and taps for mana the turn it arrives', () => {
+  const { game, mine } = battle({ p1: ['Haste Druid', 'Bear'], stopOnTurn1: true });
+  assert.ok(game.getState().validActions.some((a) => a.type === ACTION.ACTIVATE_ABILITY && a.cardId === mine['Haste Druid']));
+  toDeclareAttackers(game);
+  // The Bear arrived this turn too, but only the Haste Druid can attack.
+  assert.deepEqual(
+    game.getState().validActions.filter((a) => a.type === ACTION.TOGGLE_ATTACKER).map((a) => a.cardId),
+    [mine['Haste Druid']],
+  );
+});
+
+test('defender: can\'t attack, but can block', () => {
+  const { game, mine, theirs } = battle({ p1: ['Defender Wall', 'Bear'], p2: ['Defender Wall'] });
+  toDeclareAttackers(game);
+  assert.deepEqual(
+    game.getState().validActions.filter((a) => a.type === ACTION.TOGGLE_ATTACKER).map((a) => a.cardId),
+    [mine.Bear],
+  );
+  game.dispatch(toggleAttacker('p1', mine.Bear));
+  game.dispatch(confirmAttackers('p1'));
+  passRound(game);
+  assert.deepEqual(blockOptions(game, theirs['Defender Wall']), [mine.Bear]);
+});
+
+test('vigilance: attacking doesn\'t tap the creature', () => {
+  const { game, mine } = battle({ p1: ['Vigilance Bear', 'Bear'] });
+  attackWith(game, [mine['Vigilance Bear'], mine.Bear]);
+  assert.equal(permanent(game, mine['Vigilance Bear']).tapped, false);
+  assert.equal(permanent(game, mine.Bear).tapped, true);
+});
+
+test('flying: only creatures with flying or reach can block it', () => {
+  const { game, mine, theirs } = battle({
+    p1: ['Flying Owl', 'Bear'], p2: ['Bear', 'Flying Owl', 'Reach Spider'],
+  });
+  attackWith(game, [mine['Flying Owl'], mine.Bear]);
+  assert.deepEqual(blockOptions(game, theirs.Bear), [mine.Bear]);
+  assert.deepEqual(blockOptions(game, theirs['Flying Owl']), [mine['Flying Owl'], mine.Bear]);
+  assert.deepEqual(blockOptions(game, theirs['Reach Spider']), [mine['Flying Owl'], mine.Bear]);
+  assert.equal(game.dispatch(setBlocker('p2', theirs.Bear, mine['Flying Owl'])).ok, false);
+});
+
+test('flying: no blocker declaration when nothing can block the flyers', () => {
+  const { game, mine } = battle({ p1: ['Flying Owl'], p2: ['Bear'] });
+  attackWith(game, [mine['Flying Owl']]);
+  assert.equal(game.getState().pendingDecision, null);
+  passRound(game);
+  assert.equal(life(game, 'p2'), 19);
+});
+
+test('menace: can\'t be blocked by just one creature', () => {
+  const { game, mine, theirs } = battle({ p1: ['Menace Lynx'], p2: ['Bear', 'Mouse'] });
+  attackWith(game, [mine['Menace Lynx']]);
+  assert.ok(canConfirmBlocks(game)); // no blockers is fine
+  game.dispatch(setBlocker('p2', theirs.Bear, mine['Menace Lynx']));
+  assert.ok(!canConfirmBlocks(game));
+  assert.equal(game.dispatch(confirmBlockers('p2')).ok, false);
+  game.dispatch(setBlocker('p2', theirs.Mouse, mine['Menace Lynx']));
+  assert.ok(canConfirmBlocks(game));
+  blockWith(game, []);
+  // Two blockers: p1 divides 2 damage between them.
+  assert.equal(game.getState().pendingDecision.type, DECISION.ASSIGN_COMBAT_DAMAGE);
+});
+
+test('deathtouch: any damage it deals to a creature is lethal', () => {
+  const { game, mine, theirs, events } = battle({ p1: ['Deathtouch Asp'], p2: ['Ox'] });
+  attackWith(game, [mine['Deathtouch Asp']]);
+  blockWith(game, [[theirs.Ox, mine['Deathtouch Asp']]]);
+  assert.ok(!permanent(game, theirs.Ox));
+  assert.ok(!permanent(game, mine['Deathtouch Asp']));
+  assert.equal(events.find((e) => e.name === 'creatureDied' && e.payload.cardId === theirs.Ox).payload.reason, 'deathtouch');
+});
+
+test('deathtouch: works when blocking too', () => {
+  const { game, mine, theirs } = battle({ p1: ['Giant'], p2: ['Deathtouch Asp'] });
+  attackWith(game, [mine.Giant]);
+  blockWith(game, [[theirs['Deathtouch Asp'], mine.Giant]]);
+  assert.ok(!permanent(game, mine.Giant));
+});
+
+test('lifelink: its controller gains life equal to the damage it deals', () => {
+  const { game, theirs, events } = battle({ p1: ['Lifelink Bat', 'Lifelink Bat'], p2: ['Ox'] });
+  // Both Bats share a name, so look them up on the battlefield.
+  const bats = game.getState().battlefield.filter((p) => p.name === 'Lifelink Bat').map((p) => p.id);
+  attackWith(game, bats);
+  blockWith(game, [[theirs.Ox, bats[0]]]);
+  // One Bat hits p2 for 2, the other hits the Ox for 2: p1 gains 4.
+  assert.equal(life(game, 'p2'), 18);
+  assert.equal(life(game, 'p1'), 24);
+  assert.deepEqual(events.findLast((e) => e.name === 'combatDamageDealt').payload.lifeGained, { p1: 4 });
+});
+
+test('first strike: deals damage in its own step, before regular damage', () => {
+  const { game, mine, theirs, events } = battle({ p1: ['First Strike Elk'], p2: ['Bear'] });
+  attackWith(game, [mine['First Strike Elk']]);
+  blockWith(game, [[theirs.Bear, mine['First Strike Elk']]]);
+
+  let state = game.getState();
+  assert.equal(state.step, STEP.FIRST_STRIKE_DAMAGE);
+  assert.equal(state.priorityPlayerId, 'p1'); // players get priority between the two steps
+  assert.ok(!permanent(game, theirs.Bear)); // died before it could deal damage
+  assert.equal(permanent(game, mine['First Strike Elk']).damage, 0);
+
+  passRound(game);
+  state = game.getState();
+  assert.equal(state.step, STEP.COMBAT_DAMAGE);
+  assert.equal(permanent(game, mine['First Strike Elk']).damage, 0);
+  assert.deepEqual(
+    events.filter((e) => e.name === 'combatDamageDealt').map((e) => [e.payload.step, e.payload.damage.length]),
+    [[STEP.FIRST_STRIKE_DAMAGE, 1], [STEP.COMBAT_DAMAGE, 0]],
+  );
+});
+
+test('first strike: a first-strike blocker kills an attacker before it deals damage', () => {
+  const { game, mine, theirs } = battle({ p1: ['Mouse'], p2: ['First Strike Mouse'] });
+  attackWith(game, [mine.Mouse]);
+  blockWith(game, [[theirs['First Strike Mouse'], mine.Mouse]]);
+  assert.ok(!permanent(game, mine.Mouse));
+  passRound(game);
+  assert.ok(permanent(game, theirs['First Strike Mouse']));
+});
+
+test('first strike: creatures without it still deal damage in the regular step', () => {
+  const { game, mine, theirs } = battle({ p1: ['First Strike Mouse'], p2: ['Ox'] });
+  attackWith(game, [mine['First Strike Mouse']]);
+  blockWith(game, [[theirs.Ox, mine['First Strike Mouse']]]);
+  assert.equal(permanent(game, theirs.Ox).damage, 1);
+  assert.ok(permanent(game, mine['First Strike Mouse']));
+  passRound(game);
+  assert.ok(!permanent(game, mine['First Strike Mouse']));
+});
+
+test('trample: excess damage beyond lethal can go to the defending player', () => {
+  const { game, mine, theirs } = battle({ p1: ['Trample Rhino'], p2: ['Mouse'] });
+  attackWith(game, [mine['Trample Rhino']]);
+  blockWith(game, [[theirs.Mouse, mine['Trample Rhino']]]);
+
+  const state = game.getState();
+  assert.equal(state.pendingDecision.type, DECISION.ASSIGN_COMBAT_DAMAGE);
+  assert.equal(state.pendingDecision.trample, true);
+  assert.deepEqual(state.validActions.map((a) => a.assignment), [
+    { [theirs.Mouse]: 3, p2: 0 },
+    { [theirs.Mouse]: 2, p2: 1 },
+    { [theirs.Mouse]: 1, p2: 2 },
+  ]);
+  game.dispatch(assignCombatDamage('p1', mine['Trample Rhino'], { [theirs.Mouse]: 1, p2: 2 }));
+  assert.equal(life(game, 'p2'), 18);
+  assert.ok(!permanent(game, theirs.Mouse));
+});
+
+test('trample: no choice when power doesn\'t exceed lethal damage', () => {
+  const { game, mine, theirs } = battle({ p1: ['Trample Rhino'], p2: ['Ox'] });
+  attackWith(game, [mine['Trample Rhino']]);
+  blockWith(game, [[theirs.Ox, mine['Trample Rhino']]]);
+  assert.equal(game.getState().pendingDecision, null);
+  assert.equal(permanent(game, theirs.Ox).damage, 3);
+  assert.equal(life(game, 'p2'), 20);
+});
+
+test('trample with deathtouch: 1 damage counts as lethal', () => {
+  const { game, mine, theirs } = battle({ p1: ['Deathtouch Trampler'], p2: ['Ox'] });
+  attackWith(game, [mine['Deathtouch Trampler']]);
+  blockWith(game, [[theirs.Ox, mine['Deathtouch Trampler']]]);
+  const options = game.getState().validActions.map((a) => a.assignment);
+  assert.deepEqual(options.at(-1), { [theirs.Ox]: 1, p2: 2 });
+  game.dispatch(assignCombatDamage('p1', mine['Deathtouch Trampler'], options.at(-1)));
+  assert.ok(!permanent(game, theirs.Ox));
+  assert.equal(life(game, 'p2'), 18);
+});
+
+test('the AI makes legal blocks against flying and menace', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const game = new Game({ players, seed, cards: SAMPLE_CARDS, decks: { p1: SAMPLE_DECK, p2: SAMPLE_DECK } });
+    const ais = players.map(({ id }) => new BasicAIController({ game, playerId: id, delayMs: null }));
+    const rejected = [];
+    game.on('actionRejected', (e) => rejected.push(e));
+    game.start();
+    ais.forEach((ai) => ai.detach());
+    assert.equal(game.getState().status, GAME_STATUS.GAME_OVER, `seed ${seed}`);
+    assert.deepEqual(rejected, [], `seed ${seed}`);
+  }
 });

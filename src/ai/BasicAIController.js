@@ -1,7 +1,7 @@
 import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
-import { isCreature } from '../cards/cards.js';
+import { isCreature, hasKeyword, KEYWORD } from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
 
 export const AI_STRATEGY = Object.freeze({
@@ -66,6 +66,12 @@ export class BasicAIController extends EventEmitter {
           ACTION.TOGGLE_ATTACKER, ACTION.CONFIRM_ATTACKERS);
       case DECISION.DECLARE_BLOCKERS:
         return this.#chooseBlock(state, passive ? {} : this.#planBlocks(state), find);
+      case DECISION.ASSIGN_COMBAT_DAMAGE: {
+        // Send as much damage as possible to the player (trample); otherwise take the first split.
+        const toPlayer = (a) => Object.entries(a.assignment)
+          .filter(([id]) => state.players.some((p) => p.id === id)).reduce((sum, [, n]) => sum + n, 0);
+        return mine.reduce((best, a) => (toPlayer(a) > toPlayer(best) ? a : best));
+      }
       case undefined:
         break;
       default:
@@ -101,15 +107,29 @@ export class BasicAIController extends EventEmitter {
     return ready.length > theirBlockers.length ? ready : [];
   }
 
-  /** Block each attacker with one creature, while creatures last. */
+  /**
+   * Block each attacker with one creature that can legally block it (two for
+   * menace), while creatures last. Blocks already chosen count as possible too.
+   */
   #planBlocks(state) {
-    const blockers = [...new Set(state.validActions
+    const { blocks } = state.pendingDecision;
+    const canBlock = (blockerId, attackerId) => blocks[blockerId] === attackerId || state.validActions.some((a) => (
+      a.playerId === this.#playerId && a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId
+    ));
+    const available = new Set(state.validActions
       .filter((a) => a.playerId === this.#playerId && a.type === ACTION.SET_BLOCKER)
-      .map((a) => a.cardId))];
+      .map((a) => a.cardId));
     const plan = {};
-    state.combat.attackers.forEach(({ cardId }, i) => {
-      if (blockers[i]) plan[blockers[i]] = cardId;
-    });
+    for (const { cardId: attackerId } of state.combat.attackers) {
+      const attacker = state.battlefield.find((p) => p.id === attackerId);
+      const needed = hasKeyword(attacker, KEYWORD.MENACE) ? 2 : 1;
+      const chosen = [...available].filter((id) => canBlock(id, attackerId)).slice(0, needed);
+      if (chosen.length < needed) continue;
+      for (const id of chosen) {
+        plan[id] = attackerId;
+        available.delete(id);
+      }
+    }
     return plan;
   }
 

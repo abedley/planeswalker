@@ -25,6 +25,7 @@ export const STEP = Object.freeze({
   BEGINNING_OF_COMBAT: 'beginningOfCombat',
   DECLARE_ATTACKERS: 'declareAttackers',
   DECLARE_BLOCKERS: 'declareBlockers',
+  FIRST_STRIKE_DAMAGE: 'firstStrikeDamage',
   COMBAT_DAMAGE: 'combatDamage',
   END_OF_COMBAT: 'endOfCombat',
   END: 'end',
@@ -46,6 +47,7 @@ export const STEP_NAMES = Object.freeze({
   [STEP.BEGINNING_OF_COMBAT]: 'Beginning of Combat Step',
   [STEP.DECLARE_ATTACKERS]: 'Declare Attackers Step',
   [STEP.DECLARE_BLOCKERS]: 'Declare Blockers Step',
+  [STEP.FIRST_STRIKE_DAMAGE]: 'First-Strike Damage Step',
   [STEP.COMBAT_DAMAGE]: 'Combat Damage Step',
   [STEP.END_OF_COMBAT]: 'End of Combat Step',
   [STEP.END]: 'End Step',
@@ -54,7 +56,7 @@ export const STEP_NAMES = Object.freeze({
 
 // 508.8: if no creatures are declared as attackers, the declare blockers and
 // combat damage steps are skipped.
-const noAttackers = (game) => game.combat.attackers.length === 0;
+const noAttackers = (game) => game.combat.declaredAttackers.length === 0;
 
 export const TURN_STRUCTURE = Object.freeze([
   { phase: PHASE.BEGINNING, step: STEP.UNTAP, priority: false },
@@ -70,6 +72,14 @@ export const TURN_STRUCTURE = Object.freeze([
   { phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT, priority: true },
   { phase: PHASE.COMBAT, step: STEP.DECLARE_ATTACKERS, priority: true },
   { phase: PHASE.COMBAT, step: STEP.DECLARE_BLOCKERS, priority: true, skip: noAttackers },
+  {
+    phase: PHASE.COMBAT,
+    step: STEP.FIRST_STRIKE_DAMAGE,
+    priority: true,
+    // 510.4: an extra combat damage step happens first if an attacking or blocking
+    // creature has first strike.
+    skip: (game) => noAttackers(game) || !game.combatHasFirstStrike,
+  },
   { phase: PHASE.COMBAT, step: STEP.COMBAT_DAMAGE, priority: true, skip: noAttackers },
   { phase: PHASE.COMBAT, step: STEP.END_OF_COMBAT, priority: true },
   { phase: PHASE.POSTCOMBAT_MAIN, step: null, priority: true },

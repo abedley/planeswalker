@@ -3,7 +3,7 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, isLand, isCreature, isManaAbility,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, isLand, isCreature, isManaAbility, hasKeyword,
 } from '../cards/cards.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
 
@@ -34,6 +34,8 @@ function deepEqual(a, b) {
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((key) => deepEqual(a[key], b[key]));
 }
+
+const emptyCombat = () => ({ declaredAttackers: [], attackers: [] });
 
 /** Every way to split `amount` among `ids`, as `{ [id]: n }` objects. */
 function distributions(amount, ids) {
@@ -70,6 +72,7 @@ export class Game extends EventEmitter {
   #battlefield = [];
   #startingPlayerId;
   #random;
+  #shuffleLibraries;
   #status = GAME_STATUS.NOT_STARTED;
   #winnerId = null;
   #turn = 0;
@@ -80,7 +83,7 @@ export class Game extends EventEmitter {
   #playersPassed = [];
   #stack = []; // last element is the top of the stack
   #nextStackObjectId = 1;
-  #combat = { attackers: [] };
+  #combat = emptyCombat();
   #version = 0;
   #eventSeq = 0;
   #queue = [];
@@ -94,8 +97,12 @@ export class Game extends EventEmitter {
    *   Players without a deck get DEFAULT_DECK (5 Forests, 5 Llanowar Elves).
    * @param {number} [options.seed] Seed for shuffling; random when omitted.
    * @param {Record<string, object>} [options.cards] Extra card definitions, merged over CARDS.
+   * @param {boolean} [options.shuffleLibraries] Set false to keep decks in the given order,
+   *   so the first cards listed are the opening hand (handy for tests and puzzles).
    */
-  constructor({ players, startingPlayerId, decks = {}, seed, cards = {} } = {}) {
+  constructor({
+    players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
+  } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
       throw new Error('A game needs at least two players.');
@@ -109,6 +116,7 @@ export class Game extends EventEmitter {
     }
     this.#random = seededRandom(seed ?? Math.floor(Math.random() * 2 ** 32));
     this.#cardDefinitions = { ...CARDS, ...cards };
+    this.#shuffleLibraries = shuffleLibraries;
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
@@ -130,6 +138,12 @@ export class Game extends EventEmitter {
   get turn() { return this.#turn; }
   get combat() { return this.#combat; }
 
+  /** 510.4: whether an attacking or blocking creature has first strike. */
+  get combatHasFirstStrike() {
+    const ids = this.#combat.attackers.flatMap((a) => [a.cardId, ...a.blockerIds]);
+    return ids.some((id) => hasKeyword(this.#permanent(id), KEYWORD.FIRST_STRIKE));
+  }
+
   start() {
     if (this.#status !== GAME_STATUS.NOT_STARTED) throw new Error('Game already started.');
     this.#runExclusive(() => {
@@ -140,8 +154,10 @@ export class Game extends EventEmitter {
       });
       for (const { id } of this.#players) {
         // 103.3: each player shuffles their deck; 103.5: then draws an opening hand.
-        shuffle(this.#zones.get(id).library, this.#random);
-        this.#emitEvent('libraryShuffled', { playerId: id });
+        if (this.#shuffleLibraries) {
+          shuffle(this.#zones.get(id).library, this.#random);
+          this.#emitEvent('libraryShuffled', { playerId: id });
+        }
         this.#drawCards(id, OPENING_HAND_SIZE);
       }
       this.#beginTurn(this.#startingPlayerId);
@@ -264,19 +280,21 @@ export class Game extends EventEmitter {
         for (const blocker of this.#eligibleBlockers(playerId)) {
           const current = decision.blocks[blocker.id] ?? null;
           for (const { cardId: attackerId } of this.#combat.attackers) {
-            if (attackerId !== current) {
+            if (attackerId !== current && this.#canBlock(blocker, this.#permanent(attackerId))) {
               actions.push({ type: ACTION.SET_BLOCKER, playerId, cardId: blocker.id, attackerId });
             }
           }
           if (current) actions.push({ type: ACTION.SET_BLOCKER, playerId, cardId: blocker.id, attackerId: null });
         }
-        actions.push({ type: ACTION.CONFIRM_BLOCKERS, playerId });
+        if (this.#blocksAreLegal(decision.blocks)) actions.push({ type: ACTION.CONFIRM_BLOCKERS, playerId });
         return actions;
       }
-      case DECISION.ASSIGN_COMBAT_DAMAGE:
-        return distributions(decision.power, decision.blockerIds).map((assignment) => ({
+      case DECISION.ASSIGN_COMBAT_DAMAGE: {
+        const attacker = this.#combat.attackers.find((a) => a.cardId === decision.attackerId);
+        return this.#damageAssignmentOptions(attacker).map((assignment) => ({
           type: ACTION.ASSIGN_COMBAT_DAMAGE, playerId, attackerId: decision.attackerId, assignment,
         }));
+      }
       default:
         throw new Error(`Unknown decision type: ${decision.type}`);
     }
@@ -395,6 +413,7 @@ export class Game extends EventEmitter {
       abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => (
         { id, text, isManaAbility: isManaAbility(ability) }
       )),
+      keywords: [...(definition.keywords ?? [])],
       ownerId,
     };
     if (isCreature(definition)) Object.assign(card, { power: definition.power, toughness: definition.toughness });
@@ -410,7 +429,9 @@ export class Game extends EventEmitter {
   }
 
   #putOntoBattlefield(card, controllerId) {
-    const permanent = { ...card, controllerId, tapped: false, summoningSick: true, damage: 0 };
+    const permanent = {
+      ...card, controllerId, tapped: false, summoningSick: true, damage: 0, damagedByDeathtouch: false,
+    };
     this.#battlefield.push(permanent);
     return permanent;
   }
@@ -418,7 +439,7 @@ export class Game extends EventEmitter {
   /** Moves a permanent to its owner's graveyard, stripping battlefield-only state. */
   #putIntoGraveyard(permanent) {
     this.#battlefield.splice(this.#battlefield.indexOf(permanent), 1);
-    const { controllerId, tapped, summoningSick, damage, ...card } = permanent;
+    const { controllerId, tapped, summoningSick, damage, damagedByDeathtouch, ...card } = permanent;
     this.#zones.get(card.ownerId).graveyard.push(card);
     // 506.4: a permanent that leaves the battlefield is removed from combat.
     this.#combat.attackers = this.#combat.attackers.filter((a) => a.cardId !== permanent.id);
@@ -527,7 +548,7 @@ export class Game extends EventEmitter {
       if (permanent.tapped) return false;
       // 302.6: a creature's {T} abilities can't be activated unless its controller
       // has controlled it continuously since their most recent turn began.
-      if (isCreature(permanent) && permanent.summoningSick) return false;
+      if (this.#hasSummoningSickness(permanent)) return false;
     }
     if (cost.mana && !planManaPayment(this.#zones.get(playerId).manaPool, cost.mana)) return false;
     return true;
@@ -619,17 +640,39 @@ export class Game extends EventEmitter {
     return this.#nextPlayerId(this.#activePlayerId);
   }
 
+  /** 302.6 / 702.10b: summoning sickness, which haste ignores. */
+  #hasSummoningSickness(permanent) {
+    return isCreature(permanent) && permanent.summoningSick && !hasKeyword(permanent, KEYWORD.HASTE);
+  }
+
   #eligibleAttackers(playerId) {
-    // 508.1a: untapped creatures the player has controlled continuously since
-    // their turn began.
+    // 508.1a: untapped creatures without summoning sickness. 702.3b: defender can't attack.
     return this.#battlefield.filter((p) => (
-      p.controllerId === playerId && isCreature(p) && !p.tapped && !p.summoningSick
+      p.controllerId === playerId && isCreature(p) && !p.tapped
+      && !this.#hasSummoningSickness(p) && !hasKeyword(p, KEYWORD.DEFENDER)
     ));
   }
 
   #eligibleBlockers(playerId) {
     // 509.1a: untapped creatures the defending player controls.
     return this.#battlefield.filter((p) => p.controllerId === playerId && isCreature(p) && !p.tapped);
+  }
+
+  #canBlock(blocker, attacker) {
+    // 702.9b: a creature with flying can't be blocked except by creatures with flying or reach (702.17b).
+    if (hasKeyword(attacker, KEYWORD.FLYING)) {
+      return hasKeyword(blocker, KEYWORD.FLYING) || hasKeyword(blocker, KEYWORD.REACH);
+    }
+    return true;
+  }
+
+  #blocksAreLegal(blocks) {
+    // 702.111b: a creature with menace can't be blocked except by two or more creatures.
+    return this.#combat.attackers.every(({ cardId }) => {
+      if (!hasKeyword(this.#permanent(cardId), KEYWORD.MENACE)) return true;
+      const blockers = Object.values(blocks).filter((attackerId) => attackerId === cardId).length;
+      return blockers !== 1;
+    });
   }
 
   #beginDeclareAttackers() {
@@ -653,8 +696,12 @@ export class Game extends EventEmitter {
     const { playerId, attackers } = this.#pendingDecision;
     this.#pendingDecision = null;
     const defendingPlayerId = this.#defendingPlayerId();
-    // 508.1f: attacking creatures become tapped.
-    for (const id of attackers) this.#permanent(id).tapped = true;
+    // 508.1f: attacking creatures become tapped, except those with vigilance (702.20b).
+    for (const id of attackers) {
+      const creature = this.#permanent(id);
+      if (!hasKeyword(creature, KEYWORD.VIGILANCE)) creature.tapped = true;
+    }
+    this.#combat.declaredAttackers = [...attackers];
     this.#combat.attackers = attackers.map((cardId) => (
       { cardId, defendingPlayerId, blocked: false, blockerIds: [], damageAssignment: null }
     ));
@@ -666,7 +713,10 @@ export class Game extends EventEmitter {
   #beginDeclareBlockers() {
     // 509.1: the defending player declares blockers (a turn-based action).
     const playerId = this.#defendingPlayerId();
-    if (this.#eligibleBlockers(playerId).length === 0) {
+    const canBlockSomething = this.#eligibleBlockers(playerId).some((blocker) => (
+      this.#combat.attackers.some(({ cardId }) => this.#canBlock(blocker, this.#permanent(cardId)))
+    ));
+    if (!canBlockSomething) {
       this.#emitEvent('blockersDeclared', { playerId, blocks: [] });
       return;
     }
@@ -697,19 +747,67 @@ export class Game extends EventEmitter {
   }
 
   /**
-   * 510.1c: an attacker blocked by more than one creature has its damage divided
-   * among them by the attacking player. Asks for the next such division, if any.
+   * 510.4: with first strike in combat there are two combat damage steps. Creatures
+   * with first strike deal damage in the first; the rest deal damage in the second.
+   */
+  #dealsDamageThisStep(creature) {
+    return hasKeyword(creature, KEYWORD.FIRST_STRIKE) === (this.#segment.step === STEP.FIRST_STRIKE_DAMAGE);
+  }
+
+  /** The damage needed to destroy `blocker`, counting damage already marked (702.19b). */
+  #lethalDamage(blocker, source) {
+    const remaining = Math.max(0, blocker.toughness - blocker.damage);
+    // 702.2c: any nonzero damage from a deathtouch source is lethal.
+    return hasKeyword(source, KEYWORD.DEATHTOUCH) ? Math.min(1, remaining) : remaining;
+  }
+
+  /**
+   * Every legal way for an attacking creature to assign its combat damage, as
+   * `{ [blockerId or defendingPlayerId]: amount }` objects (510.1).
+   */
+  #damageAssignmentOptions(attacker) {
+    const creature = this.#permanent(attacker.cardId);
+    const power = creature.power;
+    if (power <= 0) return [];
+    const player = attacker.defendingPlayerId;
+    // 510.1a: an unblocked creature assigns its damage to the player it's attacking.
+    if (!attacker.blocked) return [{ [player]: power }];
+    const trample = hasKeyword(creature, KEYWORD.TRAMPLE);
+    // 510.1c: a blocked creature with no blockers left assigns no damage...
+    // 702.19e: ... unless it has trample, in which case it all goes to the player.
+    if (attacker.blockerIds.length === 0) return trample ? [{ [player]: power }] : [];
+    // 510.1c: otherwise its damage is divided among its blockers as the attacking player chooses.
+    if (!trample) return distributions(power, attacker.blockerIds);
+    // 702.19b: with trample, damage can go to the player only once every blocker
+    // has been assigned lethal damage.
+    const lethal = attacker.blockerIds.map((id) => this.#lethalDamage(this.#permanent(id), creature));
+    return distributions(power, [...attacker.blockerIds, player]).filter((split) => (
+      split[player] === 0 || attacker.blockerIds.every((id, i) => split[id] >= lethal[i])
+    ));
+  }
+
+  #beginCombatDamageStep() {
+    for (const attacker of this.#combat.attackers) attacker.damageAssignment = null;
+    if (!this.#requestDamageAssignment()) this.#dealCombatDamage();
+  }
+
+  /**
+   * Asks the attacking player to choose how the next attacker assigns its damage,
+   * when there's more than one legal way. Returns false when nothing is left to choose.
    */
   #requestDamageAssignment() {
     for (const attacker of this.#combat.attackers) {
       const creature = this.#permanent(attacker.cardId);
-      if (attacker.damageAssignment || creature.power <= 0 || attacker.blockerIds.length < 2) continue;
+      if (attacker.damageAssignment || !this.#dealsDamageThisStep(creature)) continue;
+      const options = this.#damageAssignmentOptions(attacker);
+      if (options.length < 2) continue;
       this.#requireDecision({
         type: DECISION.ASSIGN_COMBAT_DAMAGE,
         playerId: this.#activePlayerId,
         attackerId: attacker.cardId,
         power: creature.power,
         blockerIds: [...attacker.blockerIds],
+        trample: hasKeyword(creature, KEYWORD.TRAMPLE),
       });
       return true;
     }
@@ -728,33 +826,48 @@ export class Game extends EventEmitter {
   #dealCombatDamage() {
     // 510.1: work out all combat damage first; 510.2: then deal it simultaneously.
     const damage = [];
-    const hit = (sourceId, target, amount) => { if (amount > 0) damage.push({ sourceId, ...target, amount }); };
     for (const attacker of this.#combat.attackers) {
       const creature = this.#permanent(attacker.cardId);
-      if (!attacker.blocked) {
-        // 510.1a: an unblocked creature deals damage to the player it's attacking.
-        hit(creature.id, { targetPlayerId: attacker.defendingPlayerId }, creature.power);
-      } else if (attacker.blockerIds.length === 1) {
-        hit(creature.id, { targetCardId: attacker.blockerIds[0] }, creature.power);
-      } else {
-        // 510.1c: divided as assigned. A blocked creature with no blockers left deals no damage.
-        for (const [blockerId, amount] of Object.entries(attacker.damageAssignment ?? {})) {
-          hit(creature.id, { targetCardId: blockerId }, amount);
+      if (this.#dealsDamageThisStep(creature)) {
+        const assignment = attacker.damageAssignment ?? this.#damageAssignmentOptions(attacker)[0] ?? {};
+        for (const [targetId, amount] of Object.entries(assignment)) {
+          if (amount <= 0) continue;
+          const target = targetId === attacker.defendingPlayerId ? { targetPlayerId: targetId } : { targetCardId: targetId };
+          damage.push({ sourceId: creature.id, ...target, amount });
         }
       }
-      // 510.1d: each blocker deals its damage to the creature it blocks.
+      // 510.1d: each blocker assigns its damage to the creature it blocks.
       for (const blockerId of attacker.blockerIds) {
         const blocker = this.#permanent(blockerId);
-        hit(blocker.id, { targetCardId: creature.id }, blocker.power);
+        if (blocker.power > 0 && this.#dealsDamageThisStep(blocker)) {
+          damage.push({ sourceId: blocker.id, targetCardId: creature.id, amount: blocker.power });
+        }
       }
     }
-    for (const { targetPlayerId, targetCardId, amount } of damage) {
-      // 120.3a / 120.3e: damage to a player causes life loss; damage to a creature is marked on it.
-      if (targetPlayerId) this.#zones.get(targetPlayerId).life -= amount;
-      else this.#permanent(targetCardId).damage += amount;
+
+    const lifeGained = {};
+    for (const { sourceId, targetPlayerId, targetCardId, amount } of damage) {
+      const source = this.#permanent(sourceId);
+      if (targetPlayerId) {
+        // 120.3a: damage to a player causes that much life loss.
+        this.#zones.get(targetPlayerId).life -= amount;
+      } else {
+        // 120.3e: damage to a creature is marked on it.
+        const target = this.#permanent(targetCardId);
+        target.damage += amount;
+        if (hasKeyword(source, KEYWORD.DEATHTOUCH)) target.damagedByDeathtouch = true;
+      }
+      // 702.15b: damage dealt by a source with lifelink causes its controller to gain that much life.
+      if (hasKeyword(source, KEYWORD.LIFELINK)) {
+        lifeGained[source.controllerId] = (lifeGained[source.controllerId] ?? 0) + amount;
+      }
     }
+    for (const [playerId, amount] of Object.entries(lifeGained)) this.#zones.get(playerId).life += amount;
+
     this.#emitEvent('combatDamageDealt', {
+      step: this.#segment.step,
       damage,
+      lifeGained,
       life: Object.fromEntries([...this.#zones].map(([id, zone]) => [id, zone.life])),
     });
   }
@@ -770,8 +883,10 @@ export class Game extends EventEmitter {
         // 704.5a: 0 or less life; 704.5b: attempted to draw from an empty library.
         return !zone.hasLost && (zone.life <= 0 || zone.attemptedDrawFromEmptyLibrary);
       });
-      // 704.5f: toughness 0 or less; 704.5g: lethal damage.
-      const dying = this.#battlefield.filter((p) => isCreature(p) && (p.toughness <= 0 || p.damage >= p.toughness));
+      // 704.5f: toughness 0 or less; 704.5g: lethal damage; 704.5h: damage from a deathtouch source.
+      const dying = this.#battlefield.filter((p) => isCreature(p) && (
+        p.toughness <= 0 || p.damage >= p.toughness || (p.damage > 0 && p.damagedByDeathtouch)
+      ));
       if (losers.length === 0 && dying.length === 0) return false;
 
       // 704.3: all applicable state-based actions happen simultaneously.
@@ -781,7 +896,8 @@ export class Game extends EventEmitter {
           cardId: permanent.id,
           cardName: permanent.name,
           controllerId: permanent.controllerId,
-          reason: permanent.toughness <= 0 ? 'zeroToughness' : 'lethalDamage',
+          reason: permanent.toughness <= 0 ? 'zeroToughness'
+            : permanent.damage >= permanent.toughness ? 'lethalDamage' : 'deathtouch',
         });
       }
       for (const { id } of losers) {
@@ -862,7 +978,7 @@ export class Game extends EventEmitter {
     this.#turn += 1;
     this.#activePlayerId = activePlayerId;
     this.#segmentIndex = -1;
-    this.#combat = { attackers: [] };
+    this.#combat = emptyCombat();
     for (const zone of this.#zones.values()) zone.landsPlayedThisTurn = 0;
     // 302.6: the active player has now controlled their permanents since the turn began.
     for (const permanent of this.#battlefield) {
@@ -907,8 +1023,9 @@ export class Game extends EventEmitter {
       case STEP.DECLARE_BLOCKERS:
         this.#beginDeclareBlockers();
         break;
+      case STEP.FIRST_STRIKE_DAMAGE:
       case STEP.COMBAT_DAMAGE:
-        if (!this.#requestDamageAssignment()) this.#dealCombatDamage();
+        this.#beginCombatDamageStep();
         break;
       case STEP.CLEANUP: {
         // 514.1: the active player discards down to their maximum hand size.
@@ -917,7 +1034,10 @@ export class Game extends EventEmitter {
           this.#requireDecision({ type: DECISION.DISCARD_TO_HAND_SIZE, playerId: active, count: excess });
         }
         // 514.2: damage wears off.
-        for (const permanent of this.#battlefield) permanent.damage = 0;
+        for (const permanent of this.#battlefield) {
+          permanent.damage = 0;
+          permanent.damagedByDeathtouch = false;
+        }
         break;
       }
     }
@@ -934,7 +1054,7 @@ export class Game extends EventEmitter {
     }
     if (emptied.length) this.#emitEvent('manaPoolsEmptied', { pools: emptied });
     // 511.3: creatures are removed from combat as the end of combat step ends.
-    if (current.step === STEP.END_OF_COMBAT) this.#combat = { attackers: [] };
+    if (current.step === STEP.END_OF_COMBAT) this.#combat = emptyCombat();
 
     if (current.step) this.#emitEvent('stepEnded', this.#describe(current));
     if (!next || next.phase !== current.phase) {

@@ -1,6 +1,7 @@
 import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
-  LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature,
+  LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
+  DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -19,6 +20,7 @@ const el = (tag, props = {}, children = []) => {
 const ui = {
   setup: $('setup'),
   startingPlayer: $('starting-player'),
+  deck: $('deck'),
   seed: $('seed'),
   aiDelay: $('ai-delay'),
   status: $('status'),
@@ -30,6 +32,11 @@ const ui = {
   stateJson: $('state-json'),
   stack: $('stack'),
   combat: $('combat'),
+};
+
+const DECKS = {
+  standard: DEFAULT_DECK,
+  sampler: SAMPLE_DECK,
 };
 
 const CONTROLLER_KINDS = {
@@ -56,7 +63,14 @@ function newGame() {
   skippedThisTurn = new Set();
 
   seed = ui.seed.value.trim() === '' ? Math.floor(Math.random() * 1e9) : Number(ui.seed.value);
-  game = new Game({ players: PLAYERS, startingPlayerId: ui.startingPlayer.value, seed });
+  const deck = DECKS[ui.deck.value];
+  game = new Game({
+    players: PLAYERS,
+    startingPlayerId: ui.startingPlayer.value,
+    seed,
+    cards: SAMPLE_CARDS,
+    decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
+  });
   window.game = game;
 
   game.onAny(logEvent);
@@ -236,8 +250,12 @@ function decisionPrompt(decision) {
       return `Hand size limit: discard ${decision.count} card${decision.count === 1 ? '' : 's'}.`;
     case DECISION.DECLARE_ATTACKERS:
       return 'Declare attackers: choose creatures, then confirm.';
-    case DECISION.DECLARE_BLOCKERS:
-      return 'Declare blockers: choose a blocker for each attacker, then confirm.';
+    case DECISION.DECLARE_BLOCKERS: {
+      const menace = latestState.combat.attackers
+        .some(({ cardId }) => hasKeyword(latestState.battlefield.find((p) => p.id === cardId), KEYWORD.MENACE));
+      return `Declare blockers: choose a blocker for each attacker, then confirm.${
+        menace ? ' A creature with menace needs two or more blockers, or none.' : ''}`;
+    }
     case DECISION.ASSIGN_COMBAT_DAMAGE:
       return `Divide ${decision.attackerId}'s ${decision.power} damage among its blockers.`;
     default:
@@ -265,6 +283,7 @@ function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
     const details = [];
     if (card.manaCost) details.push(formatMana(card.manaCost));
     if (isCreature(card)) details.push(`${card.power}/${card.toughness}`);
+    const keywords = card.keywords?.length ? [el('span', { className: 'card-keywords', textContent: card.keywords.join(', ') })] : [];
     const status = [];
     if (card.damage) status.push(`${card.damage} damage`);
     if (isCreature(card) && card.summoningSick && 'controllerId' in card) status.push('summoning sick');
@@ -275,6 +294,7 @@ function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
     }, [
       el('span', { className: 'card-name', textContent: card.name }),
       el('span', { className: 'card-id', textContent: [card.id, ...details].join(' · ') }),
+      ...keywords,
       ...status.map((text) => el('span', { className: 'card-status', textContent: text })),
       ...buttons,
     ]);
@@ -331,7 +351,8 @@ function actionLabel(action, card, state) {
     case ACTION.SET_BLOCKER: return action.attackerId ? `Block ${action.attackerId}` : 'Don\'t block';
     case ACTION.CONFIRM_BLOCKERS: return `Confirm blockers (${Object.keys(state.pendingDecision.blocks).length})`;
     case ACTION.ASSIGN_COMBAT_DAMAGE:
-      return Object.entries(action.assignment).map(([id, n]) => `${n} to ${id}`).join(', ');
+      return Object.entries(action.assignment)
+        .map(([id, n]) => `${n} to ${PLAYERS.some((p) => p.id === id) ? playerName(id) : id}`).join(', ');
     case ACTION.ACTIVATE_ABILITY:
       return card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId;
     case ACTION.DISCARD: return 'Discard';
@@ -379,7 +400,8 @@ function summarize(name, p) {
     case 'permanentEntered': return `${p.card.name} (${p.card.id}) entered under ${who(p.playerId)}'s control`;
     case 'attackersDeclared': return p.attackers.length ? `${who(p.playerId)} attacked with ${p.attackers.join(', ')}` : `${who(p.playerId)} didn't attack`;
     case 'blockersDeclared': return p.blocks.length ? p.blocks.map((b) => `${b.blockerId} blocks ${b.attackerId}`).join(', ') : `${who(p.playerId)} didn't block`;
-    case 'combatDamageDealt': return p.damage.map((d) => `${d.sourceId} → ${d.targetPlayerId ? who(d.targetPlayerId) : d.targetCardId}: ${d.amount}`).join(', ') || 'no damage';
+    case 'combatDamageDealt': return (Object.keys(p.lifeGained ?? {}).length
+      ? `${Object.entries(p.lifeGained).map(([id, n]) => `${who(id)} gained ${n}`).join(', ')}; ` : '') + p.damage.map((d) => `${d.sourceId} → ${d.targetPlayerId ? who(d.targetPlayerId) : d.targetCardId}: ${d.amount}`).join(', ') || 'no damage';
     case 'creatureDied': return `${p.cardName} (${p.cardId}) died`;
     case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;
     case 'manaAdded': return `${who(p.playerId)} added ${formatMana(p.mana)} (pool ${formatMana(p.manaPool)})`;

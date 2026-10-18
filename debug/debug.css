@@ -181,3 +181,4 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
   :root { --creature-bg: #33301f; --creature-text: #e7dcb5; }
 }
 .card-keywords { font-size: 11px; font-style: italic; }
+.card.emblem { background: var(--accent-soft); color: var(--text); max-width: 220px; }

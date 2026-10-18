@@ -11,6 +11,11 @@ of 20 Forests and 20 Elves, shuffles it, and draws 7 cards.
 Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
 blockers, divide combat damage, and discard when the cleanup step asks them to.
 
+**Where this game differs from Magic:** each player has innate planeswalker-style abilities,
+granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
+or nothing. For now every player starts with one emblem, **Planeswalker**, with
+"0: You gain 1 life." See *Emblems* below.
+
 The combat keywords **haste, first strike, double strike, trample, menace, deathtouch, flying,
 reach, lifelink, defender and vigilance** are implemented. No real card has them yet, so a
 40-card **keyword sampler** deck (`SAMPLE_CARDS` / `SAMPLE_DECK`: 18 Forests and two each of
@@ -118,7 +123,7 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | --- | --- |
 | `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
 | `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
-| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId }` | the player has priority, controls the permanent, and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). There is one entry per ability that can be activated |
+| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated |
 | `{ type: 'CAST_SPELL', playerId, cardId }` | sorcery timing (the player's main phase, with priority and an empty stack) and the mana cost is already in their pool. There is one entry per castable card |
 | `{ type: 'TOGGLE_ATTACKER', playerId, cardId }` | declare attackers step (`pendingDecision.type === 'declareAttackers'`): adds the creature to, or removes it from, `pendingDecision.attackers`. There is one entry per creature that can attack |
 | `{ type: 'CONFIRM_ATTACKERS', playerId }` | declare attackers step: locks in the attack, which can be empty |
@@ -182,6 +187,28 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `state` | full snapshot incl. `validActions`, `version` | the game is waiting for input |
 
 `game.onAny((name, payload) => ...)` receives every event.
+
+### Emblems (this game's planeswalker abilities)
+
+Emblems are defined in `src/cards/emblems.js` and given to players with the `emblems` option
+(default: `DEFAULT_EMBLEMS`, i.e. `['planeswalker']` for everyone). Each emblem appears in
+`state.players[].emblems` with its abilities, `activationsPerTurn` and `activationsThisTurn`.
+
+- Emblems live in the command zone (114.1) and can't be removed. In Magic, emblems only have
+  static or triggered abilities. Here they can also have **activated abilities**, which work like
+  a planeswalker's loyalty abilities (606.3):
+  - **Sorcery timing** (`timing: 'sorcery'`): the player's own main phase, with an empty stack.
+    Leave `timing` out to allow activation whenever the player has priority.
+  - **Once per turn per emblem** (`activationsPerTurn: 1`): an emblem with several abilities
+    allows one of them each turn, the way a planeswalker does. The count resets at the start of
+    every turn.
+  - They **use the stack**, so the opponent can respond.
+- Costs can be nothing (`{}`), life (`{ life: 2 }`, payable only with at least that much life,
+  119.4), mana (`{ mana: { G: 1 } }`), or a combination.
+- They're activated with the normal `ACTIVATE_ABILITY` action, with the emblem's id
+  (e.g. `p1-emblem-1`) as `cardId`.
+- Effects: anything an ability can do, plus `{ type: 'gainLife', amount }`, which emits a
+  `lifeGained` event.
 
 ### Rules implemented
 
@@ -272,7 +299,7 @@ creatures for building combat scenarios.
 
 The basic AI (`BasicAIController`, `strategy: 'basic'`) plays lands and casts Elves. It attacks
 with everything when it has more creatures ready than the opponent has untapped blockers, and
-otherwise blocks one-for-one to trade. It only makes legal blocks: flyers only with flying or
+otherwise blocks one-for-one to trade. It uses emblem abilities that cost nothing. It only makes legal blocks: flyers only with flying or
 reach, and menace with two blockers or none. With trample, it sends as much damage to the player
 as it can. `strategy: 'passive'` only passes and makes empty
 declarations.

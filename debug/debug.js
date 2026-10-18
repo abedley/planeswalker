@@ -234,6 +234,8 @@ function renderPlayers(state) {
         ...general,
         ...(prompt ? [el('p', { className: 'muted', textContent: prompt })] : []),
       ]),
+      el('h3', { textContent: `Emblems (${player.emblems.length})` }),
+      emblemRow(player.emblems, cardActions),
       el('h3', { textContent: `Hand (${player.hand.length})` }),
       cardRow(player.hand, cardActions, 'Empty'),
       el('h3', { textContent: `Battlefield (${permanents.length})` }),
@@ -296,6 +298,24 @@ function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
       el('span', { className: 'card-id', textContent: [card.id, ...details].join(' · ') }),
       ...keywords,
       ...status.map((text) => el('span', { className: 'card-status', textContent: text })),
+      ...buttons,
+    ]);
+  }));
+}
+
+function emblemRow(emblems, actionsFor) {
+  if (emblems.length === 0) return el('p', { className: 'muted cards-empty', textContent: 'None' });
+  return el('ul', { className: 'cards' }, emblems.map((emblem) => {
+    const buttons = actionsFor(emblem);
+    const left = emblem.activationsPerTurn - emblem.activationsThisTurn;
+    return el('li', { className: `card emblem${buttons.length ? ' playable' : ''}`, title: `${emblem.name} (${emblem.id})` }, [
+      el('span', { className: 'card-name', textContent: emblem.name }),
+      el('span', { className: 'card-id', textContent: `${emblem.id} · emblem` }),
+      ...emblem.abilities.map((a) => el('span', {
+        className: 'card-keywords',
+        textContent: `${a.text}${a.timing === 'sorcery' ? ' (sorcery speed)' : ''}`,
+      })),
+      el('span', { className: 'card-status', textContent: left > 0 ? `${left} activation${left === 1 ? '' : 's'} left this turn` : 'used this turn' }),
       ...buttons,
     ]);
   }));
@@ -402,6 +422,7 @@ function summarize(name, p) {
     case 'blockersDeclared': return p.blocks.length ? p.blocks.map((b) => `${b.blockerId} blocks ${b.attackerId}`).join(', ') : `${who(p.playerId)} didn't block`;
     case 'combatDamageDealt': return (Object.keys(p.lifeGained ?? {}).length
       ? `${Object.entries(p.lifeGained).map(([id, n]) => `${who(id)} gained ${n}`).join(', ')}; ` : '') + p.damage.map((d) => `${d.sourceId} → ${d.targetPlayerId ? who(d.targetPlayerId) : d.targetCardId}: ${d.amount}`).join(', ') || 'no damage';
+    case 'lifeGained': return `${who(p.playerId)} gained ${p.amount} (life ${p.life})`;
     case 'creatureDied': return `${p.cardName} (${p.cardId}) died`;
     case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;
     case 'manaAdded': return `${who(p.playerId)} added ${formatMana(p.mana)} (pool ${formatMana(p.manaPool)})`;

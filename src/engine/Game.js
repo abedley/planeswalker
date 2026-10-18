@@ -3,8 +3,9 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, isLand, isCreature, isManaAbility, hasKeyword,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, isLand, isCreature, isManaAbility, hasKeyword,
 } from '../cards/cards.js';
+import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
 
 export const GAME_STATUS = Object.freeze({
@@ -68,6 +69,7 @@ function distributions(amount, ids) {
 export class Game extends EventEmitter {
   #players;
   #cardDefinitions;
+  #emblemDefinitions;
   #zones = new Map(); // playerId -> { library, hand, graveyard, manaPool, life, ... }
   #battlefield = [];
   #startingPlayerId;
@@ -94,14 +96,19 @@ export class Game extends EventEmitter {
    * @param {{id: string, name?: string}[]} options.players Players in turn order.
    * @param {string} [options.startingPlayerId] Defaults to the first player.
    * @param {Record<string, string[]>} [options.decks] Card ids per player id.
-   *   Players without a deck get DEFAULT_DECK (5 Forests, 5 Llanowar Elves).
+   *   Players without a deck get DEFAULT_DECK (20 Forests, 20 Llanowar Elves).
    * @param {number} [options.seed] Seed for shuffling; random when omitted.
    * @param {Record<string, object>} [options.cards] Extra card definitions, merged over CARDS.
    * @param {boolean} [options.shuffleLibraries] Set false to keep decks in the given order,
    *   so the first cards listed are the opening hand (handy for tests and puzzles).
+   * @param {Record<string, string[]>} [options.emblems] Emblem ids per player id. Players
+   *   without an entry get DEFAULT_EMBLEMS.
+   * @param {Record<string, object>} [options.emblemDefinitions] Extra emblem definitions,
+   *   merged over EMBLEMS.
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
+    emblems = {}, emblemDefinitions = {},
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -116,6 +123,7 @@ export class Game extends EventEmitter {
     }
     this.#random = seededRandom(seed ?? Math.floor(Math.random() * 2 ** 32));
     this.#cardDefinitions = { ...CARDS, ...cards };
+    this.#emblemDefinitions = { ...EMBLEMS, ...emblemDefinitions };
     this.#shuffleLibraries = shuffleLibraries;
 
     for (const { id } of this.#players) {
@@ -126,6 +134,8 @@ export class Game extends EventEmitter {
         hand: [],
         graveyard: [],
         manaPool: emptyManaPool(),
+        // 114.1: emblems live in the command zone.
+        emblems: (emblems[id] ?? DEFAULT_EMBLEMS).map((emblemId, i) => this.#createEmblem(emblemId, id, i + 1)),
         life: STARTING_LIFE,
         landsPlayedThisTurn: 0,
         attemptedDrawFromEmptyLibrary: false,
@@ -211,6 +221,7 @@ export class Game extends EventEmitter {
           hand: zone.hand,
           graveyard: zone.graveyard,
           manaPool: zone.manaPool,
+          emblems: zone.emblems,
           landsPlayedThisTurn: zone.landsPlayedThisTurn,
           hasLost: zone.hasLost,
         };
@@ -252,13 +263,16 @@ export class Game extends EventEmitter {
       }
     }
     // 602.2 / 605.3a: a player with priority may activate abilities of permanents
-    // they control, as long as they can pay the cost.
-    for (const permanent of this.#battlefield) {
-      if (permanent.controllerId !== holder) continue;
-      for (const ability of this.#abilitiesOf(permanent)) {
-        if (this.#canPayCost(holder, permanent, ability.cost)) {
+    // they control, and of their emblems, as long as they can pay the cost.
+    const sources = [
+      ...this.#battlefield.filter((p) => p.controllerId === holder),
+      ...this.#zones.get(holder).emblems,
+    ];
+    for (const source of sources) {
+      for (const ability of this.#abilitiesOf(source)) {
+        if (this.#canActivate(holder, source, ability)) {
           actions.push({
-            type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: permanent.id, abilityId: ability.id,
+            type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: source.id, abilityId: ability.id,
           });
         }
       }
@@ -423,8 +437,34 @@ export class Game extends EventEmitter {
     return card;
   }
 
-  #abilitiesOf(card) {
-    return this.#cardDefinitions[card.cardId].abilities ?? [];
+  #createEmblem(emblemId, ownerId, number) {
+    const definition = this.#emblemDefinitions[emblemId];
+    if (!definition) throw new Error(`Unknown emblem: ${emblemId}`);
+    return {
+      id: `${ownerId}-emblem-${number}`,
+      emblemId,
+      name: definition.name,
+      ownerId,
+      controllerId: ownerId,
+      abilities: definition.abilities.map(({ id, text, cost, timing }) => (
+        { id, text, cost: structuredClone(cost), timing: timing ?? ACTIVATION_TIMING.INSTANT }
+      )),
+      activationsPerTurn: definition.activationsPerTurn ?? Infinity,
+      activationsThisTurn: 0,
+    };
+  }
+
+  /** Activated ability definitions of a permanent or an emblem. */
+  #abilitiesOf(source) {
+    if (source.emblemId) return this.#emblemDefinitions[source.emblemId].abilities;
+    return this.#cardDefinitions[source.cardId].abilities ?? [];
+  }
+
+  /** A permanent or an emblem, by id. */
+  #findSource(id) {
+    return this.#permanent(id)
+      ?? [...this.#zones.values()].flatMap((zone) => zone.emblems).find((e) => e.id === id)
+      ?? null;
   }
 
   #permanent(id) {
@@ -546,8 +586,18 @@ export class Game extends EventEmitter {
     this.#givePriority(playerId);
   }
 
+  #canActivate(playerId, source, ability) {
+    if (ability.timing === ACTIVATION_TIMING.SORCERY && !this.#hasSorceryTiming(playerId)) return false;
+    // Like 606.3 for loyalty abilities: a limited number of activations per emblem each turn.
+    if (source.emblemId && source.activationsThisTurn >= source.activationsPerTurn) return false;
+    return this.#canPayCost(playerId, source, ability.cost);
+  }
+
   #canPayCost(playerId, permanent, cost) {
+    // 119.4: a player can pay life only if their life total is at least that much.
+    if (cost.life && this.#zones.get(playerId).life < cost.life) return false;
     if (cost.tap) {
+      if (permanent.emblemId) return false;
       if (permanent.tapped) return false;
       // 302.6: a creature's {T} abilities can't be activated unless its controller
       // has controlled it continuously since their most recent turn began.
@@ -565,13 +615,18 @@ export class Game extends EventEmitter {
       paid.tap = true;
     }
     if (cost.mana) paid.mana = this.#payMana(playerId, cost.mana);
+    if (cost.life) {
+      this.#zones.get(playerId).life -= cost.life;
+      paid.life = cost.life;
+    }
     return paid;
   }
 
   #activateAbility(playerId, cardId, abilityId) {
-    const permanent = this.#permanent(cardId);
+    const permanent = this.#findSource(cardId);
     const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
     const costPaid = this.#payCost(playerId, permanent, ability.cost);
+    if (permanent.emblemId) permanent.activationsThisTurn += 1;
     const activation = {
       playerId, cardId, cardName: permanent.name, abilityId, text: ability.text, costPaid,
     };
@@ -630,6 +685,12 @@ export class Game extends EventEmitter {
       case EFFECT.DRAW_CARDS:
         this.#drawCards(controllerId, effect.count);
         break;
+      case EFFECT.GAIN_LIFE: {
+        const zone = this.#zones.get(controllerId);
+        zone.life += effect.amount;
+        this.#emitEvent('lifeGained', { playerId: controllerId, amount: effect.amount, life: zone.life });
+        break;
+      }
       default:
         throw new Error(`Unknown effect type: ${effect.type}`);
     }
@@ -984,7 +1045,10 @@ export class Game extends EventEmitter {
     this.#activePlayerId = activePlayerId;
     this.#segmentIndex = -1;
     this.#combat = emptyCombat();
-    for (const zone of this.#zones.values()) zone.landsPlayedThisTurn = 0;
+    for (const zone of this.#zones.values()) {
+      zone.landsPlayedThisTurn = 0;
+      for (const emblem of zone.emblems) emblem.activationsThisTurn = 0;
+    }
     // 302.6: the active player has now controlled their permanents since the turn began.
     for (const permanent of this.#battlefield) {
       if (permanent.controllerId === activePlayerId) permanent.summoningSick = false;

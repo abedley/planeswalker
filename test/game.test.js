@@ -9,9 +9,16 @@ import {
 const players = [{ id: 'p1', name: 'Alice' }, { id: 'p2', name: 'Bob' }];
 const FORESTS = Array(10).fill('forest');
 
-/** Starts a game. Unless `decks` says otherwise, both players get 10 Forests. */
+const NO_EMBLEMS = { p1: [], p2: [] };
+
+/**
+ * Starts a game. Unless told otherwise, both players get 10 Forests and no emblems
+ * (emblem abilities have their own tests below).
+ */
 function startGame({ decks, ...options } = {}) {
-  const game = new Game({ players, seed: 1, decks: { p1: FORESTS, p2: FORESTS, ...decks }, ...options });
+  const game = new Game({
+    players, seed: 1, decks: { p1: FORESTS, p2: FORESTS, ...decks }, emblems: NO_EMBLEMS, ...options,
+  });
   const events = [];
   game.onAny((name, payload) => events.push({ name, payload }));
   game.start();
@@ -1041,6 +1048,7 @@ function castAll(game, playerId) {
 function battle({ p1 = [], p2 = [], stopOnTurn1 = false }) {
   const game = new Game({
     players, seed: 1, cards: KEYWORD_CARDS, shuffleLibraries: false, decks: { p1: deckOf(p1), p2: deckOf(p2) },
+    emblems: NO_EMBLEMS,
   });
   const events = [];
   game.onAny((name, payload) => events.push({ name, payload }));
@@ -1342,4 +1350,153 @@ test('the AI makes legal blocks against flying and menace', () => {
     assert.equal(game.getState().status, GAME_STATUS.GAME_OVER, `seed ${seed}`);
     assert.deepEqual(rejected, [], `seed ${seed}`);
   }
+});
+
+// -----------------------------------------------------------------------------
+// Emblems: planeswalker-style player abilities
+
+const emblemOf = (game, playerId) => player(game, playerId).emblems[0];
+const emblemActions = (game) => game.getState().validActions
+  .filter((a) => a.type === ACTION.ACTIVATE_ABILITY && a.cardId.includes('-emblem-'));
+
+/** Starts a game where both players have their default emblems. */
+const startWithEmblems = (options = {}) => startGame({ emblems: {}, ...options });
+
+test('each player starts with a Planeswalker emblem in the command zone', () => {
+  const game = new Game({ players, seed: 1 });
+  game.start();
+  for (const id of ['p1', 'p2']) {
+    assert.deepEqual(player(game, id).emblems, [{
+      id: `${id}-emblem-1`,
+      emblemId: 'planeswalker',
+      name: 'Planeswalker',
+      ownerId: id,
+      controllerId: id,
+      abilities: [{ id: 'gainLife', text: '0: You gain 1 life.', cost: {}, timing: 'sorcery' }],
+      activationsPerTurn: 1,
+      activationsThisTurn: 0,
+    }]);
+  }
+});
+
+test('emblem abilities have sorcery timing', () => {
+  const { game } = startWithEmblems();
+  assert.deepEqual(emblemActions(game), []); // upkeep
+  passRound(game);
+  assert.deepEqual(emblemActions(game), [
+    { type: ACTION.ACTIVATE_ABILITY, playerId: 'p1', cardId: 'p1-emblem-1', abilityId: 'gainLife' },
+  ]);
+  // Not for the non-active player, even with priority in a main phase.
+  game.dispatch(passPriority('p1'));
+  assert.deepEqual(emblemActions(game), []);
+  assert.equal(game.dispatch(activateAbility('p2', 'p2-emblem-1', 'gainLife')).ok, false);
+});
+
+test('the gain-life ability uses the stack, then gains 1 life', () => {
+  const { game, events } = startWithEmblems();
+  passRound(game);
+  assert.deepEqual(game.dispatch(activateAbility('p1', 'p1-emblem-1', 'gainLife')), { ok: true });
+
+  let state = game.getState();
+  assert.equal(player(game, 'p1').life, 20);
+  assert.deepEqual(
+    state.stack.map((o) => [o.kind, o.sourceId, o.sourceName, o.text]),
+    [['activatedAbility', 'p1-emblem-1', 'Planeswalker', '0: You gain 1 life.']],
+  );
+  assert.equal(state.priorityPlayerId, 'p1');
+
+  passRound(game);
+  state = game.getState();
+  assert.equal(player(game, 'p1').life, 21);
+  assert.deepEqual(state.stack, []);
+  assert.equal(state.phase, PHASE.PRECOMBAT_MAIN);
+  assert.deepEqual(events.findLast((e) => e.name === 'lifeGained').payload,
+    { seq: events.findLast((e) => e.name === 'lifeGained').payload.seq, playerId: 'p1', amount: 1, life: 21 });
+});
+
+test('an emblem\'s abilities can be activated once per turn', () => {
+  const { game } = startWithEmblems();
+  passRound(game);
+  game.dispatch(activateAbility('p1', 'p1-emblem-1', 'gainLife'));
+  passRound(game);
+  assert.equal(emblemOf(game, 'p1').activationsThisTurn, 1);
+  assert.deepEqual(emblemActions(game), []);
+  assert.equal(game.dispatch(activateAbility('p1', 'p1-emblem-1', 'gainLife')).ok, false);
+  advanceTo(game, { turn: 1, phase: PHASE.POSTCOMBAT_MAIN });
+  assert.deepEqual(emblemActions(game), []);
+
+  // p2 can use theirs on their turn, and p1 again on turn 3.
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  assert.deepEqual(emblemActions(game).map((a) => a.cardId), ['p2-emblem-1']);
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  assert.equal(emblemOf(game, 'p1').activationsThisTurn, 0);
+  assert.deepEqual(emblemActions(game).map((a) => a.cardId), ['p1-emblem-1']);
+});
+
+// A test-only emblem with several abilities and costs: life, mana, or nothing.
+const TEST_EMBLEM = {
+  id: 'testWalker',
+  name: 'Test Walker',
+  activationsPerTurn: 1,
+  abilities: [
+    { id: 'draw', text: 'Pay 2 life: Draw a card.', cost: { life: 2 }, effect: { type: EFFECT.DRAW_CARDS, count: 1 }, timing: 'sorcery' },
+    { id: 'bigGain', text: '{G}: You gain 3 life.', cost: { mana: { G: 1 } }, effect: { type: EFFECT.GAIN_LIFE, amount: 3 }, timing: 'sorcery' },
+    { id: 'instantGain', text: '0: You gain 1 life. Activate any time.', cost: {}, effect: { type: EFFECT.GAIN_LIFE, amount: 1 } },
+  ],
+};
+const startWithTestEmblem = (options) => startGame({
+  emblems: { p1: ['testWalker'], p2: [] }, emblemDefinitions: { testWalker: TEST_EMBLEM }, ...options,
+});
+
+test('emblem abilities can cost life', () => {
+  const { game, events } = startWithTestEmblem();
+  passRound(game);
+  const hand = player(game, 'p1').hand.length;
+  game.dispatch(activateAbility('p1', 'p1-emblem-1', 'draw'));
+  assert.equal(player(game, 'p1').life, 18); // paid on activation
+  assert.deepEqual(events.findLast((e) => e.name === 'abilityActivated').payload.costPaid, { life: 2 });
+  passRound(game);
+  assert.equal(player(game, 'p1').hand.length, hand + 1);
+});
+
+test('a life cost can\'t be paid with less life than it costs', () => {
+  const pricey = {
+    id: 'pricey', name: 'Pricey', activationsPerTurn: 1,
+    abilities: [{ id: 'big', text: 'Pay 21 life: Draw a card.', cost: { life: 21 }, effect: { type: EFFECT.DRAW_CARDS, count: 1 } }],
+  };
+  const { game } = startGame({ emblems: { p1: ['pricey'], p2: [] }, emblemDefinitions: { pricey } });
+  assert.equal(player(game, 'p1').life, 20);
+  assert.deepEqual(emblemActions(game), []);
+  assert.equal(game.dispatch(activateAbility('p1', 'p1-emblem-1', 'big')).ok, false);
+});
+
+test('emblem abilities can cost mana, and only one ability per emblem per turn', () => {
+  const { game } = startWithTestEmblem();
+  passRound(game);
+  const abilities = () => emblemActions(game).map((a) => a.abilityId);
+  assert.deepEqual(abilities(), ['draw', 'instantGain']); // no {G} yet
+  game.dispatch(playLand('p1', player(game, 'p1').hand[0].id));
+  game.dispatch(activateAbility('p1', game.getState().battlefield[0].id, 'tapForG'));
+  assert.deepEqual(abilities(), ['draw', 'bigGain', 'instantGain']);
+  game.dispatch(activateAbility('p1', 'p1-emblem-1', 'bigGain'));
+  passRound(game);
+  assert.equal(player(game, 'p1').life, 23);
+  assert.deepEqual(abilities(), []); // the emblem's one activation this turn is used
+});
+
+test('an emblem ability without sorcery timing can be activated with priority any time', () => {
+  const { game } = startWithTestEmblem();
+  // Upkeep: only the instant-speed ability is available.
+  assert.deepEqual(emblemActions(game).map((a) => a.abilityId), ['instantGain']);
+});
+
+test('the basic AI uses its free emblem ability', () => {
+  const game = new Game({ players, seed: 3 });
+  const ais = players.map(({ id }) => new BasicAIController({ game, playerId: id, delayMs: null }));
+  const gains = [];
+  game.on('lifeGained', (e) => gains.push(e.playerId));
+  game.start();
+  ais.forEach((ai) => ai.detach());
+  assert.equal(game.getState().status, GAME_STATUS.GAME_OVER);
+  assert.ok(gains.includes('p1') && gains.includes('p2'));
 });

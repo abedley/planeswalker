@@ -7,7 +7,9 @@
  * - `keywords`: keyword abilities from KEYWORD, e.g. `['flying', 'lifelink']`
  * - `abilities`: activated abilities (602), written as `{ id, text, cost, effect }`
  *   - `cost`: `{ tap?: true, mana?: { G: 1, ... } }`
- *   - `effect`: `{ type: 'addMana', mana }` or `{ type: 'drawCards', count }`
+ *   - `cost`: may also include `life: n` (paying life, 119.4)
+ *   - `effect`: `{ type: 'addMana', mana }`, `{ type: 'drawCards', count }` or `{ type: 'gainLife', amount }`
+ *   - `timing`: `'sorcery'` to allow activation only at sorcery speed (default: any time with priority)
  */
 import { IMPORTED_CARDS } from './importedCards.js';
 
@@ -34,6 +36,14 @@ export const KEYWORD = Object.freeze({
 export const EFFECT = Object.freeze({
   ADD_MANA: 'addMana',
   DRAW_CARDS: 'drawCards',
+  GAIN_LIFE: 'gainLife',
+});
+
+export const ACTIVATION_TIMING = Object.freeze({
+  /** Any time the player has priority (602.2). */
+  INSTANT: 'instant',
+  /** Only in the player's main phase with an empty stack, like loyalty abilities (606.3). */
+  SORCERY: 'sorcery',
 });
 
 const deepFreeze = (value) => {

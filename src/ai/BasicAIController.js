@@ -90,8 +90,13 @@ export class BasicAIController extends EventEmitter {
       && [ 'precombatMain', 'postcombatMain' ].includes(state.phase)
       && state.stack.length === 0;
 
+    // Emblem abilities that cost nothing are free value.
+    const isFreeEmblemAbility = (a) => me.emblems.find((e) => e.id === a.cardId)
+      ?.abilities.find((ab) => ab.id === a.abilityId && Object.keys(ab.cost).length === 0);
+
     return find(ACTION.PLAY_LAND)
       ?? find(ACTION.CAST_SPELL)
+      ?? find(ACTION.ACTIVATE_ABILITY, isFreeEmblemAbility)
       // Only make mana when there's a creature to spend it on.
       ?? (wantsToCast && manaPoolTotal(me.manaPool) === 0 ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
       ?? find(ACTION.PASS_PRIORITY);

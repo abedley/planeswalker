@@ -110,7 +110,11 @@ export const KEYWORD = Object.freeze({
 
 export const EFFECT = Object.freeze({
   // Players
-  /** `{ mana }` (106.4). */
+  /**
+   * `{ mana }` (106.4), or `{ anyColor: n }` for "Add n mana of any one color". The
+   * color is chosen when the spell or ability is cast or activated: its action
+   * carries `manaColor`.
+   */
   ADD_MANA: 'addMana',
   /** `{ count }` (121). */
   DRAW_CARDS: 'drawCards',
@@ -120,7 +124,10 @@ export const EFFECT = Object.freeze({
   LOSE_LIFE: 'loseLife',
   /** `{ count }`: the top cards of the library go to the graveyard (701.13). */
   MILL: 'mill',
-  /** `{ count, token: { name, colors?, subtypes?, power, toughness, keywords? } }`: creature tokens (111). */
+  /**
+   * `{ count, token }`: tokens (111). `token` is a TOKEN name such as `'treasure'`,
+   * or a creature token: `{ name?, colors?, subtypes?, power, toughness, keywords? }`.
+   */
   CREATE_TOKEN: 'createToken',
   // Players or creatures
   /** `{ amount }` damage (120). */
@@ -205,6 +212,59 @@ export const HAND_WRITTEN_CARDS = deepFreeze({
     abilities: [TAP_FOR_G],
   },
 });
+
+/** Predefined tokens (111.10), for `{ type: 'createToken', token: TOKEN.TREASURE }`. */
+export const TOKEN = Object.freeze({
+  TREASURE: 'treasure', // 111.10a
+  FOOD: 'food', // 111.10b
+  CLUE: 'clue', // 111.10f
+});
+
+/** Definitions of the predefined tokens, keyed by TOKEN name. They're colorless artifacts. */
+export const TOKENS = deepFreeze({
+  [TOKEN.TREASURE]: {
+    name: 'Treasure',
+    types: [CARD_TYPE.ARTIFACT],
+    subtypes: ['Treasure'],
+    abilities: [{
+      id: 'treasureMana',
+      text: '{T}, Sacrifice this artifact: Add one mana of any color.',
+      cost: { tap: true, sacrificeSelf: true },
+      effects: [{ type: EFFECT.ADD_MANA, anyColor: 1 }],
+    }],
+    text: '{T}, Sacrifice this artifact: Add one mana of any color.',
+  },
+  [TOKEN.FOOD]: {
+    name: 'Food',
+    types: [CARD_TYPE.ARTIFACT],
+    subtypes: ['Food'],
+    abilities: [{
+      id: 'eat',
+      text: '{2}, {T}, Sacrifice this artifact: You gain 3 life.',
+      cost: { mana: { generic: 2 }, tap: true, sacrificeSelf: true },
+      effects: [{ type: EFFECT.GAIN_LIFE, amount: 3 }],
+    }],
+    text: '{2}, {T}, Sacrifice this artifact: You gain 3 life.',
+  },
+  [TOKEN.CLUE]: {
+    name: 'Clue',
+    types: [CARD_TYPE.ARTIFACT],
+    subtypes: ['Clue'],
+    abilities: [{
+      id: 'investigate',
+      text: '{2}, Sacrifice this artifact: Draw a card.',
+      cost: { mana: { generic: 2 }, sacrificeSelf: true },
+      effects: [{ type: EFFECT.DRAW_CARDS, count: 1 }],
+    }],
+    text: '{2}, Sacrifice this artifact: Draw a card.',
+  },
+});
+
+/** The colors "one mana of any color" can be (105.1). */
+export const COLORS_OF_MANA = Object.freeze(['W', 'U', 'B', 'R', 'G']);
+
+/** Whether a spell's or ability's effects need a mana color chosen (`anyColor`). */
+export const needsManaColor = (effects) => effects.some((e) => e.type === EFFECT.ADD_MANA && e.anyColor);
 
 /** Every card: imported from Scryfall (src/cards/importedCards.js) plus the hand-written ones. */
 export const CARDS = deepFreeze({ ...structuredClone(IMPORTED_CARDS), ...HAND_WRITTEN_CARDS });

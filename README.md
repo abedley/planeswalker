@@ -25,8 +25,9 @@ draw and gain-life effects. Instants can be cast in response to other spells. Tr
   "Discard a card". Spells can have additional costs ("As an additional cost to cast this spell,
   sacrifice a creature.").
 - Effects: damage, destroy, exile, return to hand, tap and untap, +N/+N until end of turn,
-  +1/+1 counters, gain and lose life, draw, mill, creature tokens, counter target spell, and
-  adding mana.
+  +1/+1 counters, gain and lose life, draw, mill, tokens, counter target spell, and adding mana.
+- Tokens: creature tokens, plus the predefined **Treasure**, **Food** and **Clue** artifact
+  tokens (`{ type: 'createToken', count, token: 'treasure' }`, see `TOKEN` / `TOKENS`).
 - Effects can apply to the target, to you, to each opponent, to each player, to each creature,
   to each creature you control, or to the ability's own source.
 
@@ -98,15 +99,19 @@ The grammar is in `tools/scryfall/rulesText.js`.
   - "You / Target player / Each opponent gain(s) / lose(s) N life."
   - "[Target player] draws / mills N cards."
   - "Create N P/T <color> <type> creature tokens [with <keywords>]."
+  - "Create N Treasure / Food / Clue tokens." and "Investigate."
   - "Counter target [creature / noncreature] spell."
-  - "Add {B}{B}{B}."
+  - "Add {B}{B}{B}." and "Add one mana of any color."
+  - "<effect> and create <tokens>.", which is read as two sentences, e.g. "Draw two cards and
+    create two Treasure tokens."
 
 **Examples:**
 - **Imports:** Prodigal Sorcerer, Mogg Fanatic, Mind Stone, Shivan Dragon, Greed, Counterspell,
   Unsummon, Naturalize, Dark Ritual, Raise the Alarm, Pyroclasm, Wrath of God, Overrun, Lava
-  Spike, Thought Scour, Village Rites and Bone Splinters.
+  Spike, Thought Scour, Village Rites, Bone Splinters, Bake into a Pie, Big Score and Birds of
+  Paradise.
 - **Rejected:** Royal Assassin ("target tapped creature"), Sign in Blood (one sentence doing two
-  things) and Fling ("damage equal to …").
+  things), Fling ("damage equal to …") and Gilded Lotus ("three mana of any one color").
 
 Every other card is skipped, and the report says what isn't supported, for example:
 
@@ -190,7 +195,8 @@ An action is accepted only if it equals one of `state.validActions`.
 
 Costs that need a choice, like "sacrifice a creature" or "discard a card", work like targets:
 there's one entry per option, with `costChoices: { sacrifice: [id] }` or
-`costChoices: { discard: [id] }`. Targets and cost choices combine, so Bone Splinters gets one
+`costChoices: { discard: [id] }`. Likewise, "add one mana of any color" (a Treasure, Birds of
+Paradise) has one entry per color, with `manaColor: 'W' | 'U' | 'B' | 'R' | 'G'`. Targets and cost choices combine, so Bone Splinters gets one
 entry per (creature to destroy, creature to sacrifice) pair.
 
 Attackers and blockers are declared one creature at a time and then confirmed, rather than in a
@@ -376,9 +382,18 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
     battlefield. Active ones are in `state.temporaryEffects`.
   - `addCounters`: +1/+1 counters (122), which last until the permanent leaves the battlefield.
   - `drawCards`, `gainLife`, `loseLife`, `mill` (701.13) and `addMana`, for players.
-  - `createToken`: creature tokens (111) owned by the player who creates them. A token that
-    leaves the battlefield ceases to exist (111.7, 704.5d), so it never shows up in a graveyard,
-    hand or exile.
+    `addMana` takes either `mana` or `anyColor: n`, where the color comes from the action's
+    `manaColor`.
+  - `createToken`: tokens (111) owned by the player who creates them. A token that leaves the
+    battlefield ceases to exist (111.7, 704.5d), so it never shows up in a graveyard, hand or
+    exile. `token` is either a creature token's description
+    (`{ colors, subtypes, power, toughness, keywords }`) or a predefined token (111.10):
+    - `'treasure'`: "{T}, Sacrifice this artifact: Add one mana of any color." That's a mana
+      ability, so it doesn't use the stack.
+    - `'food'`: "{2}, {T}, Sacrifice this artifact: You gain 3 life."
+    - `'clue'`: "{2}, Sacrifice this artifact: Draw a card."
+
+    They're colorless artifacts, so they can use {T} abilities the turn they're created.
   - `counterSpell`: the countered spell goes to its owner's graveyard (701.6).
 - Costs (118, 601.2f–h, 602.2b): {T}, mana, life, `sacrificeSelf`, `sacrifice` (a permanent
   kind) and `discard` (a number of cards). A spell's `additionalCost` is paid after its mana
@@ -435,7 +450,9 @@ Spells and non-mana abilities are scored effect by effect:
 - **Counted against:** hurting itself, and paying sacrifices or life (sacrificing a token is
   cheap).
 
-It casts the best-scoring option when the score is positive. It activates abilities in its
+It casts the best-scoring option when the score is positive. It cracks Clues and eats Food when
+it has spare mana, which it values more when its life is low. It taps lands and Elves before
+sacrificing Treasures, and picks the Treasure's color its hand needs most. It activates abilities in its
 main phase, and taps mana on the opponent's turn only for instants. That lets it counter the
 opponent's spells, but it doesn't otherwise play combat tricks or respond. With trample, it
 sends as much damage to the player as it can. `strategy: 'passive'` only passes and makes empty

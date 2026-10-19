@@ -20,18 +20,28 @@ export const playLand = (playerId, cardId) => ({ type: ACTION.PLAY_LAND, playerI
  * `targets` (an array of ids) is only for spells that target, such as Auras.
  * `costChoices` (`{ sacrifice?: [id], discard?: [id] }`) is only for spells with
  * additional costs that need choices, such as "sacrifice a creature".
+ * `manaColor` ('W', 'U', 'B', 'R' or 'G') is only for effects that add one mana of any color.
  */
-export const castSpell = (playerId, cardId, targets, costChoices) => ({
-  type: ACTION.CAST_SPELL, playerId, cardId, ...(targets ? { targets } : {}), ...(costChoices ? { costChoices } : {}),
+export const castSpell = (playerId, cardId, targets, costChoices, manaColor) => ({
+  type: ACTION.CAST_SPELL,
+  playerId,
+  cardId,
+  ...(targets ? { targets } : {}),
+  ...(costChoices ? { costChoices } : {}),
+  ...(manaColor ? { manaColor } : {}),
 });
-/** `targets` and `costChoices` work as for castSpell, for abilities that need them. */
-export const activateAbility = (playerId, cardId, abilityId, targets, costChoices) => ({
+/**
+ * `targets`, `costChoices` and `manaColor` work as for castSpell, for abilities that
+ * need them, such as a Treasure's "Add one mana of any color".
+ */
+export const activateAbility = (playerId, cardId, abilityId, targets, costChoices, manaColor) => ({
   type: ACTION.ACTIVATE_ABILITY,
   playerId,
   cardId,
   abilityId,
   ...(targets ? { targets } : {}),
   ...(costChoices ? { costChoices } : {}),
+  ...(manaColor ? { manaColor } : {}),
 });
 export const toggleAttacker = (playerId, cardId) => ({ type: ACTION.TOGGLE_ATTACKER, playerId, cardId });
 export const confirmAttackers = (playerId) => ({ type: ACTION.CONFIRM_ATTACKERS, playerId });

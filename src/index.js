@@ -11,7 +11,7 @@ export {
   CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, COUNTER, EFFECT, KEYWORD, ACTIVATION_TIMING,
   isArtifact, isEnchantment, isAura, isEquipment, isInstant, isSorcery, isPermanentCard,
   TARGETED_EFFECTS, HARMFUL_EFFECTS, SPELL_TARGETS, PLAYER_TARGETS, effectAffects, isHarmfulEffect, abilityEffects,
-  matchesPermanentKind, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
+  matchesPermanentKind, TOKEN, TOKENS, COLORS_OF_MANA, needsManaColor, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
 } from './cards/cards.js';
 export {
   SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS, SAMPLE_SPELLS_DECK,

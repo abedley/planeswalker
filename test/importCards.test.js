@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.js';
 import { importCards } from '../tools/import-cards.js';
 import { readImportedCards, writeImportedCards } from '../tools/scryfall/importedModule.js';
-import { Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET } from '../src/index.js';
+import {
+  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN,
+} from '../src/index.js';
 import { FIXTURES } from './fixtures/scryfallCards.js';
 
 const convert = (key) => convertScryfallCard(FIXTURES[key]);
@@ -55,7 +57,7 @@ test('converts mana abilities, including a basic land\'s intrinsic one', () => {
 });
 
 test('reports rules text the engine can\'t do', () => {
-  assert.deepEqual(problems('birdsOfParadise'), ['Unsupported rules text: "{T}: Add one mana of any color."']);
+  assert.deepEqual(problems('gildedLotus'), ['Unsupported rules text: "{T}: Add three mana of any one color."']);
 });
 
 test('reports unsupported card types, supertypes and layouts', () => {
@@ -294,4 +296,67 @@ test('imported abilities and spells work in a game', () => {
   assert.deepEqual(game.dispatch(castSpell('p1', spike, ['p2'])), { ok: true });
   passRound();
   assert.equal(game.getState().players[1].life, 16);
+});
+
+test('converts Treasure, Food and Clue tokens, investigate, and mana of any color', () => {
+  const pie = convert('bakeIntoAPie').definition;
+  assert.deepEqual([pie.target, pie.effects], [TARGET.CREATURE, [
+    { type: 'destroy' }, { type: 'createToken', count: 1, token: TOKEN.FOOD },
+  ]]);
+  const score = convert('bigScore').definition;
+  assert.deepEqual([score.additionalCost, score.effects], [{ discard: 1 }, [
+    { type: 'drawCards', count: 2 }, { type: 'createToken', count: 2, token: TOKEN.TREASURE },
+  ]]);
+  assert.deepEqual(convert('sampleInquiry').definition.effects, [
+    { type: 'createToken', count: 1, token: TOKEN.CLUE }, { type: 'drawCards', count: 1 },
+  ]);
+  const birds = convert('birdsOfParadise').definition;
+  assert.deepEqual([birds.keywords, birds.abilities], [['flying'], [{
+    id: 'tapForAnyColor', text: '{T}: Add one mana of any color.', cost: { tap: true }, effect: { type: 'addMana', anyColor: 1 },
+  }]]);
+});
+
+test('imported Birds of Paradise and Big Score work in a game', () => {
+  const { cards } = importCards([FIXTURES.mountain, FIXTURES.birdsOfParadise, FIXTURES.bigScore]);
+  const deck = [...Array(4).fill('mountain'), 'bigScore', 'birdsOfParadise', ...Array(34).fill('mountain')];
+  const game = new Game({
+    players: [{ id: 'p1' }, { id: 'p2' }], cards, shuffleLibraries: false, decks: { p1: deck, p2: deck }, emblems: { p1: [], p2: [] },
+  });
+  game.start();
+  // Big Score costs four: play a Mountain on each of p1's first four turns.
+  const p1 = () => game.getState().players[0];
+  const pass = () => game.dispatch(passPriority(game.getState().priorityPlayerId));
+  const toMain = (turn) => {
+    while (game.getState().turn < turn || game.getState().phase !== PHASE.PRECOMBAT_MAIN || game.getState().priorityPlayerId === null) {
+      const { pendingDecision, validActions } = game.getState();
+      if (pendingDecision) game.dispatch(validActions.find((a) => a.type.startsWith('CONFIRM_')) ?? validActions.at(-1));
+      else pass();
+    }
+  };
+  for (const turn of [1, 3, 5, 7]) {
+    toMain(turn);
+    game.dispatch(playLand('p1', p1().hand.find((c) => c.cardId === 'mountain').id));
+  }
+  for (const land of game.getState().battlefield.filter((p) => p.cardId === 'mountain')) {
+    assert.deepEqual(game.dispatch(activateAbility('p1', land.id, 'tapForR')), { ok: true });
+  }
+  const bigScore = p1().hand.find((c) => c.cardId === 'bigScore').id;
+  const mountainInHand = (id) => p1().hand.find((c) => c.id === id).cardId === 'mountain';
+  const action = game.getState().validActions.find((a) => a.cardId === bigScore && mountainInHand(a.costChoices.discard[0]));
+  assert.deepEqual(game.dispatch(action), { ok: true });
+  pass();
+  pass();
+  const treasures = game.getState().battlefield.filter((p) => p.name === 'Treasure');
+  assert.equal(treasures.length, 2);
+  // A Treasure's green mana casts Birds of Paradise, whose own ability offers every color.
+  assert.deepEqual(game.dispatch(activateAbility('p1', treasures[0].id, 'treasureMana', undefined, undefined, 'G')), { ok: true });
+  const birds = p1().hand.find((c) => c.cardId === 'birdsOfParadise').id;
+  assert.deepEqual(game.dispatch(castSpell('p1', birds)), { ok: true });
+  pass();
+  pass();
+  toMain(9);
+  assert.deepEqual(
+    game.getState().validActions.filter((a) => a.cardId === birds).map((a) => a.manaColor),
+    ['W', 'U', 'B', 'R', 'G'],
+  );
 });

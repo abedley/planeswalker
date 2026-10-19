@@ -1,5 +1,5 @@
 import {
-  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, ACTIVATION_TIMING, equipAbility,
+  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, ACTIVATION_TIMING, TOKEN, equipAbility,
 } from './cards.js';
 
 /**
@@ -121,9 +121,10 @@ export const SAMPLE_SPELLS_DECK = Object.freeze([
 ]);
 
 /**
- * Sample cards for the common costs and effects: tokens, counters, bouncing,
- * tapping, countering, sweepers, life drain, additional costs, and activated
- * abilities that tap, sacrifice or pump. Also made up.
+ * Sample cards for the common costs and effects: creature tokens, Treasure, Food
+ * and Clue tokens, counters, bouncing, tapping, countering, sweepers, life drain,
+ * additional costs, and activated abilities that tap, sacrifice or pump. Also
+ * made up.
  */
 export const SAMPLE_EFFECTS = Object.freeze({
   sampleSprout: {
@@ -191,14 +192,14 @@ export const SAMPLE_EFFECTS = Object.freeze({
     }],
     text: '{T}: Sample Slinger deals 1 damage to any target.',
   },
-  sampleTotem: {
-    id: 'sampleTotem', name: 'Sample Totem', manaCost: { generic: 1 }, types: [CARD_TYPE.ARTIFACT],
-    abilities: [{
-      id: 'draw', text: '{1}, {T}, Sacrifice Sample Totem: Draw a card.',
-      cost: { mana: { generic: 1 }, tap: true, sacrificeSelf: true },
-      effects: [{ type: EFFECT.DRAW_CARDS, count: 1 }],
-    }],
-    text: '{1}, {T}, Sacrifice Sample Totem: Draw a card.',
+  sampleProspect: {
+    id: 'sampleProspect', name: 'Sample Prospect', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.SORCERY],
+    effects: [
+      { type: EFFECT.CREATE_TOKEN, count: 1, token: TOKEN.TREASURE },
+      { type: EFFECT.CREATE_TOKEN, count: 1, token: TOKEN.FOOD },
+      { type: EFFECT.CREATE_TOKEN, count: 1, token: TOKEN.CLUE },
+    ],
+    text: 'Create a Treasure token, a Food token and a Clue token.',
   },
   sampleBrute: {
     id: 'sampleBrute', name: 'Sample Brute', manaCost: { generic: 2, G: 1 },

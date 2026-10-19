@@ -16,14 +16,16 @@
  * - "<You | Target player | Each opponent | ...> <gain(s) | lose(s)> N life."
  * - "[Target player] draw(s) N cards." / "[Target player] mill(s) N cards."
  * - "Create N P/T <colors> <subtypes> creature token(s) [with <keywords>]."
+ * - "Create N <Treasure | Food | Clue> token(s)." and "Investigate." (create a Clue, 701.36)
  * - "Counter target <spell | creature spell | noncreature spell>."
- * - "Add {G}{G}."
+ * - "Add {G}{G}." / "Add one mana of any color."
+ * - "<effect> and create <tokens>.", e.g. "Draw two cards and create a Treasure token."
  *
  * Supported costs: {T}, mana symbols, "Pay N life", "Sacrifice ~",
  * "Sacrifice a creature" (artifact, enchantment, land, permanent), "Discard a card".
  */
 import {
-  EFFECT, TARGET, AFFECTED, KEYWORD, COUNTER, effectAffects,
+  EFFECT, TARGET, AFFECTED, KEYWORD, COUNTER, TOKEN, effectAffects,
 } from '../../src/cards/cards.js';
 
 const NUMBER_WORDS = {
@@ -115,6 +117,11 @@ function effect(type, fields, [affected]) {
 }
 
 const COLORS = ['white', 'blue', 'black', 'red', 'green', 'colorless'];
+const PREDEFINED_TOKENS = { Treasure: TOKEN.TREASURE, Food: TOKEN.FOOD, Clue: TOKEN.CLUE };
+const createTokens = (count, token) => {
+  const you = PLAYER_SUBJECTS.you;
+  return [[you, effect(EFFECT.CREATE_TOKEN, { count, token }, you)]];
+};
 
 /**
  * Sentence patterns, tried in order. Each `parse` returns a list of
@@ -208,8 +215,24 @@ const SENTENCES = [
         toughness: Number(toughness),
         ...(keywords.length ? { keywords } : {}),
       };
+      return createTokens(toNumber(count), token);
+    },
+  },
+  {
+    // 111.10: predefined tokens.
+    pattern: /^Create (\w+) (Treasure|Food|Clue) tokens?\.$/,
+    parse: ([, count, kind]) => (toNumber(count) ? createTokens(toNumber(count), PREDEFINED_TOKENS[kind]) : null),
+  },
+  {
+    // 701.36a: "Investigate" means "Create a Clue token."
+    pattern: /^Investigate(?: (twice|three times))?\.$/,
+    parse: ([, times]) => createTokens({ undefined: 1, twice: 2, 'three times': 3 }[times], TOKEN.CLUE),
+  },
+  {
+    pattern: /^Add one mana of any color\.$/,
+    parse: () => {
       const you = PLAYER_SUBJECTS.you;
-      return [[you, effect(EFFECT.CREATE_TOKEN, { count: toNumber(count), token }, you)]];
+      return [[you, effect(EFFECT.ADD_MANA, { anyColor: 1 }, you)]];
     },
   },
   {
@@ -235,8 +258,16 @@ const SENTENCES = [
   },
 ];
 
-/** Splits text into sentences. */
-export const sentences = (text) => text.split(/(?<=\.)\s+/).map((s) => s.trim()).filter(Boolean);
+/**
+ * Splits text into sentences. "Draw two cards and create a Treasure token." counts
+ * as two: "Draw two cards." and "Create a Treasure token."
+ */
+export const sentences = (text) => text.split(/(?<=\.)\s+/)
+  .flatMap((s) => s.trim().split(/ and (?=create )/).map((part, i, parts) => {
+    const capitalized = i > 0 ? part[0].toUpperCase() + part.slice(1) : part;
+    return i < parts.length - 1 ? `${capitalized}.` : capitalized;
+  }))
+  .filter(Boolean);
 
 /**
  * Parses effect sentences (already normalized with "~") into `{ effects, target }`,

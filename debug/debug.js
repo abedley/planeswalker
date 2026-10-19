@@ -407,6 +407,7 @@ function targetLabel(action, state) {
   const { sacrifice, discard } = action.costChoices ?? {};
   if (sacrifice) parts.push(`, sacrificing ${sacrifice.map((id) => describeId(id, state)).join(', ')}`);
   if (discard) parts.push(`, discarding ${discard.map((id) => describeId(id, state)).join(', ')}`);
+  if (action.manaColor) parts.push(` → {${action.manaColor}}`);
   return parts.join('');
 }
 

@@ -104,8 +104,23 @@ export class BasicAIController extends EventEmitter {
       ?? this.#chooseActivation(state, mine, abilityOf)
       // Only make mana when there's something affordable to spend it on.
       ?? (this.#wantsMana(state, me, permanents, myCreatures, unattachedEquipment, mine.filter(isManaSource).length)
-        ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
+        ? this.#chooseManaAction(me, mine.filter(isManaSource), abilityOf) : null)
       ?? find(ACTION.PASS_PRIORITY);
+  }
+
+  /**
+   * Picks a mana ability: ones that don't sacrifice anything (lands, Elves) before
+   * ones that do (Treasures), and for "any color", the color our hand needs most.
+   */
+  #chooseManaAction(me, actions, abilityOf) {
+    const needed = {};
+    for (const card of me.hand.filter((c) => !isLand(c))) {
+      for (const [color, n] of Object.entries(card.manaCost ?? {})) {
+        if (color !== 'generic') needed[color] = (needed[color] ?? 0) + n;
+      }
+    }
+    const cost = (a) => (abilityOf(a)?.cost.sacrificeSelf ? 10 : 0) - (needed[a.manaColor] ?? 0);
+    return actions.reduce((best, a) => (cost(a) < cost(best) ? a : best));
   }
 
   #isSorceryTiming(state) {
@@ -224,9 +239,12 @@ export class BasicAIController extends EventEmitter {
           case EFFECT.ADD_COUNTERS:
             if (isCreature(permanent)) score += side(id) * 3;
             break;
-          case EFFECT.GAIN_LIFE:
-            score += side(id);
+          case EFFECT.GAIN_LIFE: {
+            // Life matters more when it's running low.
+            const life = state.players.find((p) => p.id === id).life;
+            score += side(id) * effect.amount * (life <= 10 ? 1 : 0.4);
             break;
+          }
           case EFFECT.LOSE_LIFE:
             score -= side(id) * (side(id) > 0 ? 3 : 1);
             break;

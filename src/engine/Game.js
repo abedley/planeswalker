@@ -5,7 +5,7 @@ import { seededRandom, shuffle } from './random.js';
 import {
   CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS,
   isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword,
-  abilityEffects, effectAffects, matchesPermanentKind,
+  abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
@@ -285,7 +285,7 @@ export class Game extends EventEmitter {
         { type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id },
         definition.enchant ?? definition.target,
         additionalCost,
-        { excludeCardId: card.id },
+        { excludeCardId: card.id, effects: definition.effects ?? [] },
       ));
     }
     // 602.2 / 605.3a: a player with priority may activate abilities of permanents
@@ -307,6 +307,7 @@ export class Game extends EventEmitter {
             // already attached to would do nothing (701.3b).
             excludeTargetId: attaches ? source.id : null,
             skipTarget: attaches ? (target) => source.attachedTo === target.id : null,
+            effects: abilityEffects(ability),
           },
         ));
       }
@@ -315,10 +316,13 @@ export class Game extends EventEmitter {
   }
 
   /**
-   * One action per legal target (if the spell or ability targets) and per way to
-   * make the choices its cost needs, such as which creature to sacrifice (601.2b-c).
+   * One action per legal target (if the spell or ability targets), per way to
+   * make the choices its cost needs, such as which creature to sacrifice
+   * (601.2b-c), and per mana color for "add one mana of any color".
    */
-  #withTargetsAndChoices(base, targetKind, cost, { excludeTargetId = null, skipTarget = null, excludeCardId = null } = {}) {
+  #withTargetsAndChoices(base, targetKind, cost, {
+    excludeTargetId = null, skipTarget = null, excludeCardId = null, effects = [],
+  } = {}) {
     const targetOptions = targetKind
       ? this.#legalTargets(targetKind, base.playerId, excludeTargetId)
         .filter((target) => !skipTarget?.(target))
@@ -326,7 +330,12 @@ export class Game extends EventEmitter {
       : [{}];
     const choiceOptions = this.#costChoiceOptions(base.playerId, cost, excludeCardId)
       .map((costChoices) => (costChoices ? { costChoices } : {}));
-    return targetOptions.flatMap((target) => choiceOptions.map((choices) => ({ ...base, ...target, ...choices })));
+    // The color is a choice made on resolution, but a mana ability resolves at once (605.3b), so
+    // it's made with the action. Spells that add any color are rare enough to work the same way.
+    const colorOptions = needsManaColor(effects) ? COLORS_OF_MANA.map((manaColor) => ({ manaColor })) : [{}];
+    return targetOptions.flatMap((target) => choiceOptions.flatMap((choices) => (
+      colorOptions.map((color) => ({ ...base, ...target, ...choices, ...color }))
+    )));
   }
 
   /**
@@ -419,9 +428,11 @@ export class Game extends EventEmitter {
     switch (action.type) {
       case ACTION.PASS_PRIORITY: this.#passPriority(playerId); break;
       case ACTION.PLAY_LAND: this.#playLand(playerId, cardId); break;
-      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId, action.targets, action.costChoices); break;
+      case ACTION.CAST_SPELL:
+        this.#castSpell(playerId, cardId, action.targets, action.costChoices, action.manaColor);
+        break;
       case ACTION.ACTIVATE_ABILITY:
-        this.#activateAbility(playerId, cardId, action.abilityId, action.targets, action.costChoices);
+        this.#activateAbility(playerId, cardId, action.abilityId, action.targets, action.costChoices, action.manaColor);
         break;
       case ACTION.TOGGLE_ATTACKER: this.#toggleAttacker(cardId); break;
       case ACTION.CONFIRM_ATTACKERS: this.#confirmAttackers(); break;
@@ -519,8 +530,26 @@ export class Game extends EventEmitter {
     return card;
   }
 
-  /** 111.1: a creature token with the characteristics the effect gives it. */
+  /**
+   * 111.1: a token with the characteristics the effect gives it: a predefined token
+   * (a TOKEN name such as 'treasure', 111.10) or a creature token's description.
+   */
   #createToken(token, controllerId) {
+    const cardId = typeof token === 'string' ? this.#predefinedTokenId(token) : this.#creatureTokenId(token);
+    // 111.2: the player who creates a token is its owner.
+    const card = this.#createCard(cardId, controllerId, `${controllerId}-token-${this.#nextTokenNumber++}`);
+    return this.#putOntoBattlefield(card, controllerId);
+  }
+
+  #predefinedTokenId(name) {
+    const definition = TOKENS[name];
+    if (!definition) throw new Error(`Unknown token: ${name}`);
+    const cardId = `token:${name}`;
+    this.#cardDefinitions[cardId] ??= { ...structuredClone(definition), id: cardId, colors: [], token: true };
+    return cardId;
+  }
+
+  #creatureTokenId(token) {
     const name = token.name ?? `${(token.subtypes ?? []).join(' ')} Token`.trim();
     const keywords = token.keywords ?? [];
     const colors = token.colors ?? [];
@@ -538,9 +567,7 @@ export class Game extends EventEmitter {
       token: true,
       text: `${token.power}/${token.toughness} ${[...colors, ...(token.subtypes ?? [])].join(' ')} creature token${keywordText}`,
     };
-    // 111.2: the player who creates a token is its owner.
-    const card = this.#createCard(cardId, controllerId, `${controllerId}-token-${this.#nextTokenNumber++}`);
-    return this.#putOntoBattlefield(card, controllerId);
+    return cardId;
   }
 
   #createEmblem(emblemId, ownerId, number) {
@@ -699,7 +726,7 @@ export class Game extends EventEmitter {
     return payment;
   }
 
-  #castSpell(playerId, cardId, targets, costChoices) {
+  #castSpell(playerId, cardId, targets, costChoices, manaColor) {
     // 601.2a: the card moves from hand to the stack; 601.2h: its cost is paid.
     // (Mana must already be in the pool; activating mana abilities mid-cast isn't modelled.)
     const zone = this.#zones.get(playerId);
@@ -714,6 +741,7 @@ export class Game extends EventEmitter {
       text: card.name,
       card,
       ...(targets ? { targets: [...targets] } : {}),
+      ...(manaColor ? { manaColor } : {}),
     };
     this.#stack.push(stackObject);
     const manaPaid = this.#payMana(playerId, card.manaCost);
@@ -792,7 +820,7 @@ export class Game extends EventEmitter {
     return paid;
   }
 
-  #activateAbility(playerId, cardId, abilityId, targets, costChoices) {
+  #activateAbility(playerId, cardId, abilityId, targets, costChoices, manaColor) {
     const permanent = this.#findSource(cardId);
     const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
     const costPaid = this.#payCost(playerId, permanent, ability.cost, costChoices);
@@ -806,7 +834,7 @@ export class Game extends EventEmitter {
       // 605.3b: a mana ability doesn't use the stack; it resolves immediately and
       // the player keeps priority.
       this.#emitEvent('abilityActivated', { ...activation, usesStack: false });
-      for (const effect of abilityEffects(ability)) this.#applyEffect(effect, playerId, { sourceId: cardId });
+      for (const effect of abilityEffects(ability)) this.#applyEffect(effect, playerId, { sourceId: cardId, manaColor });
       return;
     }
 
@@ -821,6 +849,7 @@ export class Game extends EventEmitter {
       text: ability.text,
       effects: structuredClone(abilityEffects(ability)),
       ...(targets ? { targets: [...targets], targetKind: ability.target } : {}),
+      ...(manaColor ? { manaColor } : {}),
     };
     this.#stack.push(stackObject);
     this.#emitEvent('abilityActivated', {
@@ -840,7 +869,7 @@ export class Game extends EventEmitter {
     const effects = definition ? definition.effects ?? [] : stackObject.effects;
     const excludeId = effects.some((e) => e.type === EFFECT.ATTACH) ? stackObject.sourceId : null;
     const legalTargets = targets.filter((id) => this.#isLegalTarget(targetKind, id, controllerId, excludeId));
-    const context = { sourceId: stackObject.sourceId, targets: legalTargets };
+    const context = { sourceId: stackObject.sourceId, targets: legalTargets, manaColor: stackObject.manaColor };
 
     if (targets.length > 0 && legalTargets.length === 0) {
       // 608.2b: with every target illegal, it doesn't resolve. A spell goes to its owner's graveyard.
@@ -887,7 +916,7 @@ export class Game extends EventEmitter {
     }
   }
 
-  #applyEffect(effect, controllerId, { sourceId, targets = [] } = {}) {
+  #applyEffect(effect, controllerId, { sourceId, targets = [], manaColor } = {}) {
     const ids = this.#affectedBy(effect, controllerId, sourceId, targets);
     // Permanents still on the battlefield, and players, among what the effect applies to.
     const permanents = () => ids.map((id) => this.#permanent(id)).filter(Boolean);
@@ -977,13 +1006,15 @@ export class Game extends EventEmitter {
         if (source && source.controllerId === controllerId) this.#attach(source, targets[0]);
         break;
       }
-      case EFFECT.ADD_MANA:
+      case EFFECT.ADD_MANA: {
+        const mana = effect.mana ?? { [manaColor]: effect.anyColor };
         for (const playerId of players) {
           const pool = this.#zones.get(playerId).manaPool;
-          addMana(pool, effect.mana);
-          this.#emitEvent('manaAdded', { playerId, mana: { ...effect.mana }, manaPool: { ...pool } });
+          addMana(pool, mana);
+          this.#emitEvent('manaAdded', { playerId, mana: { ...mana }, manaPool: { ...pool } });
         }
         break;
+      }
       case EFFECT.DRAW_CARDS:
         for (const playerId of players) this.#drawCards(playerId, effect.count);
         break;

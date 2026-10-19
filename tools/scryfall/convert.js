@@ -28,7 +28,7 @@ const SUPPORTED_TYPES = new Set(Object.values(CARD_TYPE));
 const SUPPORTED_SUPERTYPES = new Set(['Basic']);
 const KNOWN_SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing', 'Elite', 'Host']);
 /** Keyword actions (701) Scryfall lists under `keywords` whose rules text is parsed like any other. */
-const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill']);
+const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill', 'investigate', 'treasure', 'food', 'clue']);
 
 /** "Llanowar Elves" -> "llanowarElves" */
 export function cardIdFromName(name) {
@@ -71,8 +71,9 @@ function parseActivatedAbility(line, normalized, number, problems) {
   if (failed) problems.push(`Unsupported rules text: "${line}"`);
   if (!cost || failed || effects.length === 0) return { ability: null };
   const manaOnly = effects.every((e) => e.type === EFFECT.ADD_MANA) && !target;
+  const manaId = (mana) => (mana ? Object.entries(mana).map(([type, n]) => type.repeat(n)).join('') : 'AnyColor');
   const id = manaOnly && Object.keys(cost).join() === 'tap' && effects.length === 1
-    ? `tapFor${Object.entries(effects[0].mana).map(([type, n]) => type.repeat(n)).join('')}`
+    ? `tapFor${manaId(effects[0].mana)}`
     : `ability${number}`;
   return {
     ability: {

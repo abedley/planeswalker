@@ -171,6 +171,23 @@ export const FIXTURES = {
     name: 'Fling', mana_cost: '{1}{R}', type_line: 'Instant',
     oracle_text: 'As an additional cost to cast this spell, sacrifice a creature.\nFling deals damage equal to the sacrificed creature\'s power to any target.',
   }),
+  // Treasure, Food and Clue tokens
+  bakeIntoAPie: card({
+    name: 'Bake into a Pie', mana_cost: '{2}{B}{B}', type_line: 'Instant', keywords: ['Food'],
+    oracle_text: 'Destroy target creature. Create a Food token. (It\'s an artifact with "{2}, {T}, Sacrifice this token: You gain 3 life.")',
+  }),
+  bigScore: card({
+    name: 'Big Score', mana_cost: '{3}{R}', type_line: 'Instant', keywords: ['Treasure'],
+    oracle_text: 'As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They\'re artifacts with "{T}, Sacrifice this token: Add one mana of any color.")',
+  }),
+  // Made up: an instant that investigates.
+  sampleInquiry: card({
+    name: 'Sample Inquiry', mana_cost: '{U}', type_line: 'Instant', keywords: ['Investigate'],
+    oracle_text: 'Investigate. (Create a Clue token. It\'s an artifact with "{2}, Sacrifice this token: Draw a card.")\nDraw a card.',
+  }),
+  gildedLotus: card({
+    name: 'Gilded Lotus', mana_cost: '{5}', type_line: 'Artifact', oracle_text: '{T}: Add three mana of any one color.',
+  }),
   jaceBeleren: card({
     name: 'Jace Beleren', mana_cost: '{1}{U}{U}', type_line: 'Legendary Planeswalker — Jace',
     oracle_text: '+2: Each player draws a card.\n−1: Target player draws a card.\n−10: Target player mills twenty cards.',

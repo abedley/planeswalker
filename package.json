@@ -8,7 +8,9 @@
   "scripts": {
     "test": "node --test",
     "serve": "python3 -m http.server 8000",
-    "import-cards": "node tools/import-cards.js"
+    "import-cards": "node tools/import-cards.js",
+    "arena": "node tools/ai-arena.js",
+    "benchmark": "node tools/benchmark.js"
   },
   "engines": {
     "node": ">=18"

@@ -19,6 +19,8 @@ export {
 } from './cards/sampleCards.js';
 export { EMBLEMS, DEFAULT_EMBLEMS } from './cards/emblems.js';
 export {
-  MANA_TYPES, emptyManaPool, addMana, planManaPayment, manaPoolTotal, formatMana,
+  MANA_TYPES, emptyManaPool, addMana, planManaPayment, canPayMana, manaPoolTotal, formatMana,
 } from './engine/mana.js';
 export { BasicAIController, AI_STRATEGY } from './ai/BasicAIController.js';
+export { seededRandom, shuffle } from './engine/random.js';
+export { copyGameData } from './engine/Game.js';

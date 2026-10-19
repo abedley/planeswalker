@@ -44,6 +44,18 @@ export function planManaPayment(pool, cost = {}) {
   return generic === 0 ? payment : null;
 }
 
+/** Whether `pool` can pay `cost`: the same answer as planManaPayment, without building the plan. */
+export function canPayMana(pool, cost) {
+  if (!cost) return true;
+  let spare = 0;
+  for (const type of MANA_TYPES) {
+    const left = pool[type] - (cost[type] ?? 0);
+    if (left < 0) return false;
+    spare += left;
+  }
+  return spare >= (cost.generic ?? 0);
+}
+
 /** Formats mana as symbols, e.g. { generic: 1, G: 2 } -> "{1}{G}{G}". */
 export function formatMana(mana = {}) {
   const generic = mana.generic ? `{${mana.generic}}` : '';

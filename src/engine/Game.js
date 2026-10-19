@@ -8,7 +8,7 @@ import {
   abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
-import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
+import { emptyManaPool, addMana, planManaPayment, canPayMana, manaPoolTotal, MANA_TYPES } from './mana.js';
 
 export const GAME_STATUS = Object.freeze({
   NOT_STARTED: 'notStarted',
@@ -51,6 +51,27 @@ function distributions(amount, ids) {
     for (const tail of distributions(amount - n, rest)) result.push({ [first]: n, ...tail });
   }
   return result;
+}
+
+/**
+ * Fields that never change once a card, ability or stack object exists, so copies
+ * of a game can share them instead of copying them.
+ */
+const IMMUTABLE_FIELDS = new Set([
+  'abilities', 'triggeredAbilities', 'spell', 'manaCost', 'types', 'subtypes', 'supertypes', 'additionalCost',
+  'colors', 'effects',
+]);
+
+/**
+ * A deep copy of plain game data (snapshots, player views) that shares
+ * IMMUTABLE_FIELDS with the original: much faster than structuredClone.
+ */
+export function copyGameData(value) {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(copyGameData);
+  const copy = {};
+  for (const key of Object.keys(value)) copy[key] = IMMUTABLE_FIELDS.has(key) ? value[key] : copyGameData(value[key]);
+  return copy;
 }
 
 /** Every way to choose `n` of `ids`, in order. */
@@ -107,6 +128,7 @@ export class Game extends EventEmitter {
   #eventSeq = 0;
   #queue = [];
   #processing = false;
+  #silent = false;
 
   /**
    * @param {object} options
@@ -122,10 +144,11 @@ export class Game extends EventEmitter {
    *   without an entry get DEFAULT_EMBLEMS.
    * @param {Record<string, object>} [options.emblemDefinitions] Extra emblem definitions,
    *   merged over EMBLEMS.
+   * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
-    emblems = {}, emblemDefinitions = {},
+    emblems = {}, emblemDefinitions = {}, silent = false,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -142,6 +165,7 @@ export class Game extends EventEmitter {
     this.#cardDefinitions = { ...CARDS, ...cards };
     this.#emblemDefinitions = { ...EMBLEMS, ...emblemDefinitions };
     this.#shuffleLibraries = shuffleLibraries;
+    this.#silent = silent;
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
@@ -223,9 +247,18 @@ export class Game extends EventEmitter {
     return playerId === undefined ? actions : actions.filter((a) => a.playerId === playerId);
   }
 
+  /** A snapshot of the state for players and UIs, including `validActions`. */
   getState() {
+    return structuredClone(this.peekState());
+  }
+
+  /**
+   * Like getState(), but without copying: the objects are the game's own, so they
+   * must not be changed, and they change as the game goes on. For fast AI simulations.
+   */
+  peekState() {
     const segment = this.#segment;
-    return structuredClone({
+    return {
       version: this.#version,
       status: this.#status,
       winnerId: this.#winnerId,
@@ -261,7 +294,167 @@ export class Game extends EventEmitter {
       combat: this.#combat,
       temporaryEffects: this.#temporaryEffects,
       validActions: this.getValidActions(),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Snapshots, for saving games and for AI search
+
+  /** Every field of the game, by reference (see serialize() for a copy). */
+  #snapshot() {
+    return {
+      players: this.#players,
+      startingPlayerId: this.#startingPlayerId,
+      randomState: this.#random.getState(),
+      shuffleLibraries: this.#shuffleLibraries,
+      status: this.#status,
+      winnerId: this.#winnerId,
+      turn: this.#turn,
+      activePlayerId: this.#activePlayerId,
+      priorityPlayerId: this.#priorityPlayerId,
+      pendingDecision: this.#pendingDecision,
+      segmentIndex: this.#segmentIndex,
+      playersPassed: this.#playersPassed,
+      stack: this.#stack,
+      pendingTriggers: this.#pendingTriggers,
+      combat: this.#combat,
+      temporaryEffects: this.#temporaryEffects,
+      zones: Object.fromEntries(this.#zones),
+      battlefield: this.#battlefield,
+      counters: {
+        nextStackObjectId: this.#nextStackObjectId,
+        nextTriggerId: this.#nextTriggerId,
+        nextEffectId: this.#nextEffectId,
+        nextTokenNumber: this.#nextTokenNumber,
+        version: this.#version,
+        eventSeq: this.#eventSeq,
+      },
+    };
+  }
+
+  /** Card definitions that aren't the built-in CARDS: custom cards and tokens created so far. */
+  #customCardDefinitions() {
+    return Object.fromEntries(Object.entries(this.#cardDefinitions).filter(([id, card]) => CARDS[id] !== card));
+  }
+
+  #customEmblemDefinitions() {
+    return Object.fromEntries(Object.entries(this.#emblemDefinitions).filter(([id, emblem]) => EMBLEMS[id] !== emblem));
+  }
+
+  /**
+   * The whole game as a plain object (it survives structuredClone and postMessage,
+   * though not JSON, because of `Infinity` activation limits). It includes the
+   * random number generator's state, so it reveals every hidden card and the
+   * order of every library: give players getPlayerView() instead.
+   */
+  serialize() {
+    return structuredClone({
+      ...this.#snapshot(),
+      cardDefinitions: this.#customCardDefinitions(),
+      emblemDefinitions: this.#customEmblemDefinitions(),
     });
+  }
+
+  /** Rebuilds a game from serialize(). `silent` games emit no events. */
+  static deserialize(snapshot, { silent = false } = {}) {
+    const empty = Object.fromEntries(snapshot.players.map((p) => [p.id, []]));
+    const game = new Game({
+      players: snapshot.players,
+      startingPlayerId: snapshot.startingPlayerId,
+      cards: snapshot.cardDefinitions,
+      emblemDefinitions: snapshot.emblemDefinitions,
+      decks: empty,
+      emblems: empty,
+      silent,
+    });
+    game.#restore(copyGameData(snapshot));
+    return game;
+  }
+
+  /** An independent copy of the game, without listeners. */
+  clone({ silent = true } = {}) {
+    const copy = new Game({
+      players: this.#players,
+      startingPlayerId: this.#startingPlayerId,
+      decks: Object.fromEntries(this.#players.map((p) => [p.id, []])),
+      emblems: Object.fromEntries(this.#players.map((p) => [p.id, []])),
+      silent,
+    });
+    copy.#cardDefinitions = { ...this.#cardDefinitions };
+    copy.#emblemDefinitions = this.#emblemDefinitions;
+    copy.#restore(copyGameData(this.#snapshot()));
+    return copy;
+  }
+
+  #restore(snapshot) {
+    this.#random.setState(snapshot.randomState);
+    this.#shuffleLibraries = snapshot.shuffleLibraries;
+    this.#status = snapshot.status;
+    this.#winnerId = snapshot.winnerId;
+    this.#turn = snapshot.turn;
+    this.#activePlayerId = snapshot.activePlayerId;
+    this.#priorityPlayerId = snapshot.priorityPlayerId;
+    this.#pendingDecision = snapshot.pendingDecision;
+    this.#segmentIndex = snapshot.segmentIndex;
+    this.#playersPassed = snapshot.playersPassed;
+    this.#stack = snapshot.stack;
+    this.#pendingTriggers = snapshot.pendingTriggers;
+    this.#combat = snapshot.combat;
+    this.#temporaryEffects = snapshot.temporaryEffects;
+    this.#zones = new Map(Object.entries(snapshot.zones));
+    this.#battlefield = snapshot.battlefield;
+    ({
+      nextStackObjectId: this.#nextStackObjectId,
+      nextTriggerId: this.#nextTriggerId,
+      nextEffectId: this.#nextEffectId,
+      nextTokenNumber: this.#nextTokenNumber,
+      version: this.#version,
+      eventSeq: this.#eventSeq,
+    } = snapshot.counters);
+  }
+
+  /**
+   * What `playerId` is allowed to know, as a snapshot without hidden information:
+   * - the opponents' hands become `handSize`, and every library becomes `librarySize`
+   * - `unknownCards[id]`: the cards whose place that player can't see, as card
+   *   objects sorted by `cardId`, with `id: null`: their own library, and each
+   *   opponent's hand and library together. (Knowing an opponent's deck list, but
+   *   not where each card is, is the assumption.)
+   * - no random number generator state, so future shuffles are unknown too.
+   * Pass it to determinize() (src/ai/determinize.js) to get playable guesses.
+   */
+  getPlayerView(playerId) {
+    const snapshot = this.serialize();
+    delete snapshot.randomState;
+    snapshot.viewerId = playerId;
+    snapshot.unknownCards = {};
+    const hide = (card) => ({ ...card, id: null });
+    const byCardId = (a, b) => (a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : 0);
+    for (const [id, zone] of Object.entries(snapshot.zones)) {
+      const unknown = [...zone.library];
+      zone.librarySize = zone.library.length;
+      zone.library = [];
+      if (id !== playerId) {
+        unknown.push(...zone.hand);
+        zone.handSize = zone.hand.length;
+        zone.hand = [];
+      }
+      snapshot.unknownCards[id] = unknown.map(hide).sort(byCardId);
+    }
+    return snapshot;
+  }
+
+  /**
+   * Applies an action taken from getValidActions() without checking it again, and
+   * without the action queue. For fast AI simulations only.
+   */
+  applyTrusted(action) {
+    this.#processing = true;
+    try {
+      this.#process(action, true);
+    } finally {
+      this.#processing = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -281,7 +474,7 @@ export class Game extends EventEmitter {
       // 304.1: instants can be cast whenever the player has priority. 307.1 / 301.1 /
       // 302.1 / 303.1: sorceries and permanent spells only at sorcery speed.
       if (!isInstant(card) && !sorceryTiming) continue;
-      if (!planManaPayment(pool, card.manaCost)) continue;
+      if (!canPayMana(pool, card.manaCost)) continue;
       const definition = this.#cardDefinitions[card.cardId];
       const additionalCost = definition.additionalCost ?? {};
       if (!this.#canPayCost(holder, null, additionalCost)) continue;
@@ -329,6 +522,8 @@ export class Game extends EventEmitter {
   #withTargetsAndChoices(base, targetKind, cost, {
     excludeTargetId = null, skipTarget = null, excludeCardId = null, effects = [],
   } = {}) {
+    // The common case, with nothing to choose, without building option lists.
+    if (!targetKind && !cost?.sacrifice && !cost?.discard && !needsManaColor(effects)) return [base];
     const targetOptions = targetKind
       ? this.#legalTargets(targetKind, base.playerId, excludeTargetId)
         .filter((target) => !skipTarget?.(target))
@@ -426,8 +621,8 @@ export class Game extends EventEmitter {
     return result;
   }
 
-  #process(action) {
-    const reason = this.#validate(action);
+  #process(action, trusted = false) {
+    const reason = trusted ? null : this.#validate(action);
     if (reason) {
       this.#emitEvent('actionRejected', { action, reason });
       return { ok: false, reason };
@@ -726,7 +921,7 @@ export class Game extends EventEmitter {
     const [card] = zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1);
     const permanent = this.#putOntoBattlefield(card, playerId);
     zone.landsPlayedThisTurn += 1;
-    this.#emitEvent('landPlayed', { playerId, card: structuredClone(permanent) });
+    this.#emitEvent('landPlayed', { playerId, card: this.#forEvent(permanent) });
 
     // 117.3c: after a special action the same player receives priority again.
     this.#resetPasses();
@@ -809,7 +1004,7 @@ export class Game extends EventEmitter {
       // has controlled it continuously since their most recent turn began.
       if (this.#hasSummoningSickness(permanent)) return false;
     }
-    if (cost.mana && !planManaPayment(this.#zones.get(playerId).manaPool, cost.mana)) return false;
+    if (cost.mana && !canPayMana(this.#zones.get(playerId).manaPool, cost.mana)) return false;
     // Choices such as which creature to sacrifice are checked by #costChoiceOptions.
     return true;
   }
@@ -891,7 +1086,7 @@ export class Game extends EventEmitter {
   #resolveTopOfStack() {
     // 608.2: the top object resolves.
     const stackObject = this.#stack.pop();
-    this.#emitEvent('stackObjectResolving', { stackObject: structuredClone(stackObject) });
+    this.#emitEvent('stackObjectResolving', { stackObject: this.#forEvent(stackObject) });
     const { controllerId, targets = [] } = stackObject;
     const definition = stackObject.kind === 'spell' ? this.#cardDefinitions[stackObject.card.cardId] : null;
     const targetKind = stackObject.targetKind ?? definition?.enchant ?? definition?.target ?? null;
@@ -914,7 +1109,7 @@ export class Game extends EventEmitter {
       const permanent = this.#putOntoBattlefield(stackObject.card, controllerId);
       // 303.4f: an Aura spell enters attached to the object it targeted.
       if (isAura(permanent)) this.#attach(permanent, legalTargets[0]);
-      this.#emitEvent('permanentEntered', { playerId: controllerId, card: structuredClone(permanent) });
+      this.#emitEvent('permanentEntered', { playerId: controllerId, card: this.#forEvent(permanent) });
     } else {
       for (const effect of effects) this.#applyEffect(effect, controllerId, context);
     }
@@ -1003,7 +1198,7 @@ export class Game extends EventEmitter {
           };
           this.#temporaryEffects.push(temporary);
           this.#applyContinuousEffects();
-          this.#emitEvent('temporaryEffectCreated', structuredClone(temporary));
+          this.#emitEvent('temporaryEffectCreated', this.#forEvent(temporary));
         }
         break;
       case EFFECT.ADD_COUNTERS:
@@ -1070,7 +1265,7 @@ export class Game extends EventEmitter {
         for (const playerId of players) {
           for (let i = 0; i < (effect.count ?? 1); i++) {
             const token = this.#createToken(effect.token, playerId);
-            this.#emitEvent('tokenCreated', { playerId, card: structuredClone(token), sourceId });
+            this.#emitEvent('tokenCreated', { playerId, card: this.#forEvent(token), sourceId });
           }
         }
         break;
@@ -1126,7 +1321,7 @@ export class Game extends EventEmitter {
         targetKind: ability.target ?? null,
       };
       this.#pendingTriggers.push(trigger);
-      this.#emitEvent('abilityTriggered', structuredClone(trigger));
+      this.#emitEvent('abilityTriggered', this.#forEvent(trigger));
     }
   }
 
@@ -1632,7 +1827,7 @@ export class Game extends EventEmitter {
 
   #requireDecision(decision) {
     this.#pendingDecision = decision;
-    this.#emitEvent('decisionRequired', structuredClone(decision));
+    this.#emitEvent('decisionRequired', this.#forEvent(decision));
   }
 
   /**
@@ -1790,12 +1985,18 @@ export class Game extends EventEmitter {
   // ---------------------------------------------------------------------------
   // Emission
 
+  /** A copy of `value` for an event payload (nothing is emitted in silent mode, so no copy). */
+  #forEvent(value) {
+    return this.#silent ? value : structuredClone(value);
+  }
+
   #emitEvent(name, data) {
+    if (this.#silent) return;
     this.emit(name, { seq: ++this.#eventSeq, ...data });
   }
 
   #emitState() {
     this.#version += 1;
-    this.#emitEvent('state', this.getState());
+    if (!this.#silent) this.#emitEvent('state', this.getState());
   }
 }

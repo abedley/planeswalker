@@ -36,10 +36,11 @@ export class BasicAIController extends EventEmitter {
     this.#playerId = playerId;
     this.#delayMs = delayMs;
     this.#strategy = strategy;
-    this.#unsubscribers = [
+    // Without a game it's just a policy: call chooseAction(state) yourself (e.g. in simulations).
+    this.#unsubscribers = game ? [
       game.on('state', (state) => this.#onState(state)),
       game.listenTo(this),
-    ];
+    ] : [];
   }
 
   get playerId() { return this.#playerId; }

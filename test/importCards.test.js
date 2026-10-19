@@ -59,9 +59,9 @@ test('reports rules text the engine can\'t do', () => {
 });
 
 test('reports unsupported card types, supertypes and layouts', () => {
-  assert.deepEqual(problems('lightningBolt'), [
-    'Unsupported card type: Instant.',
-    'Unsupported rules text: "Lightning Bolt deals 3 damage to any target."',
+  assert.deepEqual(problems('jaceBeleren').slice(0, 2), [
+    'Unsupported supertype: Legendary.',
+    'Unsupported card type: Planeswalker.',
   ]);
   assert.deepEqual(problems('thalia'), [
     'Unsupported supertype: Legendary.',
@@ -89,14 +89,14 @@ test('reports variable power/toughness, unsupported keywords and mana symbols', 
 test('importCards merges supported cards and reports the rest', () => {
   const existing = { grizzlyBears: { id: 'grizzlyBears', name: 'Old Bears' } };
   const { cards, imported, updated, skipped } = importCards(
-    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.lightningBolt, FIXTURES.llanowarElves],
+    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.counterspell, FIXTURES.llanowarElves],
     existing,
   );
   assert.deepEqual(imported, ['Serra Angel']);
   assert.deepEqual(updated, ['Grizzly Bears']);
   assert.deepEqual(Object.keys(cards).sort(), ['grizzlyBears', 'serraAngel']);
   assert.equal(cards.grizzlyBears.name, 'Grizzly Bears');
-  assert.deepEqual(skipped.map((s) => s.name), ['Lightning Bolt', 'Llanowar Elves']);
+  assert.deepEqual(skipped.map((s) => s.name), ['Counterspell', 'Llanowar Elves']);
   assert.match(skipped[1].problems[0], /defined by hand/);
   assert.equal(existing.grizzlyBears.name, 'Old Bears'); // not mutated
 });
@@ -170,4 +170,15 @@ test('imported Auras and Equipment work in a game', () => {
   const game = new Game({ players: [{ id: 'p1' }, { id: 'p2' }], cards, seed: 1 });
   game.start();
   assert.equal(game.getState().status, 'inProgress');
+});
+
+test('converts instants and sorceries built from supported sentences', () => {
+  const bolt = convert('lightningBolt').definition;
+  assert.deepEqual([bolt.types, bolt.target, bolt.effects], [['Instant'], TARGET.ANY, [{ type: 'dealDamage', amount: 3 }]]);
+  const growth = convert('giantGrowth').definition;
+  assert.deepEqual([growth.target, growth.effects], [TARGET.CREATURE, [{ type: 'pump', power: 3, toughness: 3 }]]);
+  assert.deepEqual(convert('murder').definition.effects, [{ type: 'destroy' }]);
+  const divination = convert('divination').definition;
+  assert.deepEqual([divination.types, divination.target, divination.effects], [['Sorcery'], undefined, [{ type: 'drawCards', count: 2 }]]);
+  assert.deepEqual(problems('counterspell'), ['Unsupported rules text: "Counter target spell."']);
 });

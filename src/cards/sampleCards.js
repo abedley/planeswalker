@@ -83,3 +83,39 @@ export const SAMPLE_PERMANENTS_DECK = Object.freeze([
   ...Array(9).fill('llanowarElves'),
   ...Object.keys(SAMPLE_PERMANENTS).flatMap((id) => [id, id]),
 ]);
+
+/** Sample instants and sorceries, also made up. */
+export const SAMPLE_SPELLS = Object.freeze({
+  sampleShock: {
+    id: 'sampleShock', name: 'Sample Shock', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.ANY, effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 2 }],
+    text: 'Sample Shock deals 2 damage to any target.',
+  },
+  sampleGrowth: {
+    id: 'sampleGrowth', name: 'Sample Growth', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.CREATURE, effects: [{ type: EFFECT.PUMP, power: 3, toughness: 3 }],
+    text: 'Target creature gets +3/+3 until end of turn.',
+  },
+  sampleRemedy: {
+    id: 'sampleRemedy', name: 'Sample Remedy', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    effects: [{ type: EFFECT.GAIN_LIFE, amount: 3 }],
+    text: 'You gain 3 life.',
+  },
+  sampleDoom: {
+    id: 'sampleDoom', name: 'Sample Doom', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.SORCERY],
+    target: TARGET.CREATURE, effects: [{ type: EFFECT.DESTROY }],
+    text: 'Destroy target creature.',
+  },
+  sampleInsight: {
+    id: 'sampleInsight', name: 'Sample Insight', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.SORCERY],
+    effects: [{ type: EFFECT.DRAW_CARDS, count: 2 }],
+    text: 'Draw two cards.',
+  },
+});
+
+/** 40 cards: 17 Forests, 13 Llanowar Elves and two of each sample spell. */
+export const SAMPLE_SPELLS_DECK = Object.freeze([
+  ...Array(17).fill('forest'),
+  ...Array(13).fill('llanowarElves'),
+  ...Object.keys(SAMPLE_SPELLS).flatMap((id) => [id, id]),
+]);

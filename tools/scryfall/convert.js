@@ -4,18 +4,63 @@
  *
  * Only cards the engine fully supports are converted. Everything a card does must
  * be one of:
- * - a land, creature, artifact or enchantment (no supertypes except Basic)
+ * - a land, creature, artifact, enchantment, instant or sorcery (no supertypes except Basic)
  * - a mana cost of generic and/or W, U, B, R, G, C symbols
  * - numeric power and toughness
  * - supported keywords (see KEYWORD in src/cards/cards.js)
  * - mana abilities of the form "{T}: Add {G}." (any mix of W, U, B, R, G, C symbols)
  * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>."
  * - Equipment: "Equipped creature gets +N/+N and has <keywords>." and "Equip {N}"
+ * - Instants and sorceries made only of these sentences (at most one target):
+ *   "CARDNAME deals N damage to any target." / "... to target creature.",
+ *   "Destroy target creature.", "Target creature gets +N/+N [and gains <keywords>] until end of turn.",
+ *   "You gain N life.", "Draw a card." / "Draw N cards."
  * Anything else, such as other rules text, is reported as unsupported.
  */
 import {
   KEYWORD, CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, equipAbility,
 } from '../../src/cards/cards.js';
+
+const NUMBER_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
+const toNumber = (word) => NUMBER_WORDS[word.toLowerCase()] ?? Number(word);
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Parses one instant/sorcery sentence into `{ effect, target }`, or null if the
+ * engine can't do it.
+ */
+function parseSpellSentence(sentence, cardName, problems) {
+  const name = escapeRegExp(cardName);
+  let match = new RegExp(`^${name} deals (\\d+) damage to (any target|target creature)\\.$`).exec(sentence);
+  if (match) {
+    return {
+      effect: { type: EFFECT.DEAL_DAMAGE, amount: Number(match[1]) },
+      target: match[2] === 'any target' ? TARGET.ANY : TARGET.CREATURE,
+    };
+  }
+  if (sentence === 'Destroy target creature.') return { effect: { type: EFFECT.DESTROY }, target: TARGET.CREATURE };
+  match = /^Target creature gets ([+-]\d+)\/([+-]\d+)(?: and gains (.+?))? until end of turn\.$/.exec(sentence);
+  if (match) {
+    const keywords = (match[3] ?? '').split(/,\s*(?:and\s+)?|\s+and\s+/).map(lower).filter(Boolean);
+    const unsupported = keywords.filter((k) => !SUPPORTED_KEYWORDS.has(k));
+    for (const k of unsupported) problems.push(`Unsupported keyword granted: ${k}.`);
+    if (unsupported.length) return { effect: null, target: TARGET.CREATURE };
+    return {
+      effect: {
+        type: EFFECT.PUMP, power: Number(match[1]), toughness: Number(match[2]), ...(keywords.length ? { keywords } : {}),
+      },
+      target: TARGET.CREATURE,
+    };
+  }
+  match = /^You gain (\w+) life\.$/.exec(sentence);
+  if (match && toNumber(match[1])) return { effect: { type: EFFECT.GAIN_LIFE, amount: toNumber(match[1]) }, target: null };
+  match = /^Draw (a card|(\w+) cards)\.$/.exec(sentence);
+  if (match) {
+    const count = match[2] ? toNumber(match[2]) : 1;
+    if (count) return { effect: { type: EFFECT.DRAW_CARDS, count }, target: null };
+  }
+  return null;
+}
 
 const SUPPORTED_KEYWORDS = new Set(Object.values(KEYWORD));
 const SUPPORTED_TYPES = new Set(Object.values(CARD_TYPE));
@@ -108,7 +153,10 @@ function parseOracleText(card, typeInfo, problems) {
   const keywords = [];
   const abilities = [];
   const staticAbilities = [];
+  const effects = [];
+  let spellTarget = null;
   let enchant = null;
+  const isSpellCard = typeInfo.types.includes(CARD_TYPE.INSTANT) || typeInfo.types.includes(CARD_TYPE.SORCERY);
   const isAuraCard = typeInfo.subtypes.includes(SUBTYPE.AURA);
   const isEquipmentCard = typeInfo.subtypes.includes(SUBTYPE.EQUIPMENT);
   // Keywords handled below as Aura/Equipment rules rather than as creature keywords.
@@ -123,6 +171,22 @@ function parseOracleText(card, typeInfo, problems) {
       const inner = /^\((.*)\)$/.exec(line)?.[1];
       const ability = typeInfo.supertypes.includes('Basic') && inner ? parseManaAbility(inner, problems) : null;
       if (ability) abilities.push(ability);
+      continue;
+    }
+
+    if (isSpellCard) {
+      // An instant or sorcery's rules text is its effect, one sentence at a time (608.2c).
+      for (const sentence of withoutReminder.split(/(?<=\.)\s+/)) {
+        const parsed = parseSpellSentence(sentence, card.name, problems);
+        if (!parsed) {
+          problems.push(`Unsupported rules text: "${sentence}"`);
+        } else if (parsed.target && spellTarget && parsed.target !== spellTarget) {
+          problems.push(`More than one target isn't supported: "${sentence}"`);
+        } else {
+          if (parsed.effect) effects.push(parsed.effect);
+          spellTarget = parsed.target ?? spellTarget;
+        }
+      }
       continue;
     }
 
@@ -178,7 +242,8 @@ function parseOracleText(card, typeInfo, problems) {
     }
   }
   if (isAuraCard && !enchant && !problems.length) problems.push('An Aura needs "Enchant creature".');
-  return { keywords: [...new Set(keywords)], abilities, staticAbilities, enchant };
+  if (isSpellCard && effects.length === 0 && !problems.length) problems.push('An instant or sorcery needs rules text.');
+  return { keywords: [...new Set(keywords)], abilities, staticAbilities, enchant, effects, spellTarget };
 }
 
 /**
@@ -221,7 +286,7 @@ export function convertScryfallCard(card) {
     }
   }
 
-  const { keywords, abilities, staticAbilities, enchant } = parseOracleText(card, typeInfo, problems);
+  const { keywords, abilities, staticAbilities, enchant, effects, spellTarget } = parseOracleText(card, typeInfo, problems);
   const knownSubtypes = { [SUBTYPE.AURA]: CARD_TYPE.ENCHANTMENT, [SUBTYPE.EQUIPMENT]: CARD_TYPE.ARTIFACT };
   for (const [subtype, type] of Object.entries(knownSubtypes)) {
     if (typeInfo.subtypes.includes(subtype) && !typeInfo.types.includes(type)) problems.push(`Unsupported: ${subtype} that isn't an ${type}.`);
@@ -242,6 +307,8 @@ export function convertScryfallCard(card) {
     ...(keywords.length ? { keywords } : {}),
     ...(abilities.length ? { abilities } : {}),
     ...(enchant ? { enchant } : {}),
+    ...(effects.length ? { effects } : {}),
+    ...(spellTarget ? { target: spellTarget } : {}),
     ...(staticAbilities.length ? { staticAbilities } : {}),
     text: card.oracle_text ?? '',
     // Provenance, for reference only.

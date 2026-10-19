@@ -9,10 +9,11 @@ export {
 export { PHASE, STEP, PHASE_NAMES, STEP_NAMES, TURN_STRUCTURE } from './engine/turnStructure.js';
 export {
   CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, EFFECT, KEYWORD, ACTIVATION_TIMING,
-  isArtifact, isEnchantment, isAura, isEquipment, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
+  isArtifact, isEnchantment, isAura, isEquipment, isInstant, isSorcery, isPermanentCard,
+  TARGETED_EFFECTS, HARMFUL_EFFECTS, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
 } from './cards/cards.js';
 export {
-  SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK,
+  SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS, SAMPLE_SPELLS_DECK,
 } from './cards/sampleCards.js';
 export { EMBLEMS, DEFAULT_EMBLEMS } from './cards/emblems.js';
 export {

@@ -4,7 +4,7 @@ import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStru
 import { seededRandom, shuffle } from './random.js';
 import {
   CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED,
-  isLand, isCreature, isAura, isEquipment, isManaAbility, hasKeyword,
+  isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
@@ -87,6 +87,9 @@ export class Game extends EventEmitter {
   #stack = []; // last element is the top of the stack
   #nextStackObjectId = 1;
   #combat = emptyCombat();
+  /** Continuous effects from resolved spells, e.g. "+3/+3 until end of turn" (611.2). */
+  #temporaryEffects = [];
+  #nextEffectId = 1;
   #version = 0;
   #eventSeq = 0;
   #queue = [];
@@ -240,6 +243,7 @@ export class Game extends EventEmitter {
       playersPassed: this.#playersPassed,
       stack: this.#stack,
       combat: this.#combat,
+      temporaryEffects: this.#temporaryEffects,
       validActions: this.getValidActions(),
     });
   }
@@ -255,20 +259,23 @@ export class Game extends EventEmitter {
         actions.push({ type: ACTION.PLAY_LAND, playerId: holder, cardId: card.id });
       }
     }
-    if (this.#hasSorceryTiming(holder)) {
-      // 307.1 / 301.1 / 302.1 / 303.1: permanent spells are cast at sorcery speed.
-      const pool = this.#zones.get(holder).manaPool;
-      for (const card of hand.filter((c) => !isLand(c))) {
-        if (!planManaPayment(pool, card.manaCost)) continue;
-        const { enchant } = this.#cardDefinitions[card.cardId];
-        if (!enchant) {
-          actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id });
-          continue;
-        }
-        // 303.4a / 601.2c: an Aura spell targets what it will enchant; one action per legal target.
-        for (const target of this.#legalTargets(enchant, holder, card.id)) {
-          actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id, targets: [target.id] });
-        }
+    const sorceryTiming = this.#hasSorceryTiming(holder);
+    const pool = this.#zones.get(holder).manaPool;
+    for (const card of hand.filter((c) => !isLand(c))) {
+      // 304.1: instants can be cast whenever the player has priority. 307.1 / 301.1 /
+      // 302.1 / 303.1: sorceries and permanent spells only at sorcery speed.
+      if (!isInstant(card) && !sorceryTiming) continue;
+      if (!planManaPayment(pool, card.manaCost)) continue;
+      const definition = this.#cardDefinitions[card.cardId];
+      const targetKind = definition.enchant ?? definition.target;
+      if (!targetKind) {
+        actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id });
+        continue;
+      }
+      // 601.2c: a spell that targets needs a legal target; one action per legal target.
+      // (303.4a: an Aura spell targets what it will enchant.)
+      for (const target of this.#legalTargets(targetKind, holder, card.id)) {
+        actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id, targets: [target.id] });
       }
     }
     // 602.2 / 605.3a: a player with priority may activate abilities of permanents
@@ -454,6 +461,9 @@ export class Game extends EventEmitter {
       text: definition.text ?? definition.oracleText ?? '',
       ownerId,
     };
+    if (!isPermanentCard(definition)) {
+      card.spell = { target: definition.target ?? null, effects: structuredClone(definition.effects ?? []) };
+    }
     if (isCreature(definition)) Object.assign(card, { power: definition.power, toughness: definition.toughness });
     return card;
   }
@@ -518,6 +528,8 @@ export class Game extends EventEmitter {
     // 400.7: it becomes a new object with its printed characteristics.
     Object.assign(card, base.power === undefined ? { keywords: base.keywords } : base);
     this.#zones.get(card.ownerId).graveyard.push(card);
+    // 400.7: effects that applied to it don't follow it.
+    this.#temporaryEffects = this.#temporaryEffects.filter((e) => e.targetId !== permanent.id);
     this.#applyContinuousEffects();
     // 506.4: a permanent that leaves the battlefield is removed from combat.
     this.#combat.attackers = this.#combat.attackers.filter((a) => a.cardId !== permanent.id);
@@ -701,14 +713,20 @@ export class Game extends EventEmitter {
     const stackObject = this.#stack.pop();
     this.#emitEvent('stackObjectResolving', { stackObject: structuredClone(stackObject) });
     const { controllerId, targets = [] } = stackObject;
-    const targetKind = stackObject.targetKind
-      ?? (stackObject.kind === 'spell' ? this.#cardDefinitions[stackObject.card.cardId].enchant : null);
+    const definition = stackObject.kind === 'spell' ? this.#cardDefinitions[stackObject.card.cardId] : null;
+    const targetKind = stackObject.targetKind ?? definition?.enchant ?? definition?.target ?? null;
     const legalTargets = targets.filter((id) => this.#isLegalTarget(targetKind, id, controllerId, stackObject.sourceId));
 
     if (targets.length > 0 && legalTargets.length === 0) {
       // 608.2b: with every target illegal, it doesn't resolve. A spell goes to its owner's graveyard.
       if (stackObject.kind === 'spell') this.#zones.get(stackObject.card.ownerId).graveyard.push(stackObject.card);
       this.#emitEvent('stackObjectFizzled', { stackObjectId: stackObject.id, reason: 'All targets are illegal.' });
+    } else if (stackObject.kind === 'spell' && !isPermanentCard(stackObject.card)) {
+      // 608.2c: an instant or sorcery's effects happen in order...
+      const context = { sourceId: stackObject.sourceId, targets: legalTargets };
+      for (const effect of definition.effects ?? []) this.#applyEffect(effect, controllerId, context);
+      // 608.2n: ...then it goes to its owner's graveyard.
+      this.#zones.get(stackObject.card.ownerId).graveyard.push(stackObject.card);
     } else if (stackObject.kind === 'spell') {
       // 608.3: a permanent spell enters the battlefield under its controller's control.
       const permanent = this.#putOntoBattlefield(stackObject.card, controllerId);
@@ -726,6 +744,44 @@ export class Game extends EventEmitter {
 
   #applyEffect(effect, controllerId, { sourceId, targets = [] } = {}) {
     switch (effect.type) {
+      case EFFECT.DEAL_DAMAGE: {
+        const [targetId] = targets;
+        if (this.#zones.has(targetId)) {
+          // 120.3a: damage to a player causes that much life loss.
+          this.#zones.get(targetId).life -= effect.amount;
+          this.#emitEvent('damageDealt', { sourceId, targetPlayerId: targetId, amount: effect.amount });
+        } else {
+          // 120.3e: damage to a creature is marked on it; state-based actions do the rest.
+          this.#permanent(targetId).damage += effect.amount;
+          this.#emitEvent('damageDealt', { sourceId, targetCardId: targetId, amount: effect.amount });
+        }
+        break;
+      }
+      case EFFECT.DESTROY: {
+        // 701.7a: move it from the battlefield to its owner's graveyard.
+        const permanent = this.#permanent(targets[0]);
+        this.#putIntoGraveyard(permanent);
+        this.#emitEvent('permanentDestroyed', {
+          cardId: permanent.id, cardName: permanent.name, controllerId: permanent.controllerId, sourceId,
+        });
+        break;
+      }
+      case EFFECT.PUMP: {
+        // 611.2a: a continuous effect from a resolving spell, here lasting until end of turn.
+        const temporary = {
+          id: `e${this.#nextEffectId++}`,
+          sourceId,
+          targetId: targets[0],
+          power: effect.power ?? 0,
+          toughness: effect.toughness ?? 0,
+          keywords: [...(effect.keywords ?? [])],
+          duration: 'endOfTurn',
+        };
+        this.#temporaryEffects.push(temporary);
+        this.#applyContinuousEffects();
+        this.#emitEvent('temporaryEffectCreated', structuredClone(temporary));
+        break;
+      }
       case EFFECT.ATTACH: {
         // 701.3a: attach the source to the target; nothing happens if the source has left.
         const source = this.#permanent(sourceId);
@@ -756,17 +812,22 @@ export class Game extends EventEmitter {
   // Targets, attachments and continuous effects (Comprehensive Rules 115, 301.5, 303.4, 613)
 
   #isLegalTarget(kind, id, controllerId, sourceId) {
+    // 115.4: "any target" includes players (who haven't left the game).
+    if (kind === TARGET.ANY && this.#zones.has(id)) return !this.#zones.get(id).hasLost;
     const permanent = this.#permanent(id);
     if (!permanent || id === sourceId) return false;
     switch (kind) {
       case TARGET.CREATURE: return isCreature(permanent);
       case TARGET.CREATURE_YOU_CONTROL: return isCreature(permanent) && permanent.controllerId === controllerId;
+      case TARGET.ANY: return isCreature(permanent);
       default: throw new Error(`Unknown target kind: ${kind}`);
     }
   }
 
+  /** Legal targets as `{ id }` objects: permanents, then players. */
   #legalTargets(kind, controllerId, sourceId) {
-    return this.#battlefield.filter((p) => this.#isLegalTarget(kind, p.id, controllerId, sourceId));
+    return [...this.#battlefield, ...this.#players]
+      .filter((p) => this.#isLegalTarget(kind, p.id, controllerId, sourceId));
   }
 
   /** Whether an attached Aura or Equipment is attached to something it legally can be. */
@@ -823,6 +884,18 @@ export class Game extends EventEmitter {
         for (const keyword of effect.keywords ?? []) {
           if (!host.keywords.includes(keyword)) host.keywords.push(keyword);
         }
+      }
+    }
+    // Effects from resolved spells apply after static abilities, in the order they were created (613.7).
+    for (const effect of this.#temporaryEffects) {
+      const target = this.#permanent(effect.targetId);
+      if (!target) continue;
+      if (isCreature(target)) {
+        target.power += effect.power;
+        target.toughness += effect.toughness;
+      }
+      for (const keyword of effect.keywords) {
+        if (!target.keywords.includes(keyword)) target.keywords.push(keyword);
       }
     }
   }
@@ -1249,10 +1322,16 @@ export class Game extends EventEmitter {
         if (excess > 0) {
           this.#requireDecision({ type: DECISION.DISCARD_TO_HAND_SIZE, playerId: active, count: excess });
         }
-        // 514.2: damage wears off.
+        // 514.2: damage wears off, and "until end of turn" effects end, simultaneously.
         for (const permanent of this.#battlefield) {
           permanent.damage = 0;
           permanent.damagedByDeathtouch = false;
+        }
+        if (this.#temporaryEffects.length) {
+          const ended = this.#temporaryEffects.map((e) => e.id);
+          this.#temporaryEffects = [];
+          this.#applyContinuousEffects();
+          this.#emitEvent('temporaryEffectsEnded', { effectIds: ended });
         }
         break;
       }

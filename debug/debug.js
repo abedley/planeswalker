@@ -1,7 +1,8 @@
 import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
-  DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, isAura,
+  DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
+  SAMPLE_SPELLS_DECK, isAura,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -38,6 +39,7 @@ const DECKS = {
   standard: DEFAULT_DECK,
   sampler: SAMPLE_DECK,
   permanents: SAMPLE_PERMANENTS_DECK,
+  spells: SAMPLE_SPELLS_DECK,
 };
 
 const CONTROLLER_KINDS = {
@@ -69,7 +71,7 @@ function newGame() {
     players: PLAYERS,
     startingPlayerId: ui.startingPlayer.value,
     seed,
-    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS },
+    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS },
     decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
   });
   window.game = game;
@@ -282,6 +284,10 @@ function combatTags(card, state) {
   for (const attachment of state.battlefield.filter((p) => p.attachedTo === card.id)) {
     tags.push(`${isAura(attachment) ? 'enchanted by' : 'equipped with'} ${attachment.name}`);
   }
+  for (const effect of state.temporaryEffects.filter((e) => e.targetId === card.id)) {
+    const keywords = effect.keywords.length ? ` ${effect.keywords.join(', ')}` : '';
+    tags.push(`+${effect.power}/+${effect.toughness}${keywords} until end of turn`);
+  }
   return tags;
 }
 
@@ -377,7 +383,8 @@ function targetLabel(action, state) {
   if (!action.targets?.length) return '';
   const names = action.targets.map((id) => {
     const target = state.battlefield.find((p) => p.id === id);
-    return target ? `${target.name} (${id})` : id;
+    if (target) return `${target.name} (${id})`;
+    return state.players.some((p) => p.id === id) ? playerName(id) : id;
   });
   return ` → ${names.join(', ')}`;
 }
@@ -449,6 +456,10 @@ function summarize(name, p) {
     case 'unattached': return `${p.cardName} (${p.cardId}) unattached from ${p.from}`;
     case 'permanentToGraveyard': return `${p.cardName} (${p.cardId}) went to the graveyard (${p.reason})`;
     case 'stackObjectFizzled': return `${p.stackObjectId}: ${p.reason}`;
+    case 'damageDealt': return `${p.sourceId} → ${p.targetPlayerId ? who(p.targetPlayerId) : p.targetCardId}: ${p.amount}`;
+    case 'permanentDestroyed': return `${p.cardName} (${p.cardId}) destroyed by ${p.sourceId}`;
+    case 'temporaryEffectCreated': return `${p.targetId} gets +${p.power}/+${p.toughness}${p.keywords.length ? ` and ${p.keywords.join(', ')}` : ''} until end of turn`;
+    case 'temporaryEffectsEnded': return `${p.effectIds.length} "until end of turn" effect(s) ended`;
     case 'creatureDied': return `${p.cardName} (${p.cardId}) died`;
     case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;
     case 'manaAdded': return `${who(p.playerId)} added ${formatMana(p.mana)} (pool ${formatMana(p.manaPool)})`;

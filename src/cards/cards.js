@@ -12,6 +12,8 @@
  *   - `timing`: `'sorcery'` to allow activation only at sorcery speed (default: any time with priority)
  *   - `target`: a TARGET kind, for abilities that target (e.g. equip)
  * - `enchant`: for Auras, the TARGET kind the Aura can enchant (303.4a)
+ * - Instants and sorceries: `effects` (applied in order on resolution) and an
+ *   optional `target` (a TARGET kind) that effects such as damage use
  * - `staticAbilities`: continuous effects, e.g. an Aura's or Equipment's
  *   `{ affected: 'attachedPermanent', power: 2, toughness: 0, keywords: ['flying'] }`
  * - `text`: rules text, for display
@@ -23,6 +25,8 @@ export const CARD_TYPE = Object.freeze({
   CREATURE: 'Creature',
   ARTIFACT: 'Artifact',
   ENCHANTMENT: 'Enchantment',
+  INSTANT: 'Instant',
+  SORCERY: 'Sorcery',
 });
 
 export const SUBTYPE = Object.freeze({
@@ -34,6 +38,8 @@ export const SUBTYPE = Object.freeze({
 export const TARGET = Object.freeze({
   CREATURE: 'creature',
   CREATURE_YOU_CONTROL: 'creatureYouControl',
+  /** A creature or a player (115.4; there are no planeswalkers or battles here). */
+  ANY: 'any',
 });
 
 /** Who a static ability affects. */
@@ -63,7 +69,18 @@ export const EFFECT = Object.freeze({
   GAIN_LIFE: 'gainLife',
   /** Attach the ability's source to its target (701.3), e.g. equip. */
   ATTACH: 'attach',
+  /** `{ amount }` damage to the target (120). */
+  DEAL_DAMAGE: 'dealDamage',
+  /** Destroy the target (701.7). */
+  DESTROY: 'destroy',
+  /** `{ power, toughness, keywords? }` for the target creature until end of turn (611.2). */
+  PUMP: 'pump',
 });
+
+/** Effects that apply to the spell's or ability's target rather than to its controller. */
+export const TARGETED_EFFECTS = Object.freeze(new Set([EFFECT.ATTACH, EFFECT.DEAL_DAMAGE, EFFECT.DESTROY, EFFECT.PUMP]));
+/** Effects that hurt whatever they target, for AI decisions. */
+export const HARMFUL_EFFECTS = Object.freeze(new Set([EFFECT.DEAL_DAMAGE, EFFECT.DESTROY]));
 
 export const ACTIVATION_TIMING = Object.freeze({
   /** Any time the player has priority (602.2). */
@@ -110,6 +127,10 @@ export const DEFAULT_DECK = Object.freeze([...Array(20).fill('forest'), ...Array
 
 export const isLand = (card) => card.types.includes(CARD_TYPE.LAND);
 export const isCreature = (card) => card.types.includes(CARD_TYPE.CREATURE);
+export const isInstant = (card) => card.types.includes(CARD_TYPE.INSTANT);
+export const isSorcery = (card) => card.types.includes(CARD_TYPE.SORCERY);
+/** 110.4: instants and sorceries can't be permanents; everything else here is. */
+export const isPermanentCard = (card) => !isInstant(card) && !isSorcery(card);
 export const isArtifact = (card) => card.types.includes(CARD_TYPE.ARTIFACT);
 export const isEnchantment = (card) => card.types.includes(CARD_TYPE.ENCHANTMENT);
 export const isAura = (card) => isEnchantment(card) && (card.subtypes ?? []).includes(SUBTYPE.AURA);

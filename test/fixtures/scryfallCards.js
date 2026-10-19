@@ -94,4 +94,15 @@ export const FIXTURES = {
   gloriousAnthem: card({
     name: 'Glorious Anthem', mana_cost: '{1}{W}{W}', type_line: 'Enchantment', oracle_text: 'Creatures you control get +1/+1.',
   }),
+  giantGrowth: card({
+    name: 'Giant Growth', mana_cost: '{G}', type_line: 'Instant', oracle_text: 'Target creature gets +3/+3 until end of turn.',
+  }),
+  murder: card({ name: 'Murder', mana_cost: '{1}{B}{B}', type_line: 'Instant', oracle_text: 'Destroy target creature.' }),
+  divination: card({ name: 'Divination', mana_cost: '{2}{U}', type_line: 'Sorcery', oracle_text: 'Draw two cards.' }),
+  counterspell: card({ name: 'Counterspell', mana_cost: '{U}{U}', type_line: 'Instant', oracle_text: 'Counter target spell.' }),
+  jaceBeleren: card({
+    name: 'Jace Beleren', mana_cost: '{1}{U}{U}', type_line: 'Legendary Planeswalker — Jace',
+    oracle_text: '+2: Each player draws a card.\n−1: Target player draws a card.\n−10: Target player mills twenty cards.',
+    keywords: ['Mill'], loyalty: '3',
+  }),
 };

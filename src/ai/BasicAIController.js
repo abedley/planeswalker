@@ -2,7 +2,7 @@ import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import {
-  isCreature, isLand, isAura, isEquipment, hasKeyword, manaValue, KEYWORD,
+  isCreature, isLand, isAura, isEquipment, hasKeyword, manaValue, KEYWORD, EFFECT, HARMFUL_EFFECTS, TARGET,
 } from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
 
@@ -97,7 +97,7 @@ export class BasicAIController extends EventEmitter {
       ?.abilities.find((ab) => ab.id === a.abilityId && Object.keys(ab.cost).length === 0);
 
     return find(ACTION.PLAY_LAND)
-      ?? find(ACTION.CAST_SPELL, onOwnCreatures)
+      ?? this.#chooseCast(state, me, mine, myCreatures, onOwnCreatures)
       ?? find(ACTION.ACTIVATE_ABILITY, isEquipForLooseEquipment)
       ?? find(ACTION.ACTIVATE_ABILITY, isFreeEmblemAbility)
       // Only make mana when there's something affordable to spend it on.
@@ -117,12 +117,64 @@ export class BasicAIController extends EventEmitter {
       && state.stack.length === 0;
     if (!sorceryTiming || untappedSources === 0) return false;
     const costs = [
-      ...me.hand.filter((c) => !isLand(c) && (!isAura(c) || myCreatures.size > 0)).map((c) => c.manaCost),
+      ...me.hand.filter((c) => !isLand(c) && this.#worthCasting(c, state, myCreatures)).map((c) => c.manaCost),
       ...(myCreatures.size > 0 ? unattachedEquipment : [])
         .map((e) => e.abilities.find((ab) => ab.id === 'equip')?.cost.mana).filter(Boolean),
     ];
     const available = manaPoolTotal(me.manaPool) + untappedSources;
     return costs.some((cost) => manaValue(cost) <= available && manaValue(cost) > manaPoolTotal(me.manaPool));
+  }
+
+  /** Whether a card in hand has a sensible use right now (used to decide whether to make mana). */
+  #worthCasting(card, state, myCreatures) {
+    const theirCreatures = state.battlefield.filter((p) => p.controllerId !== this.#playerId && isCreature(p));
+    if (isAura(card)) return myCreatures.size > 0;
+    if (!card.spell) return true;
+    const harmful = card.spell.effects.some((e) => HARMFUL_EFFECTS.has(e.type));
+    if (harmful) return card.spell.target === TARGET.ANY || theirCreatures.length > 0;
+    if (card.spell.target) return myCreatures.size > 0;
+    return true;
+  }
+
+  /**
+   * Picks a spell to cast, and its target: harmful spells at the opponent (killing
+   * their biggest creature it can, otherwise their face), helpful ones at our own
+   * creatures that can still attack, and untargeted ones whenever.
+   */
+  #chooseCast(state, me, mine, myCreatures, onOwnCreatures) {
+    const opponentId = state.players.find((p) => p.id !== this.#playerId).id;
+    const byId = (id) => state.battlefield.find((p) => p.id === id);
+    const theirs = (id) => id === opponentId || byId(id)?.controllerId === opponentId;
+    let best = null;
+    let bestScore = 0;
+    for (const action of mine.filter((a) => a.type === ACTION.CAST_SPELL)) {
+      const card = me.hand.find((c) => c.id === action.cardId);
+      const targets = action.targets ?? [];
+      let score = 0;
+      if (!card.spell) {
+        score = onOwnCreatures(action) ? 1 : 0;
+      } else if (card.spell.effects.some((e) => HARMFUL_EFFECTS.has(e.type))) {
+        if (!targets.every(theirs)) continue;
+        const target = byId(targets[0]);
+        const damage = card.spell.effects.find((e) => e.type === EFFECT.DEAL_DAMAGE)?.amount;
+        const destroys = card.spell.effects.some((e) => e.type === EFFECT.DESTROY);
+        if (!target) score = 1; // the opponent's face
+        else if (destroys || (damage && target.toughness - target.damage <= damage)) score = 10 + target.power;
+      } else if (targets.length) {
+        // A pump: only before combat, on a creature of ours that can attack this turn.
+        const target = byId(targets[0]);
+        const canAttack = target && myCreatures.has(target.id) && !target.tapped
+          && (!target.summoningSick || hasKeyword(target, KEYWORD.HASTE)) && !hasKeyword(target, KEYWORD.DEFENDER);
+        score = canAttack && state.phase === 'precombatMain' ? 2 : 0;
+      } else {
+        score = 1;
+      }
+      if (score > bestScore) {
+        best = action;
+        bestScore = score;
+      }
+    }
+    return best;
   }
 
   /** Attack with everything if we have more ready creatures than they have untapped blockers. */

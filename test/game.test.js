@@ -466,7 +466,7 @@ function startWithForest(options) {
 test('a Forest on the battlefield offers its mana ability', () => {
   const { game } = startWithForest();
   const forest = game.getState().battlefield[0];
-  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, timing: 'instant', target: null }]);
+  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, effects: [{ type: 'addMana', mana: { G: 1 } }], timing: 'instant', target: null }]);
   assert.deepEqual(
     game.getState().validActions.filter((a) => a.type === ACTION.ACTIVATE_ABILITY),
     [{ type: ACTION.ACTIVATE_ABILITY, playerId: 'p1', cardId: forest.id, abilityId: 'tapForG' }],
@@ -608,7 +608,7 @@ test('a non-mana ability goes on the stack and resolves when all players pass', 
     {
       id: undefined, kind: 'activatedAbility', controllerId: 'p1', sourceId: grove.id,
       sourceName: 'Library Grove', abilityId: 'draw', text: '{T}, {G}: Draw a card.',
-      effect: { type: EFFECT.DRAW_CARDS, count: 1 },
+      effects: [{ type: EFFECT.DRAW_CARDS, count: 1 }],
     },
   );
   assert.equal(state.priorityPlayerId, 'p1'); // 117.3c
@@ -697,7 +697,7 @@ test('Llanowar Elves is a 1/1 for {G} with "{T}: Add {G}."', () => {
     { manaCost: elves.manaCost, types: elves.types, subtypes: elves.subtypes, power: elves.power, toughness: elves.toughness },
     { manaCost: { G: 1 }, types: ['Creature'], subtypes: ['Elf', 'Druid'], power: 1, toughness: 1 },
   );
-  assert.deepEqual(elves.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, timing: 'instant', target: null }]);
+  assert.deepEqual(elves.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, effects: [{ type: 'addMana', mana: { G: 1 } }], timing: 'instant', target: null }]);
 });
 
 test('casting a creature needs {G} in the pool and sorcery timing', () => {
@@ -1372,7 +1372,9 @@ test('each player starts with a Planeswalker emblem in the command zone', () => 
       name: 'Planeswalker',
       ownerId: id,
       controllerId: id,
-      abilities: [{ id: 'gainLife', text: '0: You gain 1 life.', cost: {}, timing: 'sorcery' }],
+      abilities: [{
+        id: 'gainLife', text: '0: You gain 1 life.', cost: {}, effects: [{ type: 'gainLife', amount: 1 }], timing: 'sorcery', target: null,
+      }],
       activationsPerTurn: 1,
       activationsThisTurn: 0,
     }]);

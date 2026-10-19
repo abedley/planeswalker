@@ -89,14 +89,14 @@ test('reports variable power/toughness, unsupported keywords and mana symbols', 
 test('importCards merges supported cards and reports the rest', () => {
   const existing = { grizzlyBears: { id: 'grizzlyBears', name: 'Old Bears' } };
   const { cards, imported, updated, skipped } = importCards(
-    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.counterspell, FIXTURES.llanowarElves],
+    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.signInBlood, FIXTURES.llanowarElves],
     existing,
   );
   assert.deepEqual(imported, ['Serra Angel']);
   assert.deepEqual(updated, ['Grizzly Bears']);
   assert.deepEqual(Object.keys(cards).sort(), ['grizzlyBears', 'serraAngel']);
   assert.equal(cards.grizzlyBears.name, 'Grizzly Bears');
-  assert.deepEqual(skipped.map((s) => s.name), ['Counterspell', 'Llanowar Elves']);
+  assert.deepEqual(skipped.map((s) => s.name), ['Sign in Blood', 'Llanowar Elves']);
   assert.match(skipped[1].problems[0], /defined by hand/);
   assert.equal(existing.grizzlyBears.name, 'Old Bears'); // not mutated
 });
@@ -180,5 +180,118 @@ test('converts instants and sorceries built from supported sentences', () => {
   assert.deepEqual(convert('murder').definition.effects, [{ type: 'destroy' }]);
   const divination = convert('divination').definition;
   assert.deepEqual([divination.types, divination.target, divination.effects], [['Sorcery'], undefined, [{ type: 'drawCards', count: 2 }]]);
-  assert.deepEqual(problems('counterspell'), ['Unsupported rules text: "Counter target spell."']);
+  assert.deepEqual(problems('fling'), [
+    'Unsupported rules text: "Fling deals damage equal to the sacrificed creature\'s power to any target."',
+  ]);
+});
+
+test('converts common spell effects', () => {
+  const effectsOf = (key) => {
+    const { target, effects, additionalCost } = convert(key).definition;
+    return { target, effects, ...(additionalCost ? { additionalCost } : {}) };
+  };
+  assert.deepEqual(effectsOf('unsummon'), { target: TARGET.CREATURE, effects: [{ type: 'returnToHand' }] });
+  assert.deepEqual(effectsOf('naturalize'), { target: TARGET.ARTIFACT_OR_ENCHANTMENT, effects: [{ type: 'destroy' }] });
+  assert.deepEqual(effectsOf('counterspell'), { target: TARGET.SPELL, effects: [{ type: 'counterSpell' }] });
+  assert.deepEqual(effectsOf('essenceScatter').target, TARGET.CREATURE_SPELL);
+  assert.deepEqual(effectsOf('negate').target, TARGET.NONCREATURE_SPELL);
+  assert.deepEqual(effectsOf('darkRitual'), { target: undefined, effects: [{ type: 'addMana', mana: { B: 3 } }] });
+  assert.deepEqual(effectsOf('raiseTheAlarm').effects, [{
+    type: 'createToken', count: 2, token: { colors: ['white'], subtypes: ['Soldier'], power: 1, toughness: 1 },
+  }]);
+  assert.deepEqual(effectsOf('pyroclasm').effects, [{ type: 'dealDamage', amount: 2, affected: AFFECTED.EACH_CREATURE }]);
+  assert.deepEqual(effectsOf('wrathOfGod').effects, [{ type: 'destroy', affected: AFFECTED.EACH_CREATURE }]);
+  assert.deepEqual(effectsOf('overrun').effects, [{
+    type: 'pump', power: 3, toughness: 3, keywords: ['trample'], affected: AFFECTED.EACH_CREATURE_YOU_CONTROL,
+  }]);
+  assert.deepEqual(effectsOf('lavaSpike'), { target: TARGET.PLAYER, effects: [{ type: 'dealDamage', amount: 3 }] });
+  assert.deepEqual(convert('lavaSpike').definition.subtypes, ['Arcane']);
+  assert.deepEqual(effectsOf('thoughtScour'), {
+    target: TARGET.PLAYER, effects: [{ type: 'mill', count: 2, affected: AFFECTED.TARGET }, { type: 'drawCards', count: 1 }],
+  });
+  assert.deepEqual(effectsOf('battlegrowth'), { target: TARGET.CREATURE, effects: [{ type: 'addCounters', counter: '+1/+1', count: 1 }] });
+});
+
+test('converts additional costs to cast a spell', () => {
+  assert.deepEqual(convert('villageRites').definition.additionalCost, { sacrifice: TARGET.CREATURE });
+  assert.deepEqual(convert('tormentingVoice').definition.additionalCost, { discard: 1 });
+  const splinters = convert('boneSplinters').definition;
+  assert.deepEqual([splinters.additionalCost, splinters.target, splinters.effects], [{ sacrifice: TARGET.CREATURE }, TARGET.CREATURE, [{ type: 'destroy' }]]);
+});
+
+test('converts activated abilities with common costs and effects', () => {
+  const abilitiesOf = (key) => convert(key).definition.abilities;
+  assert.deepEqual(abilitiesOf('prodigalSorcerer'), [{
+    id: 'ability1', text: '{T}: Prodigal Sorcerer deals 1 damage to any target.', cost: { tap: true },
+    effect: { type: 'dealDamage', amount: 1 }, target: TARGET.ANY,
+  }]);
+  // "It" is the sacrificed creature itself.
+  assert.deepEqual(abilitiesOf('moggFanatic')[0].cost, { sacrificeSelf: true });
+  assert.deepEqual(abilitiesOf('moggFanatic')[0].effect, { type: 'dealDamage', amount: 1 });
+  assert.deepEqual(abilitiesOf('mindStone').map((a) => [a.id, a.cost, a.effect]), [
+    ['tapForC', { tap: true }, { type: 'addMana', mana: { C: 1 } }],
+    ['ability2', { mana: { generic: 1 }, tap: true, sacrificeSelf: true }, { type: 'drawCards', count: 1 }],
+  ]);
+  assert.deepEqual(abilitiesOf('shivanDragon')[0].effect, { type: 'pump', power: 1, toughness: 0, affected: AFFECTED.SOURCE });
+  assert.deepEqual(abilitiesOf('greed')[0].cost, { mana: { B: 1 }, life: 2 });
+  assert.deepEqual(abilitiesOf('dragonRoost')[0].effect.token, {
+    colors: ['red'], subtypes: ['Dragon'], power: 5, toughness: 5, keywords: ['flying'],
+  });
+});
+
+test('reports costs and effects the engine can\'t do', () => {
+  assert.deepEqual(problems('royalAssassin'), ['Unsupported rules text: "{T}: Destroy target tapped creature."']);
+  assert.deepEqual(problems('signInBlood'), ['Unsupported rules text: "Target player draws two cards and loses 2 life."']);
+  // Made up, for the two-target check.
+  const twoTargets = {
+    ...FIXTURES.naturalize, name: 'Double Shatter', oracle_text: 'Destroy target artifact. Destroy target enchantment.',
+  };
+  assert.deepEqual(convertScryfallCard(twoTargets).problems, [
+    'More than one target isn\'t supported: "Destroy target artifact. Destroy target enchantment."',
+  ]);
+  const exileCost = { ...FIXTURES.greed, name: 'Grim Ledger', oracle_text: 'Exile a card from your graveyard: Draw a card.' };
+  assert.deepEqual(convertScryfallCard(exileCost).problems, [
+    'Unsupported cost: "Exile a card from your graveyard".',
+  ]);
+});
+
+test('imported abilities and spells work in a game', () => {
+  const { cards } = importCards([FIXTURES.mountain, FIXTURES.moggFanatic, FIXTURES.lavaSpike]);
+  const deck = ['moggFanatic', 'lavaSpike', ...Array(38).fill('mountain')];
+  const game = new Game({
+    players: [{ id: 'p1' }, { id: 'p2' }], cards, shuffleLibraries: false, decks: { p1: deck, p2: deck }, emblems: { p1: [], p2: [] },
+  });
+  game.start();
+  const p1 = () => game.getState().players[0];
+  const pass = () => { game.dispatch(passPriority(game.getState().priorityPlayerId)); };
+  const passRound = () => { pass(); pass(); };
+  const playAndTap = () => {
+    game.dispatch(playLand('p1', p1().hand.find((c) => c.cardId === 'mountain').id));
+    const mountain = game.getState().battlefield.find((p) => p.cardId === 'mountain' && !p.tapped);
+    assert.deepEqual(game.dispatch(activateAbility('p1', mountain.id, 'tapForR')), { ok: true });
+  };
+  passRound(); // upkeep -> main
+  playAndTap();
+  const fanatic = p1().hand.find((c) => c.cardId === 'moggFanatic').id;
+  assert.deepEqual(game.dispatch(castSpell('p1', fanatic)), { ok: true });
+  passRound();
+  assert.deepEqual(game.dispatch(activateAbility('p1', fanatic, 'ability1', ['p2'])), { ok: true });
+  passRound();
+  assert.equal(game.getState().players[1].life, 19);
+  assert.ok(p1().graveyard.some((c) => c.id === fanatic));
+  while (game.getState().turn < 3 || game.getState().phase !== PHASE.PRECOMBAT_MAIN) {
+    const { pendingDecision, validActions } = game.getState();
+    if (pendingDecision) game.dispatch(validActions.find((a) => a.type.startsWith('CONFIRM_')) ?? validActions.at(-1));
+    else pass();
+  }
+  playAndTap();
+  const spike = p1().hand.find((c) => c.cardId === 'lavaSpike').id;
+  // Lava Spike can target only players.
+  assert.deepEqual(
+    game.getState().validActions.filter((a) => a.cardId === spike).map((a) => a.targets),
+    [['p1'], ['p2']],
+  );
+  assert.deepEqual(game.dispatch(castSpell('p1', spike, ['p2'])), { ok: true });
+  passRound();
+  assert.equal(game.getState().players[1].life, 16);
 });

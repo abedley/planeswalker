@@ -3,8 +3,9 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS,
   isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword,
+  abilityEffects, effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
@@ -50,6 +51,12 @@ function distributions(amount, ids) {
   return result;
 }
 
+/** Every way to choose `n` of `ids`, in order. */
+function combinations(ids, n) {
+  if (n === 0) return [[]];
+  return ids.flatMap((id, i) => combinations(ids.slice(i + 1), n - 1).map((rest) => [id, ...rest]));
+}
+
 /**
  * The game engine.
  *
@@ -90,6 +97,7 @@ export class Game extends EventEmitter {
   /** Continuous effects from resolved spells, e.g. "+3/+3 until end of turn" (611.2). */
   #temporaryEffects = [];
   #nextEffectId = 1;
+  #nextTokenNumber = 1;
   #version = 0;
   #eventSeq = 0;
   #queue = [];
@@ -132,11 +140,12 @@ export class Game extends EventEmitter {
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
-      const library = deck.map((cardId, i) => this.#createCard(cardId, id, i + 1));
+      const library = deck.map((cardId, i) => this.#createCard(cardId, id, `${id}-${i + 1}`));
       this.#zones.set(id, {
         library,
         hand: [],
         graveyard: [],
+        exile: [],
         manaPool: emptyManaPool(),
         // 114.1: emblems live in the command zone.
         emblems: (emblems[id] ?? DEFAULT_EMBLEMS).map((emblemId, i) => this.#createEmblem(emblemId, id, i + 1)),
@@ -224,6 +233,7 @@ export class Game extends EventEmitter {
           library: zone.library,
           hand: zone.hand,
           graveyard: zone.graveyard,
+          exile: zone.exile,
           manaPool: zone.manaPool,
           emblems: zone.emblems,
           landsPlayedThisTurn: zone.landsPlayedThisTurn,
@@ -267,16 +277,16 @@ export class Game extends EventEmitter {
       if (!isInstant(card) && !sorceryTiming) continue;
       if (!planManaPayment(pool, card.manaCost)) continue;
       const definition = this.#cardDefinitions[card.cardId];
-      const targetKind = definition.enchant ?? definition.target;
-      if (!targetKind) {
-        actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id });
-        continue;
-      }
+      const additionalCost = definition.additionalCost ?? {};
+      if (!this.#canPayCost(holder, null, additionalCost)) continue;
       // 601.2c: a spell that targets needs a legal target; one action per legal target.
       // (303.4a: an Aura spell targets what it will enchant.)
-      for (const target of this.#legalTargets(targetKind, holder, card.id)) {
-        actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id, targets: [target.id] });
-      }
+      actions.push(...this.#withTargetsAndChoices(
+        { type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id },
+        definition.enchant ?? definition.target,
+        additionalCost,
+        { excludeCardId: card.id },
+      ));
     }
     // 602.2 / 605.3a: a player with priority may activate abilities of permanents
     // they control, and of their emblems, as long as they can pay the cost.
@@ -287,19 +297,55 @@ export class Game extends EventEmitter {
     for (const source of sources) {
       for (const ability of this.#abilitiesOf(source)) {
         if (!this.#canActivate(holder, source, ability)) continue;
-        const base = { type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: source.id, abilityId: ability.id };
-        if (!ability.target) {
-          actions.push(base);
-          continue;
-        }
-        for (const target of this.#legalTargets(ability.target, holder, source.id)) {
-          // Attaching to what it's already attached to would do nothing (701.3b).
-          if (ability.effect.type === EFFECT.ATTACH && source.attachedTo === target.id) continue;
-          actions.push({ ...base, targets: [target.id] });
-        }
+        const attaches = abilityEffects(ability).some((e) => e.type === EFFECT.ATTACH);
+        actions.push(...this.#withTargetsAndChoices(
+          { type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: source.id, abilityId: ability.id },
+          ability.target,
+          ability.cost,
+          {
+            // Something can't be attached to itself, and attaching to what it's
+            // already attached to would do nothing (701.3b).
+            excludeTargetId: attaches ? source.id : null,
+            skipTarget: attaches ? (target) => source.attachedTo === target.id : null,
+          },
+        ));
       }
     }
     return actions;
+  }
+
+  /**
+   * One action per legal target (if the spell or ability targets) and per way to
+   * make the choices its cost needs, such as which creature to sacrifice (601.2b-c).
+   */
+  #withTargetsAndChoices(base, targetKind, cost, { excludeTargetId = null, skipTarget = null, excludeCardId = null } = {}) {
+    const targetOptions = targetKind
+      ? this.#legalTargets(targetKind, base.playerId, excludeTargetId)
+        .filter((target) => !skipTarget?.(target))
+        .map((target) => ({ targets: [target.id] }))
+      : [{}];
+    const choiceOptions = this.#costChoiceOptions(base.playerId, cost, excludeCardId)
+      .map((costChoices) => (costChoices ? { costChoices } : {}));
+    return targetOptions.flatMap((target) => choiceOptions.map((choices) => ({ ...base, ...target, ...choices })));
+  }
+
+  /**
+   * Every way to make the choices a cost needs, as `{ sacrifice?: [id], discard?: [id] }`
+   * objects, or `[null]` when it needs none. `excludeCardId` is a spell being cast,
+   * which is no longer in its owner's hand when costs are paid (601.2a).
+   */
+  #costChoiceOptions(playerId, cost = {}, excludeCardId = null) {
+    let options = [{}];
+    if (cost.sacrifice) {
+      const candidates = this.#battlefield
+        .filter((p) => p.controllerId === playerId && matchesPermanentKind(p, cost.sacrifice, playerId));
+      options = options.flatMap((o) => candidates.map((p) => ({ ...o, sacrifice: [p.id] })));
+    }
+    if (cost.discard) {
+      const cards = this.#zones.get(playerId).hand.filter((c) => c.id !== excludeCardId).map((c) => c.id);
+      options = options.flatMap((o) => combinations(cards, cost.discard).map((ids) => ({ ...o, discard: ids })));
+    }
+    return options.map((o) => (Object.keys(o).length ? o : null));
   }
 
   #decisionActions(decision) {
@@ -373,8 +419,10 @@ export class Game extends EventEmitter {
     switch (action.type) {
       case ACTION.PASS_PRIORITY: this.#passPriority(playerId); break;
       case ACTION.PLAY_LAND: this.#playLand(playerId, cardId); break;
-      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId, action.targets); break;
-      case ACTION.ACTIVATE_ABILITY: this.#activateAbility(playerId, cardId, action.abilityId, action.targets); break;
+      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId, action.targets, action.costChoices); break;
+      case ACTION.ACTIVATE_ABILITY:
+        this.#activateAbility(playerId, cardId, action.abilityId, action.targets, action.costChoices);
+        break;
       case ACTION.TOGGLE_ATTACKER: this.#toggleAttacker(cardId); break;
       case ACTION.CONFIRM_ATTACKERS: this.#confirmAttackers(); break;
       case ACTION.SET_BLOCKER: this.#setBlocker(cardId, action.attackerId); break;
@@ -438,11 +486,11 @@ export class Game extends EventEmitter {
   // ---------------------------------------------------------------------------
   // Cards and zones
 
-  #createCard(cardId, ownerId, number) {
+  #createCard(cardId, ownerId, id) {
     const definition = this.#cardDefinitions[cardId];
     if (!definition) throw new Error(`Unknown card: ${cardId}`);
     const card = {
-      id: `${ownerId}-${number}`,
+      id,
       cardId,
       name: definition.name,
       manaCost: definition.manaCost ?? null,
@@ -454,6 +502,7 @@ export class Game extends EventEmitter {
         text,
         isManaAbility: isManaAbility(ability),
         cost: structuredClone(ability.cost),
+        effects: structuredClone(abilityEffects(ability)),
         timing: ability.timing ?? ACTIVATION_TIMING.INSTANT,
         target: ability.target ?? null,
       })),
@@ -464,8 +513,34 @@ export class Game extends EventEmitter {
     if (!isPermanentCard(definition)) {
       card.spell = { target: definition.target ?? null, effects: structuredClone(definition.effects ?? []) };
     }
+    if (definition.additionalCost) card.additionalCost = structuredClone(definition.additionalCost);
     if (isCreature(definition)) Object.assign(card, { power: definition.power, toughness: definition.toughness });
+    if (definition.token) Object.assign(card, { token: true, colors: [...(definition.colors ?? [])] });
     return card;
+  }
+
+  /** 111.1: a creature token with the characteristics the effect gives it. */
+  #createToken(token, controllerId) {
+    const name = token.name ?? `${(token.subtypes ?? []).join(' ')} Token`.trim();
+    const keywords = token.keywords ?? [];
+    const colors = token.colors ?? [];
+    const cardId = `token:${name}:${token.power}/${token.toughness}:${colors.join(',')}:${keywords.join(',')}`;
+    const keywordText = keywords.length ? ` with ${keywords.join(', ')}` : '';
+    this.#cardDefinitions[cardId] ??= {
+      id: cardId,
+      name,
+      types: [CARD_TYPE.CREATURE],
+      subtypes: [...(token.subtypes ?? [])],
+      power: token.power,
+      toughness: token.toughness,
+      keywords: [...keywords],
+      colors: [...colors],
+      token: true,
+      text: `${token.power}/${token.toughness} ${[...colors, ...(token.subtypes ?? [])].join(' ')} creature token${keywordText}`,
+    };
+    // 111.2: the player who creates a token is its owner.
+    const card = this.#createCard(cardId, controllerId, `${controllerId}-token-${this.#nextTokenNumber++}`);
+    return this.#putOntoBattlefield(card, controllerId);
   }
 
   #createEmblem(emblemId, ownerId, number) {
@@ -477,9 +552,14 @@ export class Game extends EventEmitter {
       name: definition.name,
       ownerId,
       controllerId: ownerId,
-      abilities: definition.abilities.map(({ id, text, cost, timing }) => (
-        { id, text, cost: structuredClone(cost), timing: timing ?? ACTIVATION_TIMING.INSTANT }
-      )),
+      abilities: definition.abilities.map((ability) => ({
+        id: ability.id,
+        text: ability.text,
+        cost: structuredClone(ability.cost),
+        effects: structuredClone(abilityEffects(ability)),
+        timing: ability.timing ?? ACTIVATION_TIMING.INSTANT,
+        target: ability.target ?? null,
+      })),
       activationsPerTurn: definition.activationsPerTurn ?? Infinity,
       activationsThisTurn: 0,
     };
@@ -511,6 +591,7 @@ export class Game extends EventEmitter {
       damage: 0,
       damagedByDeathtouch: false,
       attachedTo: null,
+      counters: {},
       // Printed values; power, toughness and keywords are recalculated from these (613).
       base: { power: card.power, toughness: card.toughness, keywords: [...card.keywords] },
     };
@@ -519,15 +600,24 @@ export class Game extends EventEmitter {
     return permanent;
   }
 
-  /** Moves a permanent to its owner's graveyard, stripping battlefield-only state. */
+  /** Moves a permanent to its owner's graveyard. */
   #putIntoGraveyard(permanent) {
+    this.#moveFromBattlefield(permanent, 'graveyard');
+  }
+
+  /**
+   * Moves a permanent to one of its owner's zones ('graveyard', 'hand' or 'exile'),
+   * stripping battlefield-only state.
+   */
+  #moveFromBattlefield(permanent, zoneName) {
     this.#battlefield.splice(this.#battlefield.indexOf(permanent), 1);
     const {
-      controllerId, tapped, summoningSick, damage, damagedByDeathtouch, attachedTo, base, ...card
+      controllerId, tapped, summoningSick, damage, damagedByDeathtouch, attachedTo, counters, base, ...card
     } = permanent;
     // 400.7: it becomes a new object with its printed characteristics.
     Object.assign(card, base.power === undefined ? { keywords: base.keywords } : base);
-    this.#zones.get(card.ownerId).graveyard.push(card);
+    // 111.7 / 704.5d: a token that leaves the battlefield ceases to exist, so it isn't kept anywhere.
+    if (!card.token) this.#zones.get(card.ownerId)[zoneName].push(card);
     // 400.7: effects that applied to it don't follow it.
     this.#temporaryEffects = this.#temporaryEffects.filter((e) => e.targetId !== permanent.id);
     this.#applyContinuousEffects();
@@ -609,11 +699,12 @@ export class Game extends EventEmitter {
     return payment;
   }
 
-  #castSpell(playerId, cardId, targets) {
+  #castSpell(playerId, cardId, targets, costChoices) {
     // 601.2a: the card moves from hand to the stack; 601.2h: its cost is paid.
     // (Mana must already be in the pool; activating mana abilities mid-cast isn't modelled.)
     const zone = this.#zones.get(playerId);
     const [card] = zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1);
+    const additionalCost = this.#cardDefinitions[card.cardId].additionalCost;
     const stackObject = {
       id: `s${this.#nextStackObjectId++}`,
       kind: 'spell',
@@ -626,8 +717,16 @@ export class Game extends EventEmitter {
     };
     this.#stack.push(stackObject);
     const manaPaid = this.#payMana(playerId, card.manaCost);
+    // 601.2f: additional costs, such as sacrificing a creature, are part of the total cost.
+    const additionalCostPaid = additionalCost ? this.#payCost(playerId, null, additionalCost, costChoices) : null;
     this.#emitEvent('spellCast', {
-      playerId, cardId, cardName: card.name, manaPaid, stackObjectId: stackObject.id, targets: targets ?? [],
+      playerId,
+      cardId,
+      cardName: card.name,
+      manaPaid,
+      ...(additionalCostPaid ? { additionalCostPaid } : {}),
+      stackObjectId: stackObject.id,
+      targets: targets ?? [],
     });
     // 117.3c: the caster receives priority.
     this.#resetPasses();
@@ -641,22 +740,25 @@ export class Game extends EventEmitter {
     return this.#canPayCost(playerId, source, ability.cost);
   }
 
+  /** `permanent` is the ability's source: a permanent, an emblem, or null for a spell's cost. */
   #canPayCost(playerId, permanent, cost) {
     // 119.4: a player can pay life only if their life total is at least that much.
     if (cost.life && this.#zones.get(playerId).life < cost.life) return false;
+    // Only a permanent can be tapped or sacrificed (701.21, 701.17).
+    if ((cost.tap || cost.sacrificeSelf) && !this.#permanent(permanent?.id)) return false;
     if (cost.tap) {
-      if (permanent.emblemId) return false;
       if (permanent.tapped) return false;
       // 302.6: a creature's {T} abilities can't be activated unless its controller
       // has controlled it continuously since their most recent turn began.
       if (this.#hasSummoningSickness(permanent)) return false;
     }
     if (cost.mana && !planManaPayment(this.#zones.get(playerId).manaPool, cost.mana)) return false;
+    // Choices such as which creature to sacrifice are checked by #costChoiceOptions.
     return true;
   }
 
-  /** 602.2b: pay the cost. Returns what was paid. */
-  #payCost(playerId, permanent, cost) {
+  /** 601.2h / 602.2b: pay the cost, with the choices it needs. Returns what was paid. */
+  #payCost(playerId, permanent, cost, choices = {}) {
     const paid = {};
     if (cost.tap) {
       permanent.tapped = true;
@@ -667,13 +769,33 @@ export class Game extends EventEmitter {
       this.#zones.get(playerId).life -= cost.life;
       paid.life = cost.life;
     }
+    const sacrificed = [
+      ...(cost.sacrificeSelf ? [permanent] : []),
+      ...(choices.sacrifice ?? []).map((id) => this.#permanent(id)),
+    ];
+    for (const sacrifice of sacrificed) {
+      // 701.17a: move it from the battlefield to its owner's graveyard.
+      this.#putIntoGraveyard(sacrifice);
+      this.#emitEvent('permanentSacrificed', {
+        cardId: sacrifice.id, cardName: sacrifice.name, controllerId: playerId,
+      });
+    }
+    if (sacrificed.length) paid.sacrificed = sacrificed.map((p) => p.id);
+    if (choices.discard?.length) {
+      const zone = this.#zones.get(playerId);
+      for (const id of choices.discard) {
+        zone.graveyard.push(...zone.hand.splice(zone.hand.findIndex((c) => c.id === id), 1));
+        this.#emitEvent('cardDiscarded', { playerId, cardId: id });
+      }
+      paid.discarded = [...choices.discard];
+    }
     return paid;
   }
 
-  #activateAbility(playerId, cardId, abilityId, targets) {
+  #activateAbility(playerId, cardId, abilityId, targets, costChoices) {
     const permanent = this.#findSource(cardId);
     const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
-    const costPaid = this.#payCost(playerId, permanent, ability.cost);
+    const costPaid = this.#payCost(playerId, permanent, ability.cost, costChoices);
     if (permanent.emblemId) permanent.activationsThisTurn += 1;
     const activation = {
       playerId, cardId, cardName: permanent.name, abilityId, text: ability.text, costPaid,
@@ -684,7 +806,7 @@ export class Game extends EventEmitter {
       // 605.3b: a mana ability doesn't use the stack; it resolves immediately and
       // the player keeps priority.
       this.#emitEvent('abilityActivated', { ...activation, usesStack: false });
-      this.#applyEffect(ability.effect, playerId);
+      for (const effect of abilityEffects(ability)) this.#applyEffect(effect, playerId, { sourceId: cardId });
       return;
     }
 
@@ -697,7 +819,7 @@ export class Game extends EventEmitter {
       sourceName: permanent.name,
       abilityId,
       text: ability.text,
-      effect: structuredClone(ability.effect),
+      effects: structuredClone(abilityEffects(ability)),
       ...(targets ? { targets: [...targets], targetKind: ability.target } : {}),
     };
     this.#stack.push(stackObject);
@@ -715,7 +837,10 @@ export class Game extends EventEmitter {
     const { controllerId, targets = [] } = stackObject;
     const definition = stackObject.kind === 'spell' ? this.#cardDefinitions[stackObject.card.cardId] : null;
     const targetKind = stackObject.targetKind ?? definition?.enchant ?? definition?.target ?? null;
-    const legalTargets = targets.filter((id) => this.#isLegalTarget(targetKind, id, controllerId, stackObject.sourceId));
+    const effects = definition ? definition.effects ?? [] : stackObject.effects;
+    const excludeId = effects.some((e) => e.type === EFFECT.ATTACH) ? stackObject.sourceId : null;
+    const legalTargets = targets.filter((id) => this.#isLegalTarget(targetKind, id, controllerId, excludeId));
+    const context = { sourceId: stackObject.sourceId, targets: legalTargets };
 
     if (targets.length > 0 && legalTargets.length === 0) {
       // 608.2b: with every target illegal, it doesn't resolve. A spell goes to its owner's graveyard.
@@ -723,8 +848,7 @@ export class Game extends EventEmitter {
       this.#emitEvent('stackObjectFizzled', { stackObjectId: stackObject.id, reason: 'All targets are illegal.' });
     } else if (stackObject.kind === 'spell' && !isPermanentCard(stackObject.card)) {
       // 608.2c: an instant or sorcery's effects happen in order...
-      const context = { sourceId: stackObject.sourceId, targets: legalTargets };
-      for (const effect of definition.effects ?? []) this.#applyEffect(effect, controllerId, context);
+      for (const effect of effects) this.#applyEffect(effect, controllerId, context);
       // 608.2n: ...then it goes to its owner's graveyard.
       this.#zones.get(stackObject.card.ownerId).graveyard.push(stackObject.card);
     } else if (stackObject.kind === 'spell') {
@@ -734,7 +858,7 @@ export class Game extends EventEmitter {
       if (isAura(permanent)) this.#attach(permanent, legalTargets[0]);
       this.#emitEvent('permanentEntered', { playerId: controllerId, card: structuredClone(permanent) });
     } else {
-      this.#applyEffect(stackObject.effect, controllerId, { sourceId: stackObject.sourceId, targets: legalTargets });
+      for (const effect of effects) this.#applyEffect(effect, controllerId, context);
     }
     this.#emitEvent('stackObjectResolved', { stackObjectId: stackObject.id });
     // 117.3b: after resolution, the active player receives priority.
@@ -742,92 +866,214 @@ export class Game extends EventEmitter {
     this.#givePriority(this.#activePlayerId);
   }
 
+  /**
+   * The ids of whatever an effect applies to: players, permanents or (for
+   * countering) stack objects. Only legal targets reach here (608.2b).
+   */
+  #affectedBy(effect, controllerId, sourceId, targets) {
+    const livePlayers = this.#players.map((p) => p.id).filter((id) => !this.#zones.get(id).hasLost);
+    const creatures = this.#battlefield.filter(isCreature);
+    switch (effectAffects(effect)) {
+      case AFFECTED.TARGET: return targets;
+      case AFFECTED.YOU: return [controllerId];
+      case AFFECTED.EACH_OPPONENT: return livePlayers.filter((id) => id !== controllerId);
+      case AFFECTED.EACH_PLAYER: return livePlayers;
+      case AFFECTED.EACH_CREATURE: return creatures.map((p) => p.id);
+      case AFFECTED.EACH_CREATURE_YOU_CONTROL:
+        return creatures.filter((p) => p.controllerId === controllerId).map((p) => p.id);
+      // 113.7a: if the source has left the battlefield, an effect on "this permanent" does nothing.
+      case AFFECTED.SOURCE: return this.#permanent(sourceId) ? [sourceId] : [];
+      default: throw new Error(`Unknown affected: ${effect.affected}`);
+    }
+  }
+
   #applyEffect(effect, controllerId, { sourceId, targets = [] } = {}) {
+    const ids = this.#affectedBy(effect, controllerId, sourceId, targets);
+    // Permanents still on the battlefield, and players, among what the effect applies to.
+    const permanents = () => ids.map((id) => this.#permanent(id)).filter(Boolean);
+    const players = ids.filter((id) => this.#zones.has(id));
     switch (effect.type) {
-      case EFFECT.DEAL_DAMAGE: {
-        const [targetId] = targets;
-        if (this.#zones.has(targetId)) {
-          // 120.3a: damage to a player causes that much life loss.
-          this.#zones.get(targetId).life -= effect.amount;
-          this.#emitEvent('damageDealt', { sourceId, targetPlayerId: targetId, amount: effect.amount });
-        } else {
-          // 120.3e: damage to a creature is marked on it; state-based actions do the rest.
-          this.#permanent(targetId).damage += effect.amount;
-          this.#emitEvent('damageDealt', { sourceId, targetCardId: targetId, amount: effect.amount });
+      case EFFECT.DEAL_DAMAGE:
+        for (const id of ids) this.#dealDamage(sourceId, id, effect.amount);
+        break;
+      case EFFECT.DESTROY:
+        for (const permanent of permanents()) {
+          // 701.7a: move it from the battlefield to its owner's graveyard.
+          this.#putIntoGraveyard(permanent);
+          this.#emitEvent('permanentDestroyed', {
+            cardId: permanent.id, cardName: permanent.name, controllerId: permanent.controllerId, sourceId,
+          });
+        }
+        break;
+      case EFFECT.EXILE:
+        for (const permanent of permanents()) {
+          // 701.5a: move it to the exile zone.
+          this.#moveFromBattlefield(permanent, 'exile');
+          this.#emitEvent('permanentExiled', {
+            cardId: permanent.id, cardName: permanent.name, controllerId: permanent.controllerId, sourceId,
+          });
+        }
+        break;
+      case EFFECT.RETURN_TO_HAND:
+        for (const permanent of permanents()) {
+          this.#moveFromBattlefield(permanent, 'hand');
+          this.#emitEvent('permanentReturnedToHand', {
+            cardId: permanent.id, cardName: permanent.name, ownerId: permanent.ownerId, sourceId,
+          });
+        }
+        break;
+      case EFFECT.TAP:
+      case EFFECT.UNTAP: {
+        const tapped = effect.type === EFFECT.TAP;
+        for (const permanent of permanents().filter((p) => p.tapped !== tapped)) {
+          permanent.tapped = tapped;
+          this.#emitEvent(tapped ? 'permanentTapped' : 'permanentUntapped', { cardId: permanent.id, sourceId });
         }
         break;
       }
-      case EFFECT.DESTROY: {
-        // 701.7a: move it from the battlefield to its owner's graveyard.
-        const permanent = this.#permanent(targets[0]);
-        this.#putIntoGraveyard(permanent);
-        this.#emitEvent('permanentDestroyed', {
-          cardId: permanent.id, cardName: permanent.name, controllerId: permanent.controllerId, sourceId,
-        });
+      case EFFECT.PUMP:
+        for (const creature of permanents().filter(isCreature)) {
+          // 611.2a: a continuous effect from a resolving spell or ability, here until end of turn.
+          const temporary = {
+            id: `e${this.#nextEffectId++}`,
+            sourceId,
+            targetId: creature.id,
+            power: effect.power ?? 0,
+            toughness: effect.toughness ?? 0,
+            keywords: [...(effect.keywords ?? [])],
+            duration: 'endOfTurn',
+          };
+          this.#temporaryEffects.push(temporary);
+          this.#applyContinuousEffects();
+          this.#emitEvent('temporaryEffectCreated', structuredClone(temporary));
+        }
         break;
-      }
-      case EFFECT.PUMP: {
-        // 611.2a: a continuous effect from a resolving spell, here lasting until end of turn.
-        const temporary = {
-          id: `e${this.#nextEffectId++}`,
-          sourceId,
-          targetId: targets[0],
-          power: effect.power ?? 0,
-          toughness: effect.toughness ?? 0,
-          keywords: [...(effect.keywords ?? [])],
-          duration: 'endOfTurn',
-        };
-        this.#temporaryEffects.push(temporary);
-        this.#applyContinuousEffects();
-        this.#emitEvent('temporaryEffectCreated', structuredClone(temporary));
+      case EFFECT.ADD_COUNTERS:
+        for (const permanent of permanents()) {
+          // 122.1: counters are markers placed on an object.
+          const counter = effect.counter ?? COUNTER.PLUS_ONE;
+          permanent.counters[counter] = (permanent.counters[counter] ?? 0) + (effect.count ?? 1);
+          this.#applyContinuousEffects();
+          this.#emitEvent('countersAdded', {
+            cardId: permanent.id, counter, count: effect.count ?? 1, counters: { ...permanent.counters },
+          });
+        }
         break;
-      }
+      case EFFECT.COUNTER_SPELL:
+        for (const id of ids) {
+          // 701.6a: a countered spell is removed from the stack and put into its owner's graveyard.
+          const index = this.#stack.findIndex((s) => s.id === id);
+          if (index === -1) continue;
+          const [countered] = this.#stack.splice(index, 1);
+          this.#zones.get(countered.card.ownerId).graveyard.push(countered.card);
+          this.#emitEvent('spellCountered', {
+            stackObjectId: id, cardId: countered.card.id, cardName: countered.card.name, sourceId,
+          });
+        }
+        break;
       case EFFECT.ATTACH: {
         // 701.3a: attach the source to the target; nothing happens if the source has left.
         const source = this.#permanent(sourceId);
         if (source && source.controllerId === controllerId) this.#attach(source, targets[0]);
         break;
       }
-      case EFFECT.ADD_MANA: {
-        const pool = this.#zones.get(controllerId).manaPool;
-        addMana(pool, effect.mana);
-        this.#emitEvent('manaAdded', { playerId: controllerId, mana: { ...effect.mana }, manaPool: { ...pool } });
+      case EFFECT.ADD_MANA:
+        for (const playerId of players) {
+          const pool = this.#zones.get(playerId).manaPool;
+          addMana(pool, effect.mana);
+          this.#emitEvent('manaAdded', { playerId, mana: { ...effect.mana }, manaPool: { ...pool } });
+        }
         break;
-      }
       case EFFECT.DRAW_CARDS:
-        this.#drawCards(controllerId, effect.count);
+        for (const playerId of players) this.#drawCards(playerId, effect.count);
         break;
-      case EFFECT.GAIN_LIFE: {
-        const zone = this.#zones.get(controllerId);
-        zone.life += effect.amount;
-        this.#emitEvent('lifeGained', { playerId: controllerId, amount: effect.amount, life: zone.life });
+      case EFFECT.GAIN_LIFE:
+        for (const playerId of players) this.#gainLife(playerId, effect.amount);
         break;
-      }
+      case EFFECT.LOSE_LIFE:
+        for (const playerId of players) {
+          const zone = this.#zones.get(playerId);
+          zone.life -= effect.amount;
+          this.#emitEvent('lifeLost', { playerId, amount: effect.amount, life: zone.life });
+        }
+        break;
+      case EFFECT.MILL:
+        for (const playerId of players) {
+          // 701.13a: the top cards of the library go to the graveyard (as many as there are).
+          const zone = this.#zones.get(playerId);
+          const milled = zone.library.splice(0, effect.count);
+          zone.graveyard.push(...milled);
+          this.#emitEvent('cardsMilled', { playerId, cardIds: milled.map((c) => c.id), librarySize: zone.library.length });
+        }
+        break;
+      case EFFECT.CREATE_TOKEN:
+        for (const playerId of players) {
+          for (let i = 0; i < (effect.count ?? 1); i++) {
+            const token = this.#createToken(effect.token, playerId);
+            this.#emitEvent('tokenCreated', { playerId, card: structuredClone(token), sourceId });
+          }
+        }
+        break;
       default:
         throw new Error(`Unknown effect type: ${effect.type}`);
     }
   }
 
+  #gainLife(playerId, amount) {
+    const zone = this.#zones.get(playerId);
+    zone.life += amount;
+    this.#emitEvent('lifeGained', { playerId, amount, life: zone.life });
+  }
+
+  /** Noncombat damage from a spell or ability (120.3). */
+  #dealDamage(sourceId, targetId, amount) {
+    if (amount <= 0) return;
+    // A spell or an emblem isn't a permanent, so only a permanent source can have deathtouch or lifelink.
+    const source = this.#permanent(sourceId);
+    if (this.#zones.has(targetId)) {
+      // 120.3a: damage to a player causes that much life loss.
+      this.#zones.get(targetId).life -= amount;
+      this.#emitEvent('damageDealt', { sourceId, targetPlayerId: targetId, amount });
+    } else {
+      const target = this.#permanent(targetId);
+      if (!target || !isCreature(target)) return;
+      // 120.3e: damage to a creature is marked on it; state-based actions do the rest.
+      target.damage += amount;
+      if (source && hasKeyword(source, KEYWORD.DEATHTOUCH)) target.damagedByDeathtouch = true;
+      this.#emitEvent('damageDealt', { sourceId, targetCardId: targetId, amount });
+    }
+    // 702.15b: damage dealt by a source with lifelink causes its controller to gain that much life.
+    if (source && hasKeyword(source, KEYWORD.LIFELINK)) this.#gainLife(source.controllerId, amount);
+  }
+
   // ---------------------------------------------------------------------------
   // Targets, attachments and continuous effects (Comprehensive Rules 115, 301.5, 303.4, 613)
 
-  #isLegalTarget(kind, id, controllerId, sourceId) {
-    // 115.4: "any target" includes players (who haven't left the game).
-    if (kind === TARGET.ANY && this.#zones.has(id)) return !this.#zones.get(id).hasLost;
-    const permanent = this.#permanent(id);
-    if (!permanent || id === sourceId) return false;
-    switch (kind) {
-      case TARGET.CREATURE: return isCreature(permanent);
-      case TARGET.CREATURE_YOU_CONTROL: return isCreature(permanent) && permanent.controllerId === controllerId;
-      case TARGET.ANY: return isCreature(permanent);
-      default: throw new Error(`Unknown target kind: ${kind}`);
+  /** Whether `id` (a player, permanent or stack object) is a legal target of `kind`; `excludeId` never is. */
+  #isLegalTarget(kind, id, controllerId, excludeId = null) {
+    if (!Object.values(TARGET).includes(kind)) throw new Error(`Unknown target kind: ${kind}`);
+    if (this.#zones.has(id)) {
+      // 115.4: "any target" includes players. Players who have lost have left the game.
+      if (this.#zones.get(id).hasLost) return false;
+      return kind === TARGET.ANY || kind === TARGET.PLAYER || (kind === TARGET.OPPONENT && id !== controllerId);
     }
+    const stackObject = this.#stack.find((s) => s.id === id);
+    if (stackObject) {
+      // 115.1a: "target spell" means a spell on the stack, not an ability.
+      if (!SPELL_TARGETS.has(kind) || stackObject.kind !== 'spell') return false;
+      if (kind === TARGET.CREATURE_SPELL) return isCreature(stackObject.card);
+      if (kind === TARGET.NONCREATURE_SPELL) return !isCreature(stackObject.card);
+      return true;
+    }
+    const permanent = this.#permanent(id);
+    if (!permanent || id === excludeId) return false;
+    return matchesPermanentKind(permanent, kind, controllerId);
   }
 
-  /** Legal targets as `{ id }` objects: permanents, then players. */
-  #legalTargets(kind, controllerId, sourceId) {
-    return [...this.#battlefield, ...this.#players]
-      .filter((p) => this.#isLegalTarget(kind, p.id, controllerId, sourceId));
+  /** Legal targets as `{ id }` objects: permanents, then players, then spells (top of the stack first). */
+  #legalTargets(kind, controllerId, excludeId) {
+    return [...this.#battlefield, ...this.#players, ...[...this.#stack].reverse()]
+      .filter((p) => this.#isLegalTarget(kind, p.id, controllerId, excludeId));
   }
 
   /** Whether an attached Aura or Equipment is attached to something it legally can be. */
@@ -884,6 +1130,14 @@ export class Game extends EventEmitter {
         for (const keyword of effect.keywords ?? []) {
           if (!host.keywords.includes(keyword)) host.keywords.push(keyword);
         }
+      }
+    }
+    // 613.4c: +1/+1 counters.
+    for (const permanent of this.#battlefield) {
+      const plusOne = permanent.counters[COUNTER.PLUS_ONE] ?? 0;
+      if (plusOne && isCreature(permanent)) {
+        permanent.power += plusOne;
+        permanent.toughness += plusOne;
       }
     }
     // Effects from resolved spells apply after static abilities, in the order they were created (613.7).

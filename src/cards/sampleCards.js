@@ -1,5 +1,5 @@
 import {
-  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, equipAbility,
+  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, ACTIVATION_TIMING, equipAbility,
 } from './cards.js';
 
 /**
@@ -118,4 +118,102 @@ export const SAMPLE_SPELLS_DECK = Object.freeze([
   ...Array(17).fill('forest'),
   ...Array(13).fill('llanowarElves'),
   ...Object.keys(SAMPLE_SPELLS).flatMap((id) => [id, id]),
+]);
+
+/**
+ * Sample cards for the common costs and effects: tokens, counters, bouncing,
+ * tapping, countering, sweepers, life drain, additional costs, and activated
+ * abilities that tap, sacrifice or pump. Also made up.
+ */
+export const SAMPLE_EFFECTS = Object.freeze({
+  sampleSprout: {
+    id: 'sampleSprout', name: 'Sample Sprout', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.SORCERY],
+    effects: [{
+      type: EFFECT.CREATE_TOKEN, count: 2, token: { colors: ['green'], subtypes: ['Saproling'], power: 1, toughness: 1 },
+    }],
+    text: 'Create two 1/1 green Saproling creature tokens.',
+  },
+  sampleBlessing: {
+    id: 'sampleBlessing', name: 'Sample Blessing', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.CREATURE, effects: [{ type: EFFECT.ADD_COUNTERS, counter: '+1/+1', count: 1 }],
+    text: 'Put a +1/+1 counter on target creature.',
+  },
+  sampleGust: {
+    id: 'sampleGust', name: 'Sample Gust', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.CREATURE, effects: [{ type: EFFECT.RETURN_TO_HAND }],
+    text: 'Return target creature to its owner\'s hand.',
+  },
+  sampleSnare: {
+    id: 'sampleSnare', name: 'Sample Snare', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.CREATURE, effects: [{ type: EFFECT.TAP }, { type: EFFECT.DRAW_CARDS, count: 1 }],
+    text: 'Tap target creature.\nDraw a card.',
+  },
+  sampleDenial: {
+    id: 'sampleDenial', name: 'Sample Denial', manaCost: { G: 2 }, types: [CARD_TYPE.INSTANT],
+    target: TARGET.SPELL, effects: [{ type: EFFECT.COUNTER_SPELL }],
+    text: 'Counter target spell.',
+  },
+  sampleQuake: {
+    id: 'sampleQuake', name: 'Sample Quake', manaCost: { generic: 2, G: 1 }, types: [CARD_TYPE.SORCERY],
+    effects: [
+      { type: EFFECT.DEAL_DAMAGE, amount: 1, affected: AFFECTED.EACH_CREATURE },
+      { type: EFFECT.DEAL_DAMAGE, amount: 1, affected: AFFECTED.EACH_OPPONENT },
+    ],
+    text: 'Sample Quake deals 1 damage to each creature and each opponent.',
+  },
+  sampleDrain: {
+    id: 'sampleDrain', name: 'Sample Drain', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.SORCERY],
+    effects: [
+      { type: EFFECT.LOSE_LIFE, amount: 2, affected: AFFECTED.EACH_OPPONENT },
+      { type: EFFECT.GAIN_LIFE, amount: 2 },
+    ],
+    text: 'Each opponent loses 2 life. You gain 2 life.',
+  },
+  sampleRampage: {
+    id: 'sampleRampage', name: 'Sample Rampage', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.INSTANT],
+    effects: [{
+      type: EFFECT.PUMP, power: 1, toughness: 1, keywords: [KEYWORD.TRAMPLE], affected: AFFECTED.EACH_CREATURE_YOU_CONTROL,
+    }],
+    text: 'Creatures you control get +1/+1 and gain trample until end of turn.',
+  },
+  sampleOffering: {
+    id: 'sampleOffering', name: 'Sample Offering', manaCost: { G: 1 }, types: [CARD_TYPE.INSTANT],
+    additionalCost: { sacrifice: TARGET.CREATURE },
+    effects: [{ type: EFFECT.DRAW_CARDS, count: 2 }],
+    text: 'As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.',
+  },
+  sampleSlinger: {
+    id: 'sampleSlinger', name: 'Sample Slinger', manaCost: { generic: 1, G: 1 },
+    types: [CARD_TYPE.CREATURE], subtypes: ['Elf', 'Archer'], power: 1, toughness: 1,
+    abilities: [{
+      id: 'ping', text: '{T}: Sample Slinger deals 1 damage to any target.', cost: { tap: true },
+      target: TARGET.ANY, effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 1 }],
+    }],
+    text: '{T}: Sample Slinger deals 1 damage to any target.',
+  },
+  sampleTotem: {
+    id: 'sampleTotem', name: 'Sample Totem', manaCost: { generic: 1 }, types: [CARD_TYPE.ARTIFACT],
+    abilities: [{
+      id: 'draw', text: '{1}, {T}, Sacrifice Sample Totem: Draw a card.',
+      cost: { mana: { generic: 1 }, tap: true, sacrificeSelf: true },
+      effects: [{ type: EFFECT.DRAW_CARDS, count: 1 }],
+    }],
+    text: '{1}, {T}, Sacrifice Sample Totem: Draw a card.',
+  },
+  sampleBrute: {
+    id: 'sampleBrute', name: 'Sample Brute', manaCost: { generic: 2, G: 1 },
+    types: [CARD_TYPE.CREATURE], subtypes: ['Beast'], power: 2, toughness: 2,
+    abilities: [{
+      id: 'pump', text: '{G}: Sample Brute gets +1/+1 until end of turn. Activate only as a sorcery.',
+      cost: { mana: { G: 1 } }, timing: ACTIVATION_TIMING.SORCERY,
+      effects: [{ type: EFFECT.PUMP, power: 1, toughness: 1, affected: AFFECTED.SOURCE }],
+    }],
+    text: '{G}: Sample Brute gets +1/+1 until end of turn. Activate only as a sorcery.',
+  },
+});
+
+/** 40 cards: 16 Forests and two of each of the 12 sample cards above. */
+export const SAMPLE_EFFECTS_DECK = Object.freeze([
+  ...Array(16).fill('forest'),
+  ...Object.keys(SAMPLE_EFFECTS).flatMap((id) => [id, id]),
 ]);

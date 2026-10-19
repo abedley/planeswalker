@@ -2,7 +2,8 @@ import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import {
-  isCreature, isLand, isAura, isEquipment, hasKeyword, manaValue, KEYWORD, EFFECT, HARMFUL_EFFECTS, TARGET,
+  isCreature, isLand, isInstant, isAura, isEquipment, hasKeyword, manaValue, KEYWORD, EFFECT, AFFECTED, TARGET,
+  PLAYER_TARGETS, SPELL_TARGETS, effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
 
@@ -97,29 +98,41 @@ export class BasicAIController extends EventEmitter {
       ?.abilities.find((ab) => ab.id === a.abilityId && Object.keys(ab.cost).length === 0);
 
     return find(ACTION.PLAY_LAND)
-      ?? this.#chooseCast(state, me, mine, myCreatures, onOwnCreatures)
+      ?? this.#chooseCast(state, me, mine, onOwnCreatures)
       ?? find(ACTION.ACTIVATE_ABILITY, isEquipForLooseEquipment)
       ?? find(ACTION.ACTIVATE_ABILITY, isFreeEmblemAbility)
+      ?? this.#chooseActivation(state, mine, abilityOf)
       // Only make mana when there's something affordable to spend it on.
       ?? (this.#wantsMana(state, me, permanents, myCreatures, unattachedEquipment, mine.filter(isManaSource).length)
         ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
       ?? find(ACTION.PASS_PRIORITY);
   }
 
-  /**
-   * Whether to tap another mana source: at sorcery timing, when there's a spell
-   * (or an equip for loose Equipment) we'd use whose cost we could reach with the
-   * sources still untapped, but can't pay from the pool yet.
-   */
-  #wantsMana(state, me, permanents, myCreatures, unattachedEquipment, untappedSources) {
-    const sorceryTiming = state.activePlayerId === this.#playerId
+  #isSorceryTiming(state) {
+    return state.activePlayerId === this.#playerId
       && ['precombatMain', 'postcombatMain'].includes(state.phase)
       && state.stack.length === 0;
-    if (!sorceryTiming || untappedSources === 0) return false;
+  }
+
+  /**
+   * Whether to tap another mana source: when there's a spell, ability or equip for
+   * loose Equipment we'd use whose cost we could reach with the sources still
+   * untapped, but can't pay from the pool yet. Outside our main phase, only for
+   * instants (such as a counterspell for the opponent's spell).
+   */
+  #wantsMana(state, me, permanents, myCreatures, unattachedEquipment, untappedSources) {
+    if (untappedSources === 0) return false;
+    const sorceryTiming = this.#isSorceryTiming(state);
+    const castable = me.hand.filter((c) => !isLand(c) && (sorceryTiming || isInstant(c)));
+    const usefulAbilities = !sorceryTiming ? [] : permanents.flatMap((p) => p.abilities
+      .filter((ab) => !ab.isManaAbility && ab.cost.mana && !(ab.cost.tap && p.tapped))
+      .filter((ab) => this.#bestScore(state, ab.effects, ab.target, ab.cost, p.id) > 0)
+      .map((ab) => ab.cost.mana));
     const costs = [
-      ...me.hand.filter((c) => !isLand(c) && this.#worthCasting(c, state, myCreatures)).map((c) => c.manaCost),
-      ...(myCreatures.size > 0 ? unattachedEquipment : [])
+      ...castable.filter((c) => this.#worthCasting(c, state, myCreatures)).map((c) => c.manaCost),
+      ...(sorceryTiming && myCreatures.size > 0 ? unattachedEquipment : [])
         .map((e) => e.abilities.find((ab) => ab.id === 'equip')?.cost.mana).filter(Boolean),
+      ...usefulAbilities,
     ];
     const available = manaPoolTotal(me.manaPool) + untappedSources;
     return costs.some((cost) => manaValue(cost) <= available && manaValue(cost) > manaPoolTotal(me.manaPool));
@@ -127,48 +140,155 @@ export class BasicAIController extends EventEmitter {
 
   /** Whether a card in hand has a sensible use right now (used to decide whether to make mana). */
   #worthCasting(card, state, myCreatures) {
-    const theirCreatures = state.battlefield.filter((p) => p.controllerId !== this.#playerId && isCreature(p));
     if (isAura(card)) return myCreatures.size > 0;
     if (!card.spell) return true;
-    const harmful = card.spell.effects.some((e) => HARMFUL_EFFECTS.has(e.type));
-    if (harmful) return card.spell.target === TARGET.ANY || theirCreatures.length > 0;
-    if (card.spell.target) return myCreatures.size > 0;
-    return true;
+    return this.#bestScore(state, card.spell.effects, card.spell.target, card.additionalCost ?? {}, card.id) > 0;
+  }
+
+  /** The best score over the targets a spell or ability could have (an estimate: the engine decides legality). */
+  #bestScore(state, effects, targetKind, cost, sourceId) {
+    if (cost.sacrifice || cost.discard) return 0; // Not worth working out here.
+    const candidates = targetKind ? this.#candidateTargets(state, targetKind) : [null];
+    const costScore = this.#costScore(state, cost, {}, sourceId);
+    return Math.max(-Infinity, ...candidates.map((id) => this.#scoreEffects(state, effects, id ? [id] : [], sourceId)))
+      + costScore;
+  }
+
+  #candidateTargets(state, kind) {
+    if (SPELL_TARGETS.has(kind)) return state.stack.filter((s) => s.kind === 'spell').map((s) => s.id);
+    const players = state.players.filter((p) => !p.hasLost).map((p) => p.id);
+    if (kind === TARGET.ANY) return [...state.battlefield.filter(isCreature).map((p) => p.id), ...players];
+    if (PLAYER_TARGETS.has(kind)) {
+      return kind === TARGET.OPPONENT ? players.filter((id) => id !== this.#playerId) : players;
+    }
+    return state.battlefield.filter((p) => matchesPermanentKind(p, kind, this.#playerId)).map((p) => p.id);
   }
 
   /**
-   * Picks a spell to cast, and its target: harmful spells at the opponent (killing
-   * their biggest creature it can, otherwise their face), helpful ones at our own
-   * creatures that can still attack, and untargeted ones whenever.
+   * How good a spell's or ability's effects would be for us, with these targets:
+   * positive is good. Killing a creature is worth the most; hitting the opponent,
+   * drawing and making tokens are worth a little; hurting ourselves counts against.
    */
-  #chooseCast(state, me, mine, myCreatures, onOwnCreatures) {
+  #scoreEffects(state, effects, targets, sourceId) {
     const opponentId = state.players.find((p) => p.id !== this.#playerId).id;
     const byId = (id) => state.battlefield.find((p) => p.id === id);
-    const theirs = (id) => id === opponentId || byId(id)?.controllerId === opponentId;
+    const creatures = state.battlefield.filter(isCreature);
+    // +1 for things that are ours, -1 for things that are the opponent's.
+    const side = (id) => ((id === this.#playerId || byId(id)?.controllerId === this.#playerId) ? 1 : -1);
+    const preCombat = state.phase === 'precombatMain' && state.activePlayerId === this.#playerId;
+    const canAttack = (c) => !c.tapped && (!c.summoningSick || hasKeyword(c, KEYWORD.HASTE)) && !hasKeyword(c, KEYWORD.DEFENDER);
+    const worth = (p) => (isCreature(p) ? 10 + p.power : 5);
+    let score = 0;
+    for (const effect of effects) {
+      const affected = {
+        [AFFECTED.TARGET]: targets,
+        [AFFECTED.YOU]: [this.#playerId],
+        [AFFECTED.EACH_OPPONENT]: [opponentId],
+        [AFFECTED.EACH_PLAYER]: [this.#playerId, opponentId],
+        [AFFECTED.EACH_CREATURE]: creatures.map((p) => p.id),
+        [AFFECTED.EACH_CREATURE_YOU_CONTROL]: creatures.filter((p) => p.controllerId === this.#playerId).map((p) => p.id),
+        [AFFECTED.SOURCE]: [sourceId],
+      }[effectAffects(effect)] ?? [];
+      for (const id of affected) {
+        const spell = state.stack.find((s) => s.id === id);
+        if (spell && effect.type === EFFECT.COUNTER_SPELL) {
+          score += spell.controllerId === this.#playerId ? -6 : 6;
+          continue;
+        }
+        const permanent = byId(id);
+        const isPlayer = !permanent && state.players.some((p) => p.id === id);
+        if (!permanent && !isPlayer) continue;
+        switch (effect.type) {
+          case EFFECT.DEAL_DAMAGE:
+            if (isPlayer) score -= side(id) * (side(id) > 0 ? 3 : 1);
+            else if (permanent.toughness - permanent.damage <= effect.amount) score -= side(id) * worth(permanent);
+            break;
+          case EFFECT.DESTROY:
+          case EFFECT.EXILE:
+            score -= side(id) * worth(permanent);
+            break;
+          case EFFECT.RETURN_TO_HAND:
+            score -= side(id) * (permanent.token ? worth(permanent) : worth(permanent) / 2);
+            break;
+          case EFFECT.TAP:
+            // Tapping a would-be blocker before attacking.
+            if (!permanent.tapped && isCreature(permanent) && preCombat) score -= side(id) * 2;
+            break;
+          case EFFECT.PUMP: {
+            if (!isCreature(permanent)) break;
+            const toughness = permanent.toughness + (effect.toughness ?? 0);
+            if (toughness - permanent.damage <= 0) score -= side(id) * worth(permanent);
+            else if (side(id) > 0 && preCombat && canAttack(permanent) && (effect.power ?? 0) > 0) score += 2;
+            break;
+          }
+          case EFFECT.ADD_COUNTERS:
+            if (isCreature(permanent)) score += side(id) * 3;
+            break;
+          case EFFECT.GAIN_LIFE:
+            score += side(id);
+            break;
+          case EFFECT.LOSE_LIFE:
+            score -= side(id) * (side(id) > 0 ? 3 : 1);
+            break;
+          case EFFECT.DRAW_CARDS:
+            score += side(id) * 1.5 * effect.count;
+            break;
+          case EFFECT.MILL:
+            score -= side(id) * 0.5;
+            break;
+          case EFFECT.CREATE_TOKEN:
+            score += side(id) * 3 * (effect.count ?? 1);
+            break;
+          default:
+            break; // Mana and attaching aren't worth anything on their own.
+        }
+      }
+    }
+    return score;
+  }
+
+  /** What paying a cost's sacrifices and life would lose us (zero or negative). */
+  #costScore(state, cost, costChoices, sourceId) {
+    const byId = (id) => state.battlefield.find((p) => p.id === id);
+    const sacrificed = [...(cost.sacrificeSelf ? [sourceId] : []), ...(costChoices.sacrifice ?? [])].map(byId);
+    return -(cost.life ?? 0) / 2
+      - sacrificed.reduce((sum, p) => sum + (!p ? 0 : isCreature(p) ? p.power + p.toughness + (p.token ? 0 : 1) : 1), 0)
+      - (costChoices.discard?.length ?? 0) * 2;
+  }
+
+  /**
+   * Picks a spell to cast, and its target and cost choices, by the score of its
+   * effects: removal at the opponent's creatures, burn at their face, pumps on
+   * our creatures that can still attack, and so on. Auras and Equipment go on our
+   * own creatures; other permanents are always worth casting.
+   */
+  #chooseCast(state, me, mine, onOwnCreatures) {
     let best = null;
     let bestScore = 0;
     for (const action of mine.filter((a) => a.type === ACTION.CAST_SPELL)) {
       const card = me.hand.find((c) => c.id === action.cardId);
-      const targets = action.targets ?? [];
-      let score = 0;
-      if (!card.spell) {
-        score = onOwnCreatures(action) ? 1 : 0;
-      } else if (card.spell.effects.some((e) => HARMFUL_EFFECTS.has(e.type))) {
-        if (!targets.every(theirs)) continue;
-        const target = byId(targets[0]);
-        const damage = card.spell.effects.find((e) => e.type === EFFECT.DEAL_DAMAGE)?.amount;
-        const destroys = card.spell.effects.some((e) => e.type === EFFECT.DESTROY);
-        if (!target) score = 1; // the opponent's face
-        else if (destroys || (damage && target.toughness - target.damage <= damage)) score = 10 + target.power;
-      } else if (targets.length) {
-        // A pump: only before combat, on a creature of ours that can attack this turn.
-        const target = byId(targets[0]);
-        const canAttack = target && myCreatures.has(target.id) && !target.tapped
-          && (!target.summoningSick || hasKeyword(target, KEYWORD.HASTE)) && !hasKeyword(target, KEYWORD.DEFENDER);
-        score = canAttack && state.phase === 'precombatMain' ? 2 : 0;
-      } else {
-        score = 1;
+      const costScore = this.#costScore(state, card.additionalCost ?? {}, action.costChoices ?? {}, card.id);
+      const score = card.spell
+        ? this.#scoreEffects(state, card.spell.effects, action.targets ?? [], card.id) + costScore
+        : (onOwnCreatures(action) ? 1 : 0) + costScore;
+      if (score > bestScore) {
+        best = action;
+        bestScore = score;
       }
+    }
+    return best;
+  }
+
+  /** Picks a non-mana ability of one of our permanents worth activating, the same way. */
+  #chooseActivation(state, mine, abilityOf) {
+    if (!this.#isSorceryTiming(state)) return null;
+    let best = null;
+    let bestScore = 0;
+    for (const action of mine.filter((a) => a.type === ACTION.ACTIVATE_ABILITY)) {
+      const ability = abilityOf(action);
+      if (!ability || ability.isManaAbility || ability.id === 'equip') continue;
+      const score = this.#scoreEffects(state, ability.effects, action.targets ?? [], action.cardId)
+        + this.#costScore(state, ability.cost, action.costChoices ?? {}, action.cardId);
       if (score > bestScore) {
         best = action;
         bestScore = score;

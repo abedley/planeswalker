@@ -8,66 +8,27 @@
  * - a mana cost of generic and/or W, U, B, R, G, C symbols
  * - numeric power and toughness
  * - supported keywords (see KEYWORD in src/cards/cards.js)
- * - mana abilities of the form "{T}: Add {G}." (any mix of W, U, B, R, G, C symbols)
+ * - activated abilities, "<cost>: <effect>", made of the costs and effect sentences
+ *   in rulesText.js (including mana abilities such as "{T}: Add {G}."), optionally
+ *   followed by "Activate only as a sorcery."
  * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>."
  * - Equipment: "Equipped creature gets +N/+N and has <keywords>." and "Equip {N}"
- * - Instants and sorceries made only of these sentences (at most one target):
- *   "CARDNAME deals N damage to any target." / "... to target creature.",
- *   "Destroy target creature.", "Target creature gets +N/+N [and gains <keywords>] until end of turn.",
- *   "You gain N life.", "Draw a card." / "Draw N cards."
+ * - Instants and sorceries made only of supported effect sentences (at most one
+ *   target), optionally with "As an additional cost to cast this spell, <cost>."
  * Anything else, such as other rules text, is reported as unsupported.
  */
 import {
-  KEYWORD, CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, equipAbility,
+  CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, ACTIVATION_TIMING, equipAbility,
 } from '../../src/cards/cards.js';
+import {
+  normalizeSelfReferences, parseManaSymbols, parseKeywordList, parseEffects, parseCost, sentences, SUPPORTED_KEYWORDS,
+} from './rulesText.js';
 
-const NUMBER_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
-const toNumber = (word) => NUMBER_WORDS[word.toLowerCase()] ?? Number(word);
-const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/**
- * Parses one instant/sorcery sentence into `{ effect, target }`, or null if the
- * engine can't do it.
- */
-function parseSpellSentence(sentence, cardName, problems) {
-  const name = escapeRegExp(cardName);
-  let match = new RegExp(`^${name} deals (\\d+) damage to (any target|target creature)\\.$`).exec(sentence);
-  if (match) {
-    return {
-      effect: { type: EFFECT.DEAL_DAMAGE, amount: Number(match[1]) },
-      target: match[2] === 'any target' ? TARGET.ANY : TARGET.CREATURE,
-    };
-  }
-  if (sentence === 'Destroy target creature.') return { effect: { type: EFFECT.DESTROY }, target: TARGET.CREATURE };
-  match = /^Target creature gets ([+-]\d+)\/([+-]\d+)(?: and gains (.+?))? until end of turn\.$/.exec(sentence);
-  if (match) {
-    const keywords = (match[3] ?? '').split(/,\s*(?:and\s+)?|\s+and\s+/).map(lower).filter(Boolean);
-    const unsupported = keywords.filter((k) => !SUPPORTED_KEYWORDS.has(k));
-    for (const k of unsupported) problems.push(`Unsupported keyword granted: ${k}.`);
-    if (unsupported.length) return { effect: null, target: TARGET.CREATURE };
-    return {
-      effect: {
-        type: EFFECT.PUMP, power: Number(match[1]), toughness: Number(match[2]), ...(keywords.length ? { keywords } : {}),
-      },
-      target: TARGET.CREATURE,
-    };
-  }
-  match = /^You gain (\w+) life\.$/.exec(sentence);
-  if (match && toNumber(match[1])) return { effect: { type: EFFECT.GAIN_LIFE, amount: toNumber(match[1]) }, target: null };
-  match = /^Draw (a card|(\w+) cards)\.$/.exec(sentence);
-  if (match) {
-    const count = match[2] ? toNumber(match[2]) : 1;
-    if (count) return { effect: { type: EFFECT.DRAW_CARDS, count }, target: null };
-  }
-  return null;
-}
-
-const SUPPORTED_KEYWORDS = new Set(Object.values(KEYWORD));
 const SUPPORTED_TYPES = new Set(Object.values(CARD_TYPE));
 const SUPPORTED_SUPERTYPES = new Set(['Basic']);
 const KNOWN_SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing', 'Elite', 'Host']);
-const MANA_SYMBOL = /\{([^}]+)\}/g;
-const MANA_TYPES = new Set(['W', 'U', 'B', 'R', 'G', 'C']);
+/** Keyword actions (701) Scryfall lists under `keywords` whose rules text is parsed like any other. */
+const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill']);
 
 /** "Llanowar Elves" -> "llanowarElves" */
 export function cardIdFromName(name) {
@@ -76,21 +37,6 @@ export function cardIdFromName(name) {
     .replace(/[^A-Za-z0-9 ]+/g, ' ')
     .trim().split(/\s+/);
   return words.map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())).join('');
-}
-
-/** Parses "{3}{G}{G}" into { generic: 3, G: 2 }, collecting unsupported symbols. */
-function parseManaSymbols(text, problems, what) {
-  const mana = {};
-  for (const [, symbol] of text.matchAll(MANA_SYMBOL)) {
-    if (/^\d+$/.test(symbol)) {
-      if (Number(symbol) > 0) mana.generic = (mana.generic ?? 0) + Number(symbol);
-    } else if (MANA_TYPES.has(symbol)) {
-      mana[symbol] = (mana[symbol] ?? 0) + 1;
-    } else {
-      problems.push(`Unsupported mana symbol {${symbol}} in ${what}.`);
-    }
-  }
-  return mana;
 }
 
 /** "Basic Land — Forest" -> { supertypes: ['Basic'], types: ['Land'], subtypes: ['Forest'] } */
@@ -106,20 +52,37 @@ function parseTypeLine(typeLine) {
 
 const lower = (s) => s.toLowerCase();
 
-/** "{T}: Add {G}." -> a mana ability definition, or null if the line isn't one. */
-function parseManaAbility(line, problems) {
-  const match = /^\{T\}: Add ((?:\{[^}]+\})+)\.$/.exec(line);
+/**
+ * "<cost>: <effect>" (602.1) -> an activated ability, or null if the line isn't
+ * one. `number` numbers the card's abilities, for ids.
+ */
+function parseActivatedAbility(line, normalized, number, problems) {
+  const match = /^([^:.]+): (.+)$/.exec(normalized);
   if (!match) return null;
-  const mana = parseManaSymbols(match[1], problems, `"${line}"`);
-  if (mana.generic) {
-    problems.push(`Unsupported mana ability "${line}".`);
-    return null;
+  const cost = parseCost(match[1], problems);
+  // "It" at the start of an ability's effect means its source, e.g. "Sacrifice ~: It deals 1 damage ...".
+  let effectText = match[2].replace(/^It /, '~ ');
+  let timing = null;
+  if (/ Activate only as a sorcery\.$/.test(effectText)) {
+    effectText = effectText.replace(/ Activate only as a sorcery\.$/, '');
+    timing = ACTIVATION_TIMING.SORCERY;
   }
+  const { effects, target, failed } = parseEffects(effectText, problems);
+  if (failed) problems.push(`Unsupported rules text: "${line}"`);
+  if (!cost || failed || effects.length === 0) return { ability: null };
+  const manaOnly = effects.every((e) => e.type === EFFECT.ADD_MANA) && !target;
+  const id = manaOnly && Object.keys(cost).join() === 'tap' && effects.length === 1
+    ? `tapFor${Object.entries(effects[0].mana).map(([type, n]) => type.repeat(n)).join('')}`
+    : `ability${number}`;
   return {
-    id: `tapFor${Object.entries(mana).map(([type, n]) => type.repeat(n)).join('')}`,
-    text: line,
-    cost: { tap: true },
-    effect: { type: EFFECT.ADD_MANA, mana },
+    ability: {
+      id,
+      text: line,
+      cost,
+      ...(effects.length === 1 ? { effect: effects[0] } : { effects }),
+      ...(timing ? { timing } : {}),
+      ...(target ? { target } : {}),
+    },
   };
 }
 
@@ -130,10 +93,8 @@ function parseManaAbility(line, problems) {
 function parseAttachedBonus(line, problems) {
   const match = /^(Enchanted|Equipped) creature (?:gets ([+-]\d+)\/([+-]\d+))?(?: and )?(?:has (.+))?\.$/.exec(line);
   if (!match || (!match[2] && !match[4])) return null;
-  const keywords = (match[4] ?? '').split(/,\s*(?:and\s+)?|\s+and\s+/).map(lower).filter(Boolean);
-  const unsupported = keywords.filter((k) => !SUPPORTED_KEYWORDS.has(k));
-  for (const k of unsupported) problems.push(`Unsupported keyword granted: ${k}.`);
-  if (unsupported.length) return { kind: match[1], effect: null };
+  const keywords = match[4] ? parseKeywordList(match[4], problems) : [];
+  if (!keywords) return { kind: match[1], effect: null };
   return {
     kind: match[1],
     effect: {
@@ -154,7 +115,8 @@ function parseOracleText(card, typeInfo, problems) {
   const abilities = [];
   const staticAbilities = [];
   const effects = [];
-  let spellTarget = null;
+  const spellTargets = [];
+  let additionalCost = null;
   let enchant = null;
   const isSpellCard = typeInfo.types.includes(CARD_TYPE.INSTANT) || typeInfo.types.includes(CARD_TYPE.SORCERY);
   const isAuraCard = typeInfo.subtypes.includes(SUBTYPE.AURA);
@@ -169,30 +131,39 @@ function parseOracleText(card, typeInfo, problems) {
     if (!withoutReminder) {
       // ...except a basic land's reminder of its intrinsic mana ability (305.6).
       const inner = /^\((.*)\)$/.exec(line)?.[1];
-      const ability = typeInfo.supertypes.includes('Basic') && inner ? parseManaAbility(inner, problems) : null;
+      const ability = typeInfo.supertypes.includes('Basic') && inner
+        ? parseActivatedAbility(inner, inner, abilities.length + 1, problems)?.ability : null;
       if (ability) abilities.push(ability);
       continue;
     }
+    const normalized = normalizeSelfReferences(withoutReminder, card.name);
 
     if (isSpellCard) {
-      // An instant or sorcery's rules text is its effect, one sentence at a time (608.2c).
-      for (const sentence of withoutReminder.split(/(?<=\.)\s+/)) {
-        const parsed = parseSpellSentence(sentence, card.name, problems);
-        if (!parsed) {
-          problems.push(`Unsupported rules text: "${sentence}"`);
-        } else if (parsed.target && spellTarget && parsed.target !== spellTarget) {
-          problems.push(`More than one target isn't supported: "${sentence}"`);
-        } else {
-          if (parsed.effect) effects.push(parsed.effect);
-          spellTarget = parsed.target ?? spellTarget;
+      // 601.2f: "As an additional cost to cast this spell, sacrifice a creature."
+      const extra = /^As an additional cost to cast ~, (.+)\.$/.exec(normalized);
+      if (extra) {
+        additionalCost = parseCost(extra[1], problems);
+        if (additionalCost && (additionalCost.tap || additionalCost.sacrificeSelf || additionalCost.mana)) {
+          problems.push(`Unsupported additional cost: "${extra[1]}".`);
         }
+        continue;
+      }
+      // An instant or sorcery's rules text is its effect, one sentence at a time (608.2c).
+      for (const sentence of sentences(normalized)) {
+        const parsed = parseEffects(sentence, problems);
+        if (parsed.failed) {
+          problems.push(`Unsupported rules text: "${sentence.replaceAll('~', card.name)}"`);
+          continue;
+        }
+        effects.push(...parsed.effects);
+        if (parsed.target) spellTargets.push(parsed.target);
       }
       continue;
     }
 
-    const ability = parseManaAbility(withoutReminder, problems);
-    if (ability) {
-      abilities.push(ability);
+    const activated = parseActivatedAbility(withoutReminder, normalized, abilities.length + 1, problems);
+    if (activated) {
+      if (activated.ability) abilities.push(activated.ability);
       continue;
     }
 
@@ -237,13 +208,16 @@ function parseOracleText(card, typeInfo, problems) {
   // Scryfall also lists keywords and keyword actions separately; check them too.
   for (const keyword of card.keywords ?? []) {
     const k = lower(keyword);
-    if (!SUPPORTED_KEYWORDS.has(k) && !handledKeywords.has(k) && !problems.some((p) => p.toLowerCase().includes(k))) {
+    if (!SUPPORTED_KEYWORDS.has(k) && !SUPPORTED_KEYWORD_ACTIONS.has(k) && !handledKeywords.has(k) && !problems.some((p) => p.toLowerCase().includes(k))) {
       problems.push(`Unsupported keyword: ${k}.`);
     }
   }
   if (isAuraCard && !enchant && !problems.length) problems.push('An Aura needs "Enchant creature".');
+  if (spellTargets.length > 1) problems.push(`More than one target isn't supported: "${card.oracle_text}"`);
   if (isSpellCard && effects.length === 0 && !problems.length) problems.push('An instant or sorcery needs rules text.');
-  return { keywords: [...new Set(keywords)], abilities, staticAbilities, enchant, effects, spellTarget };
+  return {
+    keywords: [...new Set(keywords)], abilities, staticAbilities, enchant, effects, spellTarget: spellTargets[0] ?? null, additionalCost,
+  };
 }
 
 /**
@@ -286,7 +260,9 @@ export function convertScryfallCard(card) {
     }
   }
 
-  const { keywords, abilities, staticAbilities, enchant, effects, spellTarget } = parseOracleText(card, typeInfo, problems);
+  const {
+    keywords, abilities, staticAbilities, enchant, effects, spellTarget, additionalCost,
+  } = parseOracleText(card, typeInfo, problems);
   const knownSubtypes = { [SUBTYPE.AURA]: CARD_TYPE.ENCHANTMENT, [SUBTYPE.EQUIPMENT]: CARD_TYPE.ARTIFACT };
   for (const [subtype, type] of Object.entries(knownSubtypes)) {
     if (typeInfo.subtypes.includes(subtype) && !typeInfo.types.includes(type)) problems.push(`Unsupported: ${subtype} that isn't an ${type}.`);
@@ -309,6 +285,7 @@ export function convertScryfallCard(card) {
     ...(enchant ? { enchant } : {}),
     ...(effects.length ? { effects } : {}),
     ...(spellTarget ? { target: spellTarget } : {}),
+    ...(additionalCost ? { additionalCost } : {}),
     ...(staticAbilities.length ? { staticAbilities } : {}),
     text: card.oracle_text ?? '',
     // Provenance, for reference only.

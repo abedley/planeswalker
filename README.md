@@ -20,6 +20,18 @@ them.
 draw and gain-life effects. Instants can be cast in response to other spells. Try the
 *Instants & sorceries sampler* deck (`SAMPLE_SPELLS` / `SAMPLE_SPELLS_DECK`) in the debugger.
 
+**Common costs and effects** work for spells, activated abilities and emblems alike:
+- Costs: {T}, mana, paying life, "Sacrifice this", "Sacrifice a creature/artifact/…" and
+  "Discard a card". Spells can have additional costs ("As an additional cost to cast this spell,
+  sacrifice a creature.").
+- Effects: damage, destroy, exile, return to hand, tap and untap, +N/+N until end of turn,
+  +1/+1 counters, gain and lose life, draw, mill, creature tokens, counter target spell, and
+  adding mana.
+- Effects can apply to the target, to you, to each opponent, to each player, to each creature,
+  to each creature you control, or to the ability's own source.
+
+The *Costs & effects sampler* deck (`SAMPLE_EFFECTS` / `SAMPLE_EFFECTS_DECK`) shows them off.
+
 **Where this game differs from Magic:** each player has innate planeswalker-style abilities,
 granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
 or nothing. For now every player starts with one emblem, **Planeswalker**, with
@@ -62,14 +74,39 @@ A card is only imported if the engine supports everything it does:
   supertype other than Basic.
 - Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
 - Its power and toughness are fixed numbers.
-- Its rules text is only supported keywords, "{T}: Add …" mana abilities, and for Auras and
-  Equipment "Enchant creature", "Enchanted/Equipped creature gets +N/+N and has …" and
-  "Equip {N}".
-- For instants and sorceries, every sentence is one of "CARDNAME deals N damage to any
-  target / target creature.", "Destroy target creature.", "Target creature gets +N/+N [and
-  gains …] until end of turn.", "You gain N life." or "Draw N cards.", with at most one
-  target. Lightning Bolt, Giant Growth, Murder and Divination would import; Counterspell
-  wouldn't.
+- Its rules text is only:
+  - supported keywords
+  - activated abilities, "<cost>: <effect>", optionally ending "Activate only as a sorcery."
+  - for Auras and Equipment, "Enchant creature", "Enchanted/Equipped creature gets +N/+N and
+    has …" and "Equip {N}"
+- For instants and sorceries, every sentence must be a supported effect, with at most one
+  target in total, plus optionally "As an additional cost to cast this spell, <cost>."
+
+The grammar is in `tools/scryfall/rulesText.js`.
+- **Costs:** {T}, mana symbols, "Pay N life", "Sacrifice CARDNAME", "Sacrifice a creature"
+  (artifact, enchantment, land, permanent) and "Discard a card".
+- **Effect sentences** (the card's own name or "this creature" can stand in for CARDNAME):
+  - "CARDNAME deals N damage to any target / target creature / target player / each creature /
+    each opponent / …"
+  - "Destroy / Exile target creature / target artifact or enchantment / target nonland
+    permanent / all creatures / …"
+  - "Return target creature to its owner's hand."
+  - "Tap / Untap target creature."
+  - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
+    turn."
+  - "Put a +1/+1 counter on …"
+  - "You / Target player / Each opponent gain(s) / lose(s) N life."
+  - "[Target player] draws / mills N cards."
+  - "Create N P/T <color> <type> creature tokens [with <keywords>]."
+  - "Counter target [creature / noncreature] spell."
+  - "Add {B}{B}{B}."
+
+**Examples:**
+- **Imports:** Prodigal Sorcerer, Mogg Fanatic, Mind Stone, Shivan Dragon, Greed, Counterspell,
+  Unsummon, Naturalize, Dark Ritual, Raise the Alarm, Pyroclasm, Wrath of God, Overrun, Lava
+  Spike, Thought Scour, Village Rites and Bone Splinters.
+- **Rejected:** Royal Assassin ("target tapped creature"), Sign in Blood (one sentence doing two
+  things) and Fling ("damage equal to …").
 
 Every other card is skipped, and the report says what isn't supported, for example:
 
@@ -140,8 +177,8 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | --- | --- |
 | `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
 | `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
-| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId, targets? }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated, and one per legal target for abilities that target (e.g. equip) |
-| `{ type: 'CAST_SPELL', playerId, cardId, targets? }` | the mana cost is already in the player's pool, and the timing fits: instants whenever the player has priority, everything else at sorcery timing (their main phase, with priority and an empty stack). There is one entry per castable card. A spell that targets (an Aura, a Shock, ...) has one entry per legal target, with `targets: [id]`, where the id is a permanent's or a player's |
+| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId, targets?, costChoices? }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated, and one per legal target for abilities that target (e.g. equip) |
+| `{ type: 'CAST_SPELL', playerId, cardId, targets?, costChoices? }` | the mana cost is already in the player's pool, and the timing fits: instants whenever the player has priority, everything else at sorcery timing (their main phase, with priority and an empty stack). There is one entry per castable card. A spell that targets (an Aura, a Shock, ...) has one entry per legal target, with `targets: [id]`, where the id is a permanent's, a player's, or (for counterspells) a spell's stack object id |
 | `{ type: 'TOGGLE_ATTACKER', playerId, cardId }` | declare attackers step (`pendingDecision.type === 'declareAttackers'`): adds the creature to, or removes it from, `pendingDecision.attackers`. There is one entry per creature that can attack |
 | `{ type: 'CONFIRM_ATTACKERS', playerId }` | declare attackers step: locks in the attack, which can be empty |
 | `{ type: 'SET_BLOCKER', playerId, cardId, attackerId }` | declare blockers step (`'declareBlockers'`): the creature blocks that attacker, or blocks nothing when `attackerId` is `null`. Updates `pendingDecision.blocks` |
@@ -151,6 +188,11 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 
 An action is accepted only if it equals one of `state.validActions`.
 
+Costs that need a choice, like "sacrifice a creature" or "discard a card", work like targets:
+there's one entry per option, with `costChoices: { sacrifice: [id] }` or
+`costChoices: { discard: [id] }`. Targets and cost choices combine, so Bone Splinters gets one
+entry per (creature to destroy, creature to sacrifice) pair.
+
 Attackers and blockers are declared one creature at a time and then confirmed, rather than in a
 single action. That way every choice is a concrete entry in `validActions`: listing every
 possible set of attackers or blocks up front could run to thousands of entries. The declaration
@@ -159,10 +201,10 @@ counts once it's confirmed.
 ### State
 
 The `state` event payload includes `players[]`, each with `life`, `library`, `hand`, `graveyard`,
-`manaPool` (`{ W, U, B, R, G, C }`), `landsPlayedThisTurn` and `hasLost`. It also includes:
+`exile`, `manaPool` (`{ W, U, B, R, G, C }`), `landsPlayedThisTurn` and `hasLost`. It also includes:
 - `battlefield`: permanents carry `controllerId`, `tapped`, `summoningSick`, `damage`,
-  `damagedByDeathtouch`, `abilities` and `keywords`, and creatures also carry `power` and
-  `toughness`
+  `damagedByDeathtouch`, `counters` (e.g. `{ '+1/+1': 2 }`), `abilities` and `keywords`, and
+  creatures also carry `power` and `toughness`. Tokens have `token: true` and `colors`
 - `stack`: spells and abilities; the last element is the top
 - `combat`: `declaredAttackers` (ids), and `attackers: [{ cardId, defendingPlayerId, blocked, blockerIds, damageAssignment }]`
 - `pendingDecision` `status` (`notStarted` / `inProgress` /
@@ -198,7 +240,18 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `manaPoolsEmptied` | `pools: [{ playerId, lost }]` | a step or phase ends with mana in a pool |
 | `permanentsUntapped` | `playerId`, `cardIds` | untap step, if anything was tapped |
 | `decisionRequired` | the new `pendingDecision` | a player must declare attackers or blockers, divide damage, or discard |
-| `cardDiscarded` | `playerId`, `cardId` | a card is discarded |
+| `cardDiscarded` | `playerId`, `cardId` | a card is discarded (to hand size, or as a cost) |
+| `damageDealt` | `sourceId`, `targetPlayerId \| targetCardId`, `amount` | a spell or ability deals damage |
+| `permanentDestroyed` / `permanentExiled` / `permanentReturnedToHand` | `cardId`, `cardName`, `sourceId`, ... | a permanent is destroyed, exiled or bounced |
+| `permanentSacrificed` | `cardId`, `cardName`, `controllerId` | a permanent is sacrificed to pay a cost |
+| `permanentTapped` / `permanentUntapped` | `cardId`, `sourceId` | an effect taps or untaps a permanent |
+| `temporaryEffectCreated` / `temporaryEffectsEnded` | the effect / `effectIds` | a pump starts / "until end of turn" effects end in cleanup |
+| `countersAdded` | `cardId`, `counter`, `count`, `counters` | counters are put on a permanent |
+| `tokenCreated` | `playerId`, `card`, `sourceId` | a token enters the battlefield |
+| `spellCountered` | `stackObjectId`, `cardId`, `cardName`, `sourceId` | a spell is countered |
+| `lifeGained` / `lifeLost` | `playerId`, `amount`, `life` | an effect changes a life total |
+| `cardsMilled` | `playerId`, `cardIds`, `librarySize` | cards are milled |
+| `stackObjectFizzled` | `stackObjectId`, `reason` | a spell or ability's targets are all illegal |
 | `drawFromEmptyLibrary` / `playerLost` / `gameEnded` | `playerId` / `reason` / `winnerId` | a player decks out |
 | `actionAccepted` / `actionRejected` | `action` (+ `reason`) | an action is processed |
 | `state` | full snapshot incl. `validActions`, `version` | the game is waiting for input |
@@ -237,8 +290,7 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
   After a pass, the next player in turn order receives it (117.3d).
 - When all players pass in succession with an empty stack, the step or phase ends (117.4, 500.2).
 - The player who goes first skips the draw step of turn 1 (103.8a).
-- Declare blockers and combat damage are skipped when no creatures attack (508.8). For now,
-  nothing can attack.
+- Declare blockers and combat damage are skipped when no creatures attack (508.8).
 - Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5). Mulligans aren't
   implemented yet.
 - Turn-based actions: the active player untaps their permanents (502.3), draws in the draw step
@@ -309,17 +361,40 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
   including in response to other spells, during combat, and on the opponent's turn. Sorceries
   need sorcery timing. On resolution their `effects` happen in order (608.2c), then the card goes
   to its owner's graveyard (608.2n). Effects:
+- Effects (`EFFECT` in `src/cards/cards.js`) are shared by spells, activated abilities and
+  emblems. Each applies to what its `affected` field says (`target`, `you`, `eachOpponent`,
+  `eachPlayer`, `eachCreature`, `eachCreatureYouControl`, or `source`, the ability's own
+  permanent). Without it, targeted effect types apply to the target, and the rest to "you".
   - `dealDamage`: to a creature (marked damage, so state-based actions kill it) or to a player
-    (life loss).
-  - `destroy`: puts the target into its owner's graveyard (701.7).
-  - `pump`: +N/+N and keywords until end of turn (611.2). It ends in the cleanup step at the
-    same time damage wears off (514.2), or earlier if the creature leaves the battlefield.
-    Active ones are in `state.temporaryEffects`.
-  - `drawCards`, `gainLife`: for the spell's controller.
+    (life loss). If the source is a permanent with deathtouch or lifelink, those apply (702.2,
+    702.15).
+  - `destroy` (701.7), `exile` (701.5) and `returnToHand`: move a permanent to its owner's
+    graveyard, exile zone or hand.
+  - `tap` and `untap` (701.21).
+  - `pump`: +N/+N (or -N/-N) and keywords until end of turn (611.2). It ends in the cleanup
+    step at the same time damage wears off (514.2), or earlier if the creature leaves the
+    battlefield. Active ones are in `state.temporaryEffects`.
+  - `addCounters`: +1/+1 counters (122), which last until the permanent leaves the battlefield.
+  - `drawCards`, `gainLife`, `loseLife`, `mill` (701.13) and `addMana`, for players.
+  - `createToken`: creature tokens (111) owned by the player who creates them. A token that
+    leaves the battlefield ceases to exist (111.7, 704.5d), so it never shows up in a graveyard,
+    hand or exile.
+  - `counterSpell`: the countered spell goes to its owner's graveyard (701.6).
+- Costs (118, 601.2f–h, 602.2b): {T}, mana, life, `sacrificeSelf`, `sacrifice` (a permanent
+  kind) and `discard` (a number of cards). A spell's `additionalCost` is paid after its mana
+  cost. A sacrificed source is gone before the ability resolves, but the ability still
+  resolves; effects on "this permanent" then do nothing.
 - Targets (115): spells and abilities that target list one valid action per legal target. When
   one resolves, its targets are checked again, and if they're all illegal it doesn't resolve
   (608.2b). A spell that doesn't resolve goes to its owner's graveyard (`stackObjectFizzled`).
-  Target kinds so far: `creature`, `creatureYouControl`, and `any` (a creature or a player).
+  Target kinds (`TARGET`):
+  - creatures: `creature`, `creatureYouControl`, `creatureOpponentControls`
+  - other permanents: `artifact`, `enchantment`, `artifactOrEnchantment`, `land`,
+    `nonlandPermanent`, `permanent`
+  - players: `player`, `opponent`, and `any` (a creature or a player)
+  - spells on the stack: `spell`, `creatureSpell`, `noncreatureSpell`
+  
+  Abilities can target their own source, except Auras and Equipment attaching to themselves.
 - Auras (303.4): "Enchant creature" Auras target a creature when cast and enter attached to it.
   An Aura that's attached to nothing, or to something it can't enchant, goes to its owner's
   graveyard (704.5m).
@@ -328,19 +403,23 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
   attached. If the creature leaves, the Equipment stays on the battlefield, unattached (704.5n).
 - Continuous effects (613): each permanent keeps its printed `base` power, toughness and
   keywords. The current values are recalculated whenever something enters, leaves, or is
-  attached. So far the only effects are static abilities on attached Auras and Equipment
-  (`affected: 'attachedPermanent'`), which add power, toughness and keywords. Combat and
-  keyword rules use the recalculated values.
+  attached. The effects so far are:
+  - static abilities on attached Auras and Equipment (`affected: 'attachedPermanent'`)
+  - +1/+1 counters
+  - "until end of turn" pumps
+
+  These add power, toughness and keywords. Combat and keyword rules use the recalculated
+  values.
 - State-based actions are checked before a player receives priority (117.5), and repeated until
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).
   A player loses at 0 life (704.5a), or after trying to draw from an empty library (704.5b). The
   game ends as soon as any player loses, because multiplayer elimination isn't modelled.
 
 Cards are defined in `src/cards/cards.js` (by hand) and `src/cards/importedCards.js` (generated
-from Scryfall, see above): a mana cost, types, power and toughness for creatures,
-and activated abilities as data (`{ id, text, cost: { tap?, mana? }, effect }`). The supported
-effects are `addMana` (which makes it a mana ability) and `drawCards`. Creatures can list
-`keywords`. The tests add test-only cards through the `cards` option, including free (0-cost)
+from Scryfall, see above): a mana cost, types, power and toughness for creatures, and activated
+abilities as data (`{ id, text, cost, effects, target?, timing? }`; the format is documented at
+the top of `cards.js`). An ability that adds mana and doesn't target is a mana ability. Creatures
+can list `keywords`. The tests add test-only cards through the `cards` option, including free (0-cost)
 creatures for building combat scenarios.
 
 The basic AI (`BasicAIController`, `strategy: 'basic'`) plays lands and casts Elves. It attacks
@@ -349,9 +428,17 @@ otherwise blocks one-for-one to trade. It uses emblem abilities that cost nothin
 reach, and menace with two blockers or none. It casts artifacts and enchantments, puts Auras
 only on its own creatures, equips loose Equipment, and taps enough mana for generic costs. Damage
 and destroy spells go at the opponent: their biggest creature it can kill, otherwise their face.
-It casts pumps before combat on a creature that can attack, and draw and life-gain spells
-whenever. It only casts at sorcery timing, so it never responds or plays combat tricks. With trample, it sends as much damage to the player
-as it can. `strategy: 'passive'` only passes and makes empty
+Spells and non-mana abilities are scored effect by effect:
+- **Valued highly:** killing, exiling or bouncing the opponent's creatures.
+- **Valued a little:** hitting their face, drawing cards, making tokens, adding counters, and
+  pumping a creature that can still attack.
+- **Counted against:** hurting itself, and paying sacrifices or life (sacrificing a token is
+  cheap).
+
+It casts the best-scoring option when the score is positive. It activates abilities in its
+main phase, and taps mana on the opponent's turn only for instants. That lets it counter the
+opponent's spells, but it doesn't otherwise play combat tricks or respond. With trample, it
+sends as much damage to the player as it can. `strategy: 'passive'` only passes and makes empty
 declarations.
 
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main

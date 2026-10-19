@@ -2,7 +2,7 @@ import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
   DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
-  SAMPLE_SPELLS_DECK, isAura,
+  SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, isAura,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -40,6 +40,7 @@ const DECKS = {
   sampler: SAMPLE_DECK,
   permanents: SAMPLE_PERMANENTS_DECK,
   spells: SAMPLE_SPELLS_DECK,
+  effects: SAMPLE_EFFECTS_DECK,
 };
 
 const CONTROLLER_KINDS = {
@@ -71,7 +72,7 @@ function newGame() {
     players: PLAYERS,
     startingPlayerId: ui.startingPlayer.value,
     seed,
-    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS },
+    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS },
     decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
   });
   window.game = game;
@@ -230,6 +231,7 @@ function renderPlayers(state) {
         zoneCount('Library', player.library.length),
         zoneCount('Hand', player.hand.length),
         zoneCount('Graveyard', player.graveyard.length),
+        zoneCount('Exile', player.exile.length),
         zoneCount('Lands played', `${player.landsPlayedThisTurn}/${LAND_PLAYS_PER_TURN}`),
         zoneCount('Mana pool', manaPoolTotal(player.manaPool) ? formatMana(player.manaPool) : 'empty'),
       ]),
@@ -245,6 +247,10 @@ function renderPlayers(state) {
       cardRow(permanents, cardActions, 'No permanents', (card) => combatTags(card, state)),
       el('h3', { textContent: `Graveyard (${player.graveyard.length})` }),
       cardRow(player.graveyard, () => [], 'Empty'),
+      ...(player.exile.length ? [
+        el('h3', { textContent: `Exile (${player.exile.length})` }),
+        cardRow(player.exile, () => [], 'Empty'),
+      ] : []),
     ]);
   }));
 }
@@ -284,11 +290,17 @@ function combatTags(card, state) {
   for (const attachment of state.battlefield.filter((p) => p.attachedTo === card.id)) {
     tags.push(`${isAura(attachment) ? 'enchanted by' : 'equipped with'} ${attachment.name}`);
   }
+  const signed = (n) => (n < 0 ? `${n}` : `+${n}`);
   for (const effect of state.temporaryEffects.filter((e) => e.targetId === card.id)) {
     const keywords = effect.keywords.length ? ` ${effect.keywords.join(', ')}` : '';
-    tags.push(`+${effect.power}/+${effect.toughness}${keywords} until end of turn`);
+    tags.push(`${signed(effect.power)}/${signed(effect.toughness)}${keywords} until end of turn`);
   }
-  return tags;
+  for (const [counter, n] of Object.entries(card.counters ?? {})) tags.push(`${n} ${counter} counter${n === 1 ? '' : 's'}`);
+  if (card.token) tags.push('token');
+  // Collapse repeats, e.g. the same pump activated several times.
+  const counts = new Map();
+  for (const tag of tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  return [...counts].map(([tag, n]) => (n > 1 ? `${tag} ×${n}` : tag));
 }
 
 function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
@@ -379,14 +391,23 @@ function renderStack(state) {
   ))));
 }
 
+/** A permanent, card in hand, player or spell on the stack, by id. */
+function describeId(id, state) {
+  const card = state.battlefield.find((p) => p.id === id)
+    ?? state.players.flatMap((p) => p.hand).find((c) => c.id === id);
+  if (card) return `${card.name} (${id})`;
+  const spell = state.stack.find((s) => s.id === id);
+  if (spell) return `${spell.sourceName} (${id}, on the stack)`;
+  return state.players.some((p) => p.id === id) ? playerName(id) : id;
+}
+
 function targetLabel(action, state) {
-  if (!action.targets?.length) return '';
-  const names = action.targets.map((id) => {
-    const target = state.battlefield.find((p) => p.id === id);
-    if (target) return `${target.name} (${id})`;
-    return state.players.some((p) => p.id === id) ? playerName(id) : id;
-  });
-  return ` → ${names.join(', ')}`;
+  const parts = [];
+  if (action.targets?.length) parts.push(` → ${action.targets.map((id) => describeId(id, state)).join(', ')}`);
+  const { sacrifice, discard } = action.costChoices ?? {};
+  if (sacrifice) parts.push(`, sacrificing ${sacrifice.map((id) => describeId(id, state)).join(', ')}`);
+  if (discard) parts.push(`, discarding ${discard.map((id) => describeId(id, state)).join(', ')}`);
+  return parts.join('');
 }
 
 function actionLabel(action, card, state) {
@@ -458,7 +479,17 @@ function summarize(name, p) {
     case 'stackObjectFizzled': return `${p.stackObjectId}: ${p.reason}`;
     case 'damageDealt': return `${p.sourceId} → ${p.targetPlayerId ? who(p.targetPlayerId) : p.targetCardId}: ${p.amount}`;
     case 'permanentDestroyed': return `${p.cardName} (${p.cardId}) destroyed by ${p.sourceId}`;
-    case 'temporaryEffectCreated': return `${p.targetId} gets +${p.power}/+${p.toughness}${p.keywords.length ? ` and ${p.keywords.join(', ')}` : ''} until end of turn`;
+    case 'permanentExiled': return `${p.cardName} (${p.cardId}) exiled by ${p.sourceId}`;
+    case 'permanentReturnedToHand': return `${p.cardName} (${p.cardId}) returned to ${who(p.ownerId)}'s hand`;
+    case 'permanentSacrificed': return `${who(p.controllerId)} sacrificed ${p.cardName} (${p.cardId})`;
+    case 'permanentTapped': return `${p.cardId} tapped by ${p.sourceId}`;
+    case 'permanentUntapped': return `${p.cardId} untapped by ${p.sourceId}`;
+    case 'countersAdded': return `${p.cardId} got ${p.count} ${p.counter} counter${p.count === 1 ? '' : 's'}`;
+    case 'spellCountered': return `${p.cardName} (${p.stackObjectId}) countered by ${p.sourceId}`;
+    case 'lifeLost': return `${who(p.playerId)} lost ${p.amount} (life ${p.life})`;
+    case 'cardsMilled': return `${who(p.playerId)} milled ${p.cardIds.length} (${p.librarySize} left in library)`;
+    case 'tokenCreated': return `${who(p.playerId)} created ${p.card.name} (${p.card.id})`;
+    case 'temporaryEffectCreated': return `${p.targetId} gets ${p.power < 0 ? p.power : `+${p.power}`}/${p.toughness < 0 ? p.toughness : `+${p.toughness}`}${p.keywords.length ? ` and ${p.keywords.join(', ')}` : ''} until end of turn`;
     case 'temporaryEffectsEnded': return `${p.effectIds.length} "until end of turn" effect(s) ended`;
     case 'creatureDied': return `${p.cardName} (${p.cardId}) died`;
     case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;

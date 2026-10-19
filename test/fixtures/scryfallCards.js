@@ -100,6 +100,77 @@ export const FIXTURES = {
   murder: card({ name: 'Murder', mana_cost: '{1}{B}{B}', type_line: 'Instant', oracle_text: 'Destroy target creature.' }),
   divination: card({ name: 'Divination', mana_cost: '{2}{U}', type_line: 'Sorcery', oracle_text: 'Draw two cards.' }),
   counterspell: card({ name: 'Counterspell', mana_cost: '{U}{U}', type_line: 'Instant', oracle_text: 'Counter target spell.' }),
+  mountain: card({ name: 'Mountain', mana_cost: '', type_line: 'Basic Land — Mountain', oracle_text: '({T}: Add {R}.)' }),
+  // Activated abilities
+  prodigalSorcerer: card({
+    name: 'Prodigal Sorcerer', mana_cost: '{2}{U}', type_line: 'Creature — Human Wizard',
+    oracle_text: '{T}: Prodigal Sorcerer deals 1 damage to any target.', power: '1', toughness: '1',
+  }),
+  moggFanatic: card({
+    name: 'Mogg Fanatic', mana_cost: '{R}', type_line: 'Creature — Goblin',
+    oracle_text: 'Sacrifice Mogg Fanatic: It deals 1 damage to any target.', power: '1', toughness: '1',
+  }),
+  mindStone: card({
+    name: 'Mind Stone', mana_cost: '{2}', type_line: 'Artifact',
+    oracle_text: '{T}: Add {C}.\n{1}, {T}, Sacrifice Mind Stone: Draw a card.',
+  }),
+  shivanDragon: card({
+    name: 'Shivan Dragon', mana_cost: '{4}{R}{R}', type_line: 'Creature — Dragon',
+    oracle_text: 'Flying\n{R}: Shivan Dragon gets +1/+0 until end of turn.', keywords: ['Flying'], power: '5', toughness: '5',
+  }),
+  greed: card({ name: 'Greed', mana_cost: '{3}{B}', type_line: 'Enchantment', oracle_text: '{B}, Pay 2 life: Draw a card.' }),
+  dragonRoost: card({
+    name: 'Dragon Roost', mana_cost: '{4}{R}{R}', type_line: 'Enchantment',
+    oracle_text: '{5}{R}{R}: Create a 5/5 red Dragon creature token with flying. (It can\'t be blocked except by creatures with flying or reach.)',
+  }),
+  royalAssassin: card({
+    name: 'Royal Assassin', mana_cost: '{1}{B}{B}', type_line: 'Creature — Human Assassin',
+    oracle_text: '{T}: Destroy target tapped creature.', power: '1', toughness: '1',
+  }),
+  // Instants and sorceries
+  unsummon: card({ name: 'Unsummon', mana_cost: '{U}', type_line: 'Instant', oracle_text: 'Return target creature to its owner\'s hand.' }),
+  naturalize: card({ name: 'Naturalize', mana_cost: '{1}{G}', type_line: 'Instant', oracle_text: 'Destroy target artifact or enchantment.' }),
+  essenceScatter: card({ name: 'Essence Scatter', mana_cost: '{1}{U}', type_line: 'Instant', oracle_text: 'Counter target creature spell.' }),
+  negate: card({ name: 'Negate', mana_cost: '{1}{U}', type_line: 'Instant', oracle_text: 'Counter target noncreature spell.' }),
+  darkRitual: card({ name: 'Dark Ritual', mana_cost: '{B}', type_line: 'Instant', oracle_text: 'Add {B}{B}{B}.' }),
+  raiseTheAlarm: card({
+    name: 'Raise the Alarm', mana_cost: '{1}{W}', type_line: 'Instant', oracle_text: 'Create two 1/1 white Soldier creature tokens.',
+  }),
+  pyroclasm: card({ name: 'Pyroclasm', mana_cost: '{1}{R}', type_line: 'Sorcery', oracle_text: 'Pyroclasm deals 2 damage to each creature.' }),
+  wrathOfGod: card({
+    name: 'Wrath of God', mana_cost: '{2}{W}{W}', type_line: 'Sorcery', oracle_text: 'Destroy all creatures. They can\'t be regenerated.',
+  }),
+  overrun: card({
+    name: 'Overrun', mana_cost: '{2}{G}{G}{G}', type_line: 'Sorcery',
+    oracle_text: 'Creatures you control get +3/+3 and gain trample until end of turn.',
+  }),
+  lavaSpike: card({
+    name: 'Lava Spike', mana_cost: '{R}', type_line: 'Sorcery — Arcane',
+    oracle_text: 'Lava Spike deals 3 damage to target player or planeswalker.',
+  }),
+  thoughtScour: card({
+    name: 'Thought Scour', mana_cost: '{U}', type_line: 'Instant', oracle_text: 'Target player mills two cards.\nDraw a card.', keywords: ['Mill'],
+  }),
+  battlegrowth: card({ name: 'Battlegrowth', mana_cost: '{G}', type_line: 'Instant', oracle_text: 'Put a +1/+1 counter on target creature.' }),
+  villageRites: card({
+    name: 'Village Rites', mana_cost: '{B}', type_line: 'Instant',
+    oracle_text: 'As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.',
+  }),
+  tormentingVoice: card({
+    name: 'Tormenting Voice', mana_cost: '{1}{R}', type_line: 'Sorcery',
+    oracle_text: 'As an additional cost to cast this spell, discard a card.\nDraw two cards.',
+  }),
+  boneSplinters: card({
+    name: 'Bone Splinters', mana_cost: '{B}', type_line: 'Sorcery',
+    oracle_text: 'As an additional cost to cast this spell, sacrifice a creature.\nDestroy target creature.',
+  }),
+  signInBlood: card({
+    name: 'Sign in Blood', mana_cost: '{B}{B}', type_line: 'Sorcery', oracle_text: 'Target player draws two cards and loses 2 life.',
+  }),
+  fling: card({
+    name: 'Fling', mana_cost: '{1}{R}', type_line: 'Instant',
+    oracle_text: 'As an additional cost to cast this spell, sacrifice a creature.\nFling deals damage equal to the sacrificed creature\'s power to any target.',
+  }),
   jaceBeleren: card({
     name: 'Jace Beleren', mana_cost: '{1}{U}{U}', type_line: 'Legendary Planeswalker — Jace',
     oracle_text: '+2: Each player draws a card.\n−1: Target player draws a card.\n−10: Target player mills twenty cards.',

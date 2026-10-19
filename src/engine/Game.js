@@ -3,7 +3,7 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS, TRIGGER,
   isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword,
   abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor,
 } from '../cards/cards.js';
@@ -21,6 +21,8 @@ export const DECISION = Object.freeze({
   DECLARE_ATTACKERS: 'declareAttackers',
   DECLARE_BLOCKERS: 'declareBlockers',
   ASSIGN_COMBAT_DAMAGE: 'assignCombatDamage',
+  /** A triggered ability with more than one legal target is being put on the stack (603.3d). */
+  CHOOSE_TARGETS: 'chooseTargets',
 });
 
 export const STARTING_LIFE = 20; // 103.4
@@ -93,6 +95,9 @@ export class Game extends EventEmitter {
   #playersPassed = [];
   #stack = []; // last element is the top of the stack
   #nextStackObjectId = 1;
+  /** Abilities that have triggered but aren't on the stack yet (603.3), oldest first. */
+  #pendingTriggers = [];
+  #nextTriggerId = 1;
   #combat = emptyCombat();
   /** Continuous effects from resolved spells, e.g. "+3/+3 until end of turn" (611.2). */
   #temporaryEffects = [];
@@ -252,6 +257,7 @@ export class Game extends EventEmitter {
       segmentIndex: this.#segmentIndex,
       playersPassed: this.#playersPassed,
       stack: this.#stack,
+      pendingTriggers: this.#pendingTriggers,
       combat: this.#combat,
       temporaryEffects: this.#temporaryEffects,
       validActions: this.getValidActions(),
@@ -389,6 +395,9 @@ export class Game extends EventEmitter {
           type: ACTION.ASSIGN_COMBAT_DAMAGE, playerId, attackerId: decision.attackerId, assignment,
         }));
       }
+      case DECISION.CHOOSE_TARGETS:
+        return this.#legalTargets(decision.targetKind, playerId, null)
+          .map((target) => ({ type: ACTION.CHOOSE_TARGETS, playerId, targets: [target.id] }));
       default:
         throw new Error(`Unknown decision type: ${decision.type}`);
     }
@@ -440,6 +449,7 @@ export class Game extends EventEmitter {
       case ACTION.CONFIRM_BLOCKERS: this.#confirmBlockers(); break;
       case ACTION.ASSIGN_COMBAT_DAMAGE: this.#assignCombatDamage(action.assignment); break;
       case ACTION.DISCARD: this.#discardToHandSize(playerId, cardId); break;
+      case ACTION.CHOOSE_TARGETS: this.#chooseTriggerTargets(action.targets); break;
     }
     this.#emitState();
     return { ok: true };
@@ -480,10 +490,15 @@ export class Game extends EventEmitter {
     }
   }
 
-  /** Returns false if state-based actions ended the game instead. */
+  /**
+   * Returns false if state-based actions ended the game instead, or if a player
+   * must first choose a target for a triggered ability.
+   */
   #givePriority(playerId) {
-    // 117.5 / 704.3: state-based actions are checked before a player receives priority.
+    // 117.5 / 704.3: state-based actions are checked before a player receives priority,
+    // then triggered abilities are put on the stack (603.3).
     if (this.#checkStateBasedActions()) return false;
+    if (this.#putTriggersOnStack(playerId)) return false;
     this.#priorityPlayerId = playerId;
     this.#emitEvent('priorityGranted', { playerId });
     return true;
@@ -508,6 +523,15 @@ export class Game extends EventEmitter {
       supertypes: [...(definition.supertypes ?? [])],
       types: [...definition.types],
       subtypes: [...(definition.subtypes ?? [])],
+      ...(definition.triggeredAbilities ? {
+        triggeredAbilities: definition.triggeredAbilities.map((ability) => ({
+          id: ability.id,
+          text: ability.text,
+          trigger: ability.trigger,
+          effects: structuredClone(abilityEffects(ability)),
+          target: ability.target ?? null,
+        })),
+      } : {}),
       abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => ({
         id,
         text,
@@ -624,6 +648,8 @@ export class Game extends EventEmitter {
     };
     this.#battlefield.push(permanent);
     this.#applyContinuousEffects();
+    // 603.6a: "When this enters" triggers.
+    this.#trigger(permanent, TRIGGER.ENTERS_BATTLEFIELD, controllerId);
     return permanent;
   }
 
@@ -638,6 +664,9 @@ export class Game extends EventEmitter {
    */
   #moveFromBattlefield(permanent, zoneName) {
     this.#battlefield.splice(this.#battlefield.indexOf(permanent), 1);
+    // 700.4: a creature dies when it's put into a graveyard from the battlefield. Leaves-the-
+    // battlefield abilities "look back in time" (603.10a), so this uses the permanent as it was.
+    if (zoneName === 'graveyard' && isCreature(permanent)) this.#trigger(permanent, TRIGGER.DIES, permanent.controllerId);
     const {
       controllerId, tapped, summoningSick, damage, damagedByDeathtouch, attachedTo, counters, base, ...card
     } = permanent;
@@ -1075,6 +1104,106 @@ export class Game extends EventEmitter {
     }
     // 702.15b: damage dealt by a source with lifelink causes its controller to gain that much life.
     if (source && hasKeyword(source, KEYWORD.LIFELINK)) this.#gainLife(source.controllerId, amount);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Triggered abilities (Comprehensive Rules 603)
+
+  /** 603.2: an event happened; any of the permanent's abilities that trigger on it trigger. */
+  #trigger(permanent, type, controllerId) {
+    for (const ability of this.#cardDefinitions[permanent.cardId].triggeredAbilities ?? []) {
+      if (ability.trigger !== type) continue;
+      const trigger = {
+        id: `t${this.#nextTriggerId++}`,
+        sourceId: permanent.id,
+        sourceName: permanent.name,
+        // 603.3a: the ability's controller is its source's controller when it triggered.
+        controllerId,
+        abilityId: ability.id,
+        text: ability.text,
+        trigger: type,
+        effects: structuredClone(abilityEffects(ability)),
+        targetKind: ability.target ?? null,
+      };
+      this.#pendingTriggers.push(trigger);
+      this.#emitEvent('abilityTriggered', structuredClone(trigger));
+    }
+  }
+
+  /** Players in APNAP order (101.4): the active player, then the others in turn order. */
+  #apnapOrder() {
+    const index = this.#players.findIndex((p) => p.id === this.#activePlayerId);
+    return [...this.#players.slice(index), ...this.#players.slice(0, index)].map((p) => p.id);
+  }
+
+  /**
+   * 603.3b: puts abilities that triggered since a player last received priority on
+   * the stack, the active player's first, so the last player's end up on top. Each
+   * player's go on in the order they triggered (choosing that order isn't modelled).
+   * Returns true when a player must first choose a target (603.3d), which leaves
+   * `priorityPlayerId` waiting.
+   */
+  #putTriggersOnStack(priorityPlayerId) {
+    const order = this.#apnapOrder();
+    this.#pendingTriggers.sort((a, b) => order.indexOf(a.controllerId) - order.indexOf(b.controllerId));
+    while (this.#pendingTriggers.length > 0) {
+      const trigger = this.#pendingTriggers[0];
+      if (!trigger.targetKind) {
+        this.#putTriggerOnStack(this.#pendingTriggers.shift(), null);
+        continue;
+      }
+      const legal = this.#legalTargets(trigger.targetKind, trigger.controllerId, null);
+      if (legal.length === 0) {
+        // 603.3d: with no legal target, the ability is removed from the stack.
+        this.#pendingTriggers.shift();
+        this.#emitEvent('triggeredAbilityRemoved', { triggerId: trigger.id, sourceId: trigger.sourceId, reason: 'No legal targets.' });
+        continue;
+      }
+      if (legal.length === 1) {
+        this.#putTriggerOnStack(this.#pendingTriggers.shift(), [legal[0].id]);
+        continue;
+      }
+      this.#priorityPlayerId = null;
+      this.#requireDecision({
+        type: DECISION.CHOOSE_TARGETS,
+        playerId: trigger.controllerId,
+        triggerId: trigger.id,
+        sourceId: trigger.sourceId,
+        sourceName: trigger.sourceName,
+        text: trigger.text,
+        targetKind: trigger.targetKind,
+        effects: structuredClone(trigger.effects),
+        priorityPlayerId,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  #putTriggerOnStack(trigger, targets) {
+    const stackObject = {
+      id: `s${this.#nextStackObjectId++}`,
+      kind: 'triggeredAbility',
+      controllerId: trigger.controllerId,
+      sourceId: trigger.sourceId,
+      sourceName: trigger.sourceName,
+      abilityId: trigger.abilityId,
+      text: trigger.text,
+      effects: trigger.effects,
+      ...(targets ? { targets: [...targets], targetKind: trigger.targetKind } : {}),
+    };
+    this.#stack.push(stackObject);
+    this.#emitEvent('triggeredAbilityPutOnStack', {
+      triggerId: trigger.id, stackObjectId: stackObject.id, sourceId: trigger.sourceId, targets: targets ?? [],
+    });
+  }
+
+  #chooseTriggerTargets(targets) {
+    const { priorityPlayerId } = this.#pendingDecision;
+    this.#pendingDecision = null;
+    this.#putTriggerOnStack(this.#pendingTriggers.shift(), targets);
+    // Put any other triggered abilities on the stack, then give priority as was about to happen.
+    this.#givePriority(priorityPlayerId);
   }
 
   // ---------------------------------------------------------------------------

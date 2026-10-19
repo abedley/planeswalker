@@ -75,6 +75,12 @@ export class BasicAIController extends EventEmitter {
           .filter(([id]) => state.players.some((p) => p.id === id)).reduce((sum, [, n]) => sum + n, 0);
         return mine.reduce((best, a) => (toPlayer(a) > toPlayer(best) ? a : best));
       }
+      case DECISION.CHOOSE_TARGETS: {
+        // A triggered ability's target: the best one for us, even if every option is bad.
+        const { effects, sourceId } = state.pendingDecision;
+        const score = (a) => this.#scoreEffects(state, effects, a.targets, sourceId);
+        return mine.reduce((best, a) => (score(a) > score(best) ? a : best));
+      }
       case undefined:
         break;
       default:

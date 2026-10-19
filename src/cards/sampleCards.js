@@ -1,5 +1,5 @@
 import {
-  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, ACTIVATION_TIMING, TOKEN, equipAbility,
+  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, ACTIVATION_TIMING, TOKEN, TRIGGER, equipAbility,
 } from './cards.js';
 
 /**
@@ -217,4 +217,52 @@ export const SAMPLE_EFFECTS = Object.freeze({
 export const SAMPLE_EFFECTS_DECK = Object.freeze([
   ...Array(16).fill('forest'),
   ...Object.keys(SAMPLE_EFFECTS).flatMap((id) => [id, id]),
+]);
+
+/** Sample creatures with "when this enters" and "when this dies" abilities, also made up. */
+const triggered = (id, name, manaCost, power, toughness, trigger, text, effects, target) => Object.freeze({
+  id,
+  name,
+  manaCost,
+  types: [CARD_TYPE.CREATURE],
+  power,
+  toughness,
+  triggeredAbilities: [{ id: trigger, text, trigger, effects, ...(target ? { target } : {}) }],
+  text,
+});
+
+export const SAMPLE_TRIGGERS = Object.freeze({
+  sampleHealer: triggered('sampleHealer', 'Sample Healer', { generic: 1, G: 1 }, 2, 1, TRIGGER.ENTERS_BATTLEFIELD,
+    'When this creature enters, you gain 3 life.', [{ type: EFFECT.GAIN_LIFE, amount: 3 }]),
+  sampleScout: triggered('sampleScout', 'Sample Scout', { generic: 1, G: 1 }, 1, 1, TRIGGER.ENTERS_BATTLEFIELD,
+    'When this creature enters, draw a card.', [{ type: EFFECT.DRAW_CARDS, count: 1 }]),
+  sampleSniper: triggered('sampleSniper', 'Sample Sniper', { generic: 2, G: 1 }, 2, 2, TRIGGER.ENTERS_BATTLEFIELD,
+    'When this creature enters, it deals 1 damage to any target.', [{ type: EFFECT.DEAL_DAMAGE, amount: 1 }], TARGET.ANY),
+  sampleMentor: triggered('sampleMentor', 'Sample Mentor', { generic: 2, G: 1 }, 2, 2, TRIGGER.ENTERS_BATTLEFIELD,
+    'When this creature enters, put a +1/+1 counter on target creature you control.',
+    [{ type: EFFECT.ADD_COUNTERS, counter: '+1/+1', count: 1 }], TARGET.CREATURE_YOU_CONTROL),
+  sampleForager: triggered('sampleForager', 'Sample Forager', { generic: 1, G: 1 }, 2, 1, TRIGGER.ENTERS_BATTLEFIELD,
+    'When this creature enters, create a Food token.', [{ type: EFFECT.CREATE_TOKEN, count: 1, token: TOKEN.FOOD }]),
+  sampleMartyr: triggered('sampleMartyr', 'Sample Martyr', { G: 1 }, 1, 1, TRIGGER.DIES,
+    'When this creature dies, draw a card.', [{ type: EFFECT.DRAW_CARDS, count: 1 }]),
+  sampleSporeling: triggered('sampleSporeling', 'Sample Sporeling', { generic: 1, G: 1 }, 2, 2, TRIGGER.DIES,
+    'When this creature dies, create two 1/1 green Saproling creature tokens.',
+    [{ type: EFFECT.CREATE_TOKEN, count: 2, token: { colors: ['green'], subtypes: ['Saproling'], power: 1, toughness: 1 } }]),
+  sampleBomber: triggered('sampleBomber', 'Sample Bomber', { generic: 1, G: 1 }, 1, 1, TRIGGER.DIES,
+    'When this creature dies, it deals 2 damage to any target.', [{ type: EFFECT.DEAL_DAMAGE, amount: 2 }], TARGET.ANY),
+  sampleAltar: {
+    id: 'sampleAltar', name: 'Sample Altar of Bones', manaCost: { generic: 1, G: 1 }, types: [CARD_TYPE.ENCHANTMENT],
+    abilities: [{
+      id: 'sacrifice', text: 'Sacrifice a creature: You gain 1 life.', cost: { sacrifice: TARGET.CREATURE },
+      effects: [{ type: EFFECT.GAIN_LIFE, amount: 1 }],
+    }],
+    text: 'Sacrifice a creature: You gain 1 life.',
+  },
+});
+
+/** 40 cards: 16 Forests, 6 Llanowar Elves and two of each of the 9 sample cards above. */
+export const SAMPLE_TRIGGERS_DECK = Object.freeze([
+  ...Array(16).fill('forest'),
+  ...Array(6).fill('llanowarElves'),
+  ...Object.keys(SAMPLE_TRIGGERS).flatMap((id) => [id, id]),
 ]);

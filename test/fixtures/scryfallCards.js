@@ -188,6 +188,28 @@ export const FIXTURES = {
   gildedLotus: card({
     name: 'Gilded Lotus', mana_cost: '{5}', type_line: 'Artifact', oracle_text: '{T}: Add three mana of any one color.',
   }),
+  // Triggered abilities
+  elvishVisionary: card({
+    name: 'Elvish Visionary', mana_cost: '{1}{G}', type_line: 'Creature — Elf Shaman',
+    oracle_text: 'When Elvish Visionary enters the battlefield, draw a card.', power: '1', toughness: '1',
+  }),
+  wallOfOmens: card({
+    name: 'Wall of Omens', mana_cost: '{1}{W}', type_line: 'Creature — Wall', keywords: ['Defender'],
+    oracle_text: 'Defender\nWhen this creature enters, draw a card.', power: '0', toughness: '4',
+  }),
+  flametongueKavu: card({
+    name: 'Flametongue Kavu', mana_cost: '{3}{R}', type_line: 'Creature — Kavu',
+    oracle_text: 'When Flametongue Kavu enters, it deals 4 damage to target creature.', power: '4', toughness: '2',
+  }),
+  doomedTraveler: card({
+    name: 'Doomed Traveler', mana_cost: '{W}', type_line: 'Creature — Human Soldier',
+    oracle_text: 'When Doomed Traveler dies, create a 1/1 white Spirit creature token with flying.', power: '1', toughness: '1',
+  }),
+  bloodArtist: card({
+    name: 'Blood Artist', mana_cost: '{1}{B}', type_line: 'Creature — Vampire',
+    oracle_text: 'Whenever Blood Artist or another creature dies, target player loses 1 life and you gain 1 life.',
+    power: '0', toughness: '1',
+  }),
   jaceBeleren: card({
     name: 'Jace Beleren', mana_cost: '{1}{U}{U}', type_line: 'Legendary Planeswalker — Jace',
     oracle_text: '+2: Each player draws a card.\n−1: Target player draws a card.\n−10: Target player mills twenty cards.',

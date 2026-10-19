@@ -2,7 +2,7 @@ import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
   DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
-  SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, isAura,
+  SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, isAura,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -41,6 +41,7 @@ const DECKS = {
   permanents: SAMPLE_PERMANENTS_DECK,
   spells: SAMPLE_SPELLS_DECK,
   effects: SAMPLE_EFFECTS_DECK,
+  triggers: SAMPLE_TRIGGERS_DECK,
 };
 
 const CONTROLLER_KINDS = {
@@ -72,7 +73,7 @@ function newGame() {
     players: PLAYERS,
     startingPlayerId: ui.startingPlayer.value,
     seed,
-    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS },
+    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS, ...SAMPLE_TRIGGERS },
     decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
   });
   window.game = game;
@@ -267,6 +268,8 @@ function decisionPrompt(decision) {
       return `Declare blockers: choose a blocker for each attacker, then confirm.${
         menace ? ' A creature with menace needs two or more blockers, or none.' : ''}`;
     }
+    case DECISION.CHOOSE_TARGETS:
+      return `${decision.sourceName}: choose a target for "${decision.text}"`;
     case DECISION.ASSIGN_COMBAT_DAMAGE:
       return `Divide ${decision.attackerId}'s ${decision.power} damage among its blockers.`;
     default:
@@ -427,6 +430,7 @@ function actionLabel(action, card, state) {
     case ACTION.ACTIVATE_ABILITY:
       return `${card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId}${targetLabel(action, state)}`;
     case ACTION.DISCARD: return 'Discard';
+    case ACTION.CHOOSE_TARGETS: return `Target${targetLabel(action, state)}`;
     default: return action.type;
   }
 }
@@ -477,6 +481,9 @@ function summarize(name, p) {
     case 'attached': return `${p.cardName} (${p.cardId}) attached to ${p.attachedTo}`;
     case 'unattached': return `${p.cardName} (${p.cardId}) unattached from ${p.from}`;
     case 'permanentToGraveyard': return `${p.cardName} (${p.cardId}) went to the graveyard (${p.reason})`;
+    case 'abilityTriggered': return `${p.sourceName} (${p.sourceId}) triggered: ${p.text}`;
+    case 'triggeredAbilityPutOnStack': return `${p.sourceId}'s ability → stack (${p.stackObjectId})${p.targets.length ? ` targeting ${p.targets.join(', ')}` : ''}`;
+    case 'triggeredAbilityRemoved': return `${p.sourceId}'s ability was removed: ${p.reason}`;
     case 'stackObjectFizzled': return `${p.stackObjectId}: ${p.reason}`;
     case 'damageDealt': return `${p.sourceId} → ${p.targetPlayerId ? who(p.targetPlayerId) : p.targetCardId}: ${p.amount}`;
     case 'permanentDestroyed': return `${p.cardName} (${p.cardId}) destroyed by ${p.sourceId}`;

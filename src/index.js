@@ -4,18 +4,18 @@ export {
 } from './engine/Game.js';
 export {
   ACTION, passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
-  setBlocker, confirmBlockers, assignCombatDamage, discard,
+  setBlocker, confirmBlockers, assignCombatDamage, discard, chooseTargets,
 } from './engine/actions.js';
 export { PHASE, STEP, PHASE_NAMES, STEP_NAMES, TURN_STRUCTURE } from './engine/turnStructure.js';
 export {
-  CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, COUNTER, EFFECT, KEYWORD, ACTIVATION_TIMING,
+  CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, COUNTER, EFFECT, KEYWORD, ACTIVATION_TIMING, TRIGGER,
   isArtifact, isEnchantment, isAura, isEquipment, isInstant, isSorcery, isPermanentCard,
   TARGETED_EFFECTS, HARMFUL_EFFECTS, SPELL_TARGETS, PLAYER_TARGETS, effectAffects, isHarmfulEffect, abilityEffects,
   matchesPermanentKind, TOKEN, TOKENS, COLORS_OF_MANA, needsManaColor, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword,
 } from './cards/cards.js';
 export {
   SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS, SAMPLE_SPELLS_DECK,
-  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK,
+  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK,
 } from './cards/sampleCards.js';
 export { EMBLEMS, DEFAULT_EMBLEMS } from './cards/emblems.js';
 export {

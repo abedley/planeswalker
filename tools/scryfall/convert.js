@@ -11,6 +11,8 @@
  * - activated abilities, "<cost>: <effect>", made of the costs and effect sentences
  *   in rulesText.js (including mana abilities such as "{T}: Add {G}."), optionally
  *   followed by "Activate only as a sorcery."
+ * - triggered abilities "When this creature enters, <effect>." and "When this creature
+ *   dies, <effect>.", with the same effect sentences
  * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>."
  * - Equipment: "Equipped creature gets +N/+N and has <keywords>." and "Equip {N}"
  * - Instants and sorceries made only of supported effect sentences (at most one
@@ -18,7 +20,7 @@
  * Anything else, such as other rules text, is reported as unsupported.
  */
 import {
-  CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, ACTIVATION_TIMING, equipAbility,
+  CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, ACTIVATION_TIMING, TRIGGER, equipAbility,
 } from '../../src/cards/cards.js';
 import {
   normalizeSelfReferences, parseManaSymbols, parseKeywordList, parseEffects, parseCost, sentences, SUPPORTED_KEYWORDS,
@@ -51,6 +53,27 @@ function parseTypeLine(typeLine) {
 }
 
 const lower = (s) => s.toLowerCase();
+
+/**
+ * "When ~ enters, <effect>." / "When ~ dies, <effect>." (603.1) -> a triggered
+ * ability, `{ ability: null }` if its effect isn't supported, or null if the line
+ * isn't one.
+ */
+function parseTriggeredAbility(line, normalized, problems) {
+  const match = /^When ~ (enters(?: the battlefield)?|dies), (.+)$/.exec(normalized);
+  if (!match) return null;
+  const trigger = match[1] === 'dies' ? TRIGGER.DIES : TRIGGER.ENTERS_BATTLEFIELD;
+  // "When ~ enters, you gain 2 life." -> "You gain 2 life."; "it deals ..." means the permanent.
+  const effectText = (match[2][0].toUpperCase() + match[2].slice(1)).replace(/^It /, '~ ');
+  const { effects, target, failed } = parseEffects(effectText, problems);
+  if (failed) problems.push(`Unsupported rules text: "${line}"`);
+  if (failed || effects.length === 0) return { ability: null };
+  return {
+    ability: {
+      id: trigger, text: line, trigger, ...(effects.length === 1 ? { effect: effects[0] } : { effects }), ...(target ? { target } : {}),
+    },
+  };
+}
 
 /**
  * "<cost>: <effect>" (602.1) -> an activated ability, or null if the line isn't
@@ -114,6 +137,7 @@ function parseAttachedBonus(line, problems) {
 function parseOracleText(card, typeInfo, problems) {
   const keywords = [];
   const abilities = [];
+  const triggeredAbilities = [];
   const staticAbilities = [];
   const effects = [];
   const spellTargets = [];
@@ -158,6 +182,16 @@ function parseOracleText(card, typeInfo, problems) {
         }
         effects.push(...parsed.effects);
         if (parsed.target) spellTargets.push(parsed.target);
+      }
+      continue;
+    }
+
+    const triggered = parseTriggeredAbility(withoutReminder, normalized, problems);
+    if (triggered) {
+      if (triggered.ability && triggeredAbilities.some((a) => a.id === triggered.ability.id)) {
+        problems.push(`More than one ${triggered.ability.trigger} ability isn't supported: "${line}"`);
+      } else if (triggered.ability) {
+        triggeredAbilities.push(triggered.ability);
       }
       continue;
     }
@@ -217,7 +251,7 @@ function parseOracleText(card, typeInfo, problems) {
   if (spellTargets.length > 1) problems.push(`More than one target isn't supported: "${card.oracle_text}"`);
   if (isSpellCard && effects.length === 0 && !problems.length) problems.push('An instant or sorcery needs rules text.');
   return {
-    keywords: [...new Set(keywords)], abilities, staticAbilities, enchant, effects, spellTarget: spellTargets[0] ?? null, additionalCost,
+    keywords: [...new Set(keywords)], abilities, triggeredAbilities, staticAbilities, enchant, effects, spellTarget: spellTargets[0] ?? null, additionalCost,
   };
 }
 
@@ -262,7 +296,7 @@ export function convertScryfallCard(card) {
   }
 
   const {
-    keywords, abilities, staticAbilities, enchant, effects, spellTarget, additionalCost,
+    keywords, abilities, triggeredAbilities, staticAbilities, enchant, effects, spellTarget, additionalCost,
   } = parseOracleText(card, typeInfo, problems);
   const knownSubtypes = { [SUBTYPE.AURA]: CARD_TYPE.ENCHANTMENT, [SUBTYPE.EQUIPMENT]: CARD_TYPE.ARTIFACT };
   for (const [subtype, type] of Object.entries(knownSubtypes)) {
@@ -283,6 +317,7 @@ export function convertScryfallCard(card) {
     ...(isCreature ? { power, toughness } : {}),
     ...(keywords.length ? { keywords } : {}),
     ...(abilities.length ? { abilities } : {}),
+    ...(triggeredAbilities.length ? { triggeredAbilities } : {}),
     ...(enchant ? { enchant } : {}),
     ...(effects.length ? { effects } : {}),
     ...(spellTarget ? { target: spellTarget } : {}),

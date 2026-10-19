@@ -33,6 +33,10 @@ draw and gain-life effects. Instants can be cast in response to other spells. Tr
 
 The *Costs & effects sampler* deck (`SAMPLE_EFFECTS` / `SAMPLE_EFFECTS_DECK`) shows them off.
 
+**Triggered abilities:** "When this permanent enters, …" and "When this creature dies, …", with
+any of the effects above. Try the *Triggered abilities sampler* deck (`SAMPLE_TRIGGERS` /
+`SAMPLE_TRIGGERS_DECK`).
+
 **Where this game differs from Magic:** each player has innate planeswalker-style abilities,
 granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
 or nothing. For now every player starts with one emblem, **Planeswalker**, with
@@ -78,6 +82,9 @@ A card is only imported if the engine supports everything it does:
 - Its rules text is only:
   - supported keywords
   - activated abilities, "<cost>: <effect>", optionally ending "Activate only as a sorcery."
+  - triggered abilities, "When CARDNAME enters [the battlefield], <effect>" and "When CARDNAME
+    dies, <effect>". Elvish Visionary, Wall of Omens, Flametongue Kavu and Doomed Traveler
+    import; Blood Artist ("Whenever … another creature dies") doesn't.
   - for Auras and Equipment, "Enchant creature", "Enchanted/Equipped creature gets +N/+N and
     has …" and "Equip {N}"
 - For instants and sorceries, every sentence must be a supported effect, with at most one
@@ -190,6 +197,7 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | `{ type: 'CONFIRM_BLOCKERS', playerId }` | declare blockers step: locks in the blocks |
 | `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | a combat damage step (`'assignCombatDamage'`), when an attacker has more than one legal split: several blockers, or trample. `assignment` maps blocker ids (and, with trample, the defending player's id) to damage. There is one entry per legal split |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
+| `{ type: 'CHOOSE_TARGETS', playerId, targets }` | a triggered ability with more than one legal target is being put on the stack (`'chooseTargets'`); its controller picks one. There is one entry per legal target |
 
 An action is accepted only if it equals one of `state.validActions`.
 
@@ -212,6 +220,7 @@ The `state` event payload includes `players[]`, each with `life`, `library`, `ha
   `damagedByDeathtouch`, `counters` (e.g. `{ '+1/+1': 2 }`), `abilities` and `keywords`, and
   creatures also carry `power` and `toughness`. Tokens have `token: true` and `colors`
 - `stack`: spells and abilities; the last element is the top
+- `pendingTriggers`: abilities that have triggered but aren't on the stack yet
 - `combat`: `declaredAttackers` (ids), and `attackers: [{ cardId, defendingPlayerId, blocked, blockerIds, damageAssignment }]`
 - `pendingDecision` `status` (`notStarted` / `inProgress` /
 `gameOver`), `winnerId`, and the turn and priority fields.
@@ -260,6 +269,8 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `stackObjectFizzled` | `stackObjectId`, `reason` | a spell or ability's targets are all illegal |
 | `drawFromEmptyLibrary` / `playerLost` / `gameEnded` | `playerId` / `reason` / `winnerId` | a player decks out |
 | `actionAccepted` / `actionRejected` | `action` (+ `reason`) | an action is processed |
+| `abilityTriggered` | the trigger: `id`, `sourceId`, `sourceName`, `controllerId`, `trigger`, `text`, `effects`, `targetKind` | a triggered ability triggers |
+| `triggeredAbilityPutOnStack` / `triggeredAbilityRemoved` | `triggerId`, `sourceId`, `stackObjectId`, `targets` / `reason` | it's put on the stack, or removed for lack of a legal target |
 | `state` | full snapshot incl. `validActions`, `version` | the game is waiting for input |
 
 `game.onAny((name, payload) => ...)` receives every event.
@@ -425,6 +436,24 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
 
   These add power, toughness and keywords. Combat and keyword rules use the recalculated
   values.
+- Triggered abilities (603): `triggeredAbilities: [{ id, text, trigger, effects, target? }]`,
+  where `trigger` is `entersBattlefield` (603.6a) or `dies` (700.4: put into a graveyard from the
+  battlefield, by any means, including tokens). Being exiled or returned to hand isn't dying.
+  - When the event happens, the ability triggers (`abilityTriggered`, `state.pendingTriggers`).
+    The next time a player would receive priority, after state-based actions, it goes on the
+    stack (603.3). Its controller is the permanent's controller at the time.
+  - Several at once go on in APNAP order (603.3b): the active player's first, so the other
+    player's end up on top and resolve first. A player's own triggers go on in the order they
+    triggered; choosing that order isn't modelled.
+  - Targets are chosen as it goes on the stack (603.3d):
+    - With no legal target, it's removed.
+    - With one, that one is used.
+    - With more, its controller gets a `chooseTargets` decision, and priority waits until
+      they've chosen.
+  - A dies ability works even though its source is gone (603.10a), but an effect on the source
+    itself then does nothing.
+  - During the cleanup step, abilities that trigger wait until a player next gets priority;
+    the extra cleanup step of 514.3a isn't modelled.
 - State-based actions are checked before a player receives priority (117.5), and repeated until
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).
   A player loses at 0 life (704.5a), or after trying to draw from an empty library (704.5b). The
@@ -450,7 +479,7 @@ Spells and non-mana abilities are scored effect by effect:
 - **Counted against:** hurting itself, and paying sacrifices or life (sacrificing a token is
   cheap).
 
-It casts the best-scoring option when the score is positive. It cracks Clues and eats Food when
+It casts the best-scoring option when the score is positive. It picks targets for its triggered abilities the same way. It cracks Clues and eats Food when
 it has spare mana, which it values more when its life is low. It taps lands and Elves before
 sacrificing Treasures, and picks the Treasure's color its hand needs most. It activates abilities in its
 main phase, and taps mana on the opponent's turn only for instants. That lets it counter the

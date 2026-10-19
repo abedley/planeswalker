@@ -17,6 +17,8 @@
  *   - `effects`: see EFFECT, applied in order on resolution (608.2c)
  *   - `timing`: `'sorcery'` to allow activation only at sorcery speed (default: any time with priority)
  *   - `target`: a TARGET kind, for abilities that target (e.g. equip)
+ * - `triggeredAbilities` (603): `{ id, text, trigger, effects, target? }`, where
+ *   `trigger` is a TRIGGER value. Effects and targets work as for activated abilities.
  * - `enchant`: for Auras, the TARGET kind the Aura can enchant (303.4a)
  * - Instants and sorceries: `effects` (applied in order on resolution) and an
  *   optional `target` (a TARGET kind) that effects such as damage use
@@ -175,6 +177,14 @@ export const isHarmfulEffect = (effect) => HARMFUL_EFFECTS.has(effect.type)
 
 /** An ability's effects, whether written as `effects` or a single `effect`. */
 export const abilityEffects = (ability) => ability.effects ?? (ability.effect ? [ability.effect] : []);
+
+/** What a triggered ability triggers on (603.1), always about the permanent itself. */
+export const TRIGGER = Object.freeze({
+  /** "When this permanent enters" (603.6a). */
+  ENTERS_BATTLEFIELD: 'entersBattlefield',
+  /** "When this creature dies": put into a graveyard from the battlefield (700.4, 603.10a). */
+  DIES: 'dies',
+});
 
 export const ACTIVATION_TIMING = Object.freeze({
   /** Any time the player has priority (602.2). */

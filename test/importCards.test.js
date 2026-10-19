@@ -7,7 +7,7 @@ import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.j
 import { importCards } from '../tools/import-cards.js';
 import { readImportedCards, writeImportedCards } from '../tools/scryfall/importedModule.js';
 import {
-  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN,
+  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER,
 } from '../src/index.js';
 import { FIXTURES } from './fixtures/scryfallCards.js';
 
@@ -83,7 +83,6 @@ test('reports variable power/toughness, unsupported keywords and mana symbols', 
   assert.deepEqual(problems('kitchenFinks'), [
     'Unsupported mana symbol {G/W} in the mana cost.',
     'Unsupported mana symbol {G/W} in the mana cost.',
-    'Unsupported rules text: "When Kitchen Finks enters, you gain 2 life."',
     'Unsupported keyword: persist.',
   ]);
 });
@@ -359,4 +358,47 @@ test('imported Birds of Paradise and Big Score work in a game', () => {
     game.getState().validActions.filter((a) => a.cardId === birds).map((a) => a.manaColor),
     ['W', 'U', 'B', 'R', 'G'],
   );
+});
+
+test('converts "enters" and "dies" triggered abilities', () => {
+  const triggersOf = (key) => convert(key).definition.triggeredAbilities;
+  // Older Oracle wording ("enters the battlefield") and newer ("this creature enters") both work.
+  assert.deepEqual(triggersOf('elvishVisionary'), [{
+    id: TRIGGER.ENTERS_BATTLEFIELD, text: 'When Elvish Visionary enters the battlefield, draw a card.',
+    trigger: TRIGGER.ENTERS_BATTLEFIELD, effect: { type: 'drawCards', count: 1 },
+  }]);
+  const wall = convert('wallOfOmens').definition;
+  assert.deepEqual([wall.keywords, wall.triggeredAbilities[0].effect], [['defender'], { type: 'drawCards', count: 1 }]);
+  assert.deepEqual(triggersOf('flametongueKavu')[0], {
+    id: TRIGGER.ENTERS_BATTLEFIELD, text: 'When Flametongue Kavu enters, it deals 4 damage to target creature.',
+    trigger: TRIGGER.ENTERS_BATTLEFIELD, effect: { type: 'dealDamage', amount: 4 }, target: TARGET.CREATURE,
+  });
+  assert.deepEqual(triggersOf('doomedTraveler')[0], {
+    id: TRIGGER.DIES, text: 'When Doomed Traveler dies, create a 1/1 white Spirit creature token with flying.',
+    trigger: TRIGGER.DIES,
+    effect: { type: 'createToken', count: 1, token: { colors: ['white'], subtypes: ['Spirit'], power: 1, toughness: 1, keywords: ['flying'] } },
+  });
+  assert.deepEqual(problems('bloodArtist'), [`Unsupported rules text: "${FIXTURES.bloodArtist.oracle_text}"`]);
+});
+
+test('an imported Flametongue Kavu has to target itself when it\'s the only creature', () => {
+  const { cards } = importCards([FIXTURES.flametongueKavu, FIXTURES.mountain]);
+  // Free to cast, so the test is about the trigger rather than the mana.
+  cards.flametongueKavu = { ...cards.flametongueKavu, manaCost: {} };
+  const deck = ['flametongueKavu', ...Array(39).fill('mountain')];
+  const game = new Game({
+    players: [{ id: 'p1' }, { id: 'p2' }], cards, shuffleLibraries: false, decks: { p1: deck, p2: deck }, emblems: { p1: [], p2: [] },
+  });
+  game.start();
+  const pass = () => game.dispatch(passPriority(game.getState().priorityPlayerId));
+  pass();
+  pass();
+  const kavu = game.getState().players[0].hand.find((c) => c.cardId === 'flametongueKavu').id;
+  assert.deepEqual(game.dispatch(castSpell('p1', kavu)), { ok: true });
+  pass();
+  pass();
+  assert.deepEqual(game.getState().stack[0].targets, [kavu]);
+  pass();
+  pass();
+  assert.ok(game.getState().players[0].graveyard.some((c) => c.id === kavu));
 });

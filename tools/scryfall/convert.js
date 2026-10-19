@@ -4,14 +4,18 @@
  *
  * Only cards the engine fully supports are converted. Everything a card does must
  * be one of:
- * - a land or creature (no other card types, no supertypes except Basic)
+ * - a land, creature, artifact or enchantment (no supertypes except Basic)
  * - a mana cost of generic and/or W, U, B, R, G, C symbols
  * - numeric power and toughness
  * - supported keywords (see KEYWORD in src/cards/cards.js)
  * - mana abilities of the form "{T}: Add {G}." (any mix of W, U, B, R, G, C symbols)
+ * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>."
+ * - Equipment: "Equipped creature gets +N/+N and has <keywords>." and "Equip {N}"
  * Anything else, such as other rules text, is reported as unsupported.
  */
-import { KEYWORD, CARD_TYPE, EFFECT } from '../../src/cards/cards.js';
+import {
+  KEYWORD, CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, equipAbility,
+} from '../../src/cards/cards.js';
 
 const SUPPORTED_KEYWORDS = new Set(Object.values(KEYWORD));
 const SUPPORTED_TYPES = new Set(Object.values(CARD_TYPE));
@@ -75,12 +79,40 @@ function parseManaAbility(line, problems) {
 }
 
 /**
+ * "Enchanted creature gets +2/+2 and has flying and trample." -> a static ability,
+ * or null if the line isn't one.
+ */
+function parseAttachedBonus(line, problems) {
+  const match = /^(Enchanted|Equipped) creature (?:gets ([+-]\d+)\/([+-]\d+))?(?: and )?(?:has (.+))?\.$/.exec(line);
+  if (!match || (!match[2] && !match[4])) return null;
+  const keywords = (match[4] ?? '').split(/,\s*(?:and\s+)?|\s+and\s+/).map(lower).filter(Boolean);
+  const unsupported = keywords.filter((k) => !SUPPORTED_KEYWORDS.has(k));
+  for (const k of unsupported) problems.push(`Unsupported keyword granted: ${k}.`);
+  if (unsupported.length) return { kind: match[1], effect: null };
+  return {
+    kind: match[1],
+    effect: {
+      affected: AFFECTED.ATTACHED_PERMANENT,
+      ...(match[2] && Number(match[2]) ? { power: Number(match[2]) } : {}),
+      ...(match[3] && Number(match[3]) ? { toughness: Number(match[3]) } : {}),
+      ...(keywords.length ? { keywords } : {}),
+    },
+  };
+}
+
+/**
  * Splits rules text into keywords and abilities, reporting any line that isn't
- * a supported keyword list or mana ability.
+ * a supported keyword list, mana ability, or Aura/Equipment line.
  */
 function parseOracleText(card, typeInfo, problems) {
   const keywords = [];
   const abilities = [];
+  const staticAbilities = [];
+  let enchant = null;
+  const isAuraCard = typeInfo.subtypes.includes(SUBTYPE.AURA);
+  const isEquipmentCard = typeInfo.subtypes.includes(SUBTYPE.EQUIPMENT);
+  // Keywords handled below as Aura/Equipment rules rather than as creature keywords.
+  const handledKeywords = new Set();
   const lines = (card.oracle_text ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
   for (const line of lines) {
@@ -100,6 +132,32 @@ function parseOracleText(card, typeInfo, problems) {
       continue;
     }
 
+    // 303.4a: "Enchant creature" on an Aura.
+    if (/^Enchant /.test(withoutReminder)) {
+      handledKeywords.add('enchant');
+      if (withoutReminder === 'Enchant creature' && isAuraCard) enchant = TARGET.CREATURE;
+      else problems.push(`Unsupported rules text: "${line}"`);
+      continue;
+    }
+
+    // 702.6a: "Equip {N}" on Equipment.
+    const equip = /^Equip ((?:\{[^}]+\})+)$/.exec(withoutReminder);
+    if (equip) {
+      handledKeywords.add('equip');
+      const mana = parseManaSymbols(equip[1], problems, `"${withoutReminder}"`);
+      if (isEquipmentCard) abilities.push(equipAbility(mana, withoutReminder));
+      else problems.push(`Unsupported rules text: "${line}"`);
+      continue;
+    }
+
+    const bonus = parseAttachedBonus(withoutReminder, problems);
+    if (bonus) {
+      const fits = bonus.kind === 'Enchanted' ? isAuraCard : isEquipmentCard;
+      if (!fits) problems.push(`Unsupported rules text: "${line}"`);
+      else if (bonus.effect) staticAbilities.push(bonus.effect);
+      continue;
+    }
+
     // A keyword line: "Flying, vigilance" or "First strike".
     const parts = withoutReminder.split(/,\s*/).map(lower);
     const scryfallKeywords = new Set((card.keywords ?? []).map(lower));
@@ -115,11 +173,12 @@ function parseOracleText(card, typeInfo, problems) {
   // Scryfall also lists keywords and keyword actions separately; check them too.
   for (const keyword of card.keywords ?? []) {
     const k = lower(keyword);
-    if (!SUPPORTED_KEYWORDS.has(k) && !problems.some((p) => p.toLowerCase().includes(k))) {
+    if (!SUPPORTED_KEYWORDS.has(k) && !handledKeywords.has(k) && !problems.some((p) => p.toLowerCase().includes(k))) {
       problems.push(`Unsupported keyword: ${k}.`);
     }
   }
-  return { keywords: [...new Set(keywords)], abilities };
+  if (isAuraCard && !enchant && !problems.length) problems.push('An Aura needs "Enchant creature".');
+  return { keywords: [...new Set(keywords)], abilities, staticAbilities, enchant };
 }
 
 /**
@@ -162,7 +221,11 @@ export function convertScryfallCard(card) {
     }
   }
 
-  const { keywords, abilities } = parseOracleText(card, typeInfo, problems);
+  const { keywords, abilities, staticAbilities, enchant } = parseOracleText(card, typeInfo, problems);
+  const knownSubtypes = { [SUBTYPE.AURA]: CARD_TYPE.ENCHANTMENT, [SUBTYPE.EQUIPMENT]: CARD_TYPE.ARTIFACT };
+  for (const [subtype, type] of Object.entries(knownSubtypes)) {
+    if (typeInfo.subtypes.includes(subtype) && !typeInfo.types.includes(type)) problems.push(`Unsupported: ${subtype} that isn't an ${type}.`);
+  }
   if (keywords.length && !isCreature) problems.push('Keywords on non-creatures are not supported.');
 
   if (problems.length) return { ok: false, name, problems };
@@ -171,13 +234,16 @@ export function convertScryfallCard(card) {
   const definition = {
     id,
     name,
-    ...(isCreature ? { manaCost: manaCost ?? {} } : {}),
+    ...(!isLand ? { manaCost: manaCost ?? {} } : {}),
     supertypes: typeInfo.supertypes,
     types: typeInfo.types,
     subtypes: typeInfo.subtypes,
     ...(isCreature ? { power, toughness } : {}),
     ...(keywords.length ? { keywords } : {}),
     ...(abilities.length ? { abilities } : {}),
+    ...(enchant ? { enchant } : {}),
+    ...(staticAbilities.length ? { staticAbilities } : {}),
+    text: card.oracle_text ?? '',
     // Provenance, for reference only.
     typeLine: card.type_line,
     oracleText: card.oracle_text ?? '',

@@ -1,7 +1,7 @@
 import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
-  DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK,
+  DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, isAura,
 } from '../src/index.js';
 
 const PLAYERS = [
@@ -37,6 +37,7 @@ const ui = {
 const DECKS = {
   standard: DEFAULT_DECK,
   sampler: SAMPLE_DECK,
+  permanents: SAMPLE_PERMANENTS_DECK,
 };
 
 const CONTROLLER_KINDS = {
@@ -68,7 +69,7 @@ function newGame() {
     players: PLAYERS,
     startingPlayerId: ui.startingPlayer.value,
     seed,
-    cards: SAMPLE_CARDS,
+    cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS },
     decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
   });
   window.game = game;
@@ -275,6 +276,12 @@ function combatTags(card, state) {
   if (blocking) tags.push(`blocking ${blocking.cardId}`);
   if (decision?.type === DECISION.DECLARE_ATTACKERS && decision.attackers.includes(card.id)) tags.push('will attack');
   if (decision?.type === DECISION.DECLARE_BLOCKERS && decision.blocks[card.id]) tags.push(`will block ${decision.blocks[card.id]}`);
+  // Attachments: what this is attached to, and what's attached to it.
+  const nameOf = (id) => state.battlefield.find((p) => p.id === id)?.name ?? id;
+  if (card.attachedTo) tags.push(`attached to ${nameOf(card.attachedTo)} (${card.attachedTo})`);
+  for (const attachment of state.battlefield.filter((p) => p.attachedTo === card.id)) {
+    tags.push(`${isAura(attachment) ? 'enchanted by' : 'equipped with'} ${attachment.name}`);
+  }
   return tags;
 }
 
@@ -284,7 +291,12 @@ function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
     const buttons = actionsFor(card);
     const details = [];
     if (card.manaCost) details.push(formatMana(card.manaCost));
-    if (isCreature(card)) details.push(`${card.power}/${card.toughness}`);
+    if (isCreature(card)) {
+      const changed = card.base && (card.base.power !== card.power || card.base.toughness !== card.toughness);
+      details.push(`${card.power}/${card.toughness}${changed ? ` (base ${card.base.power}/${card.base.toughness})` : ''}`);
+    }
+    const rulesText = card.text || (card.abilities ?? []).map((a) => a.text).join('\n');
+    const textLines = rulesText ? [el('span', { className: 'card-text', textContent: rulesText })] : [];
     const keywords = card.keywords?.length ? [el('span', { className: 'card-keywords', textContent: card.keywords.join(', ') })] : [];
     const status = [];
     if (card.damage) status.push(`${card.damage} damage`);
@@ -297,6 +309,7 @@ function cardRow(cards, actionsFor, emptyText, tagsFor = () => []) {
       el('span', { className: 'card-name', textContent: card.name }),
       el('span', { className: 'card-id', textContent: [card.id, ...details].join(' · ') }),
       ...keywords,
+      ...textLines,
       ...status.map((text) => el('span', { className: 'card-status', textContent: text })),
       ...buttons,
     ]);
@@ -360,11 +373,20 @@ function renderStack(state) {
   ))));
 }
 
+function targetLabel(action, state) {
+  if (!action.targets?.length) return '';
+  const names = action.targets.map((id) => {
+    const target = state.battlefield.find((p) => p.id === id);
+    return target ? `${target.name} (${id})` : id;
+  });
+  return ` → ${names.join(', ')}`;
+}
+
 function actionLabel(action, card, state) {
   switch (action.type) {
     case ACTION.PASS_PRIORITY: return 'Pass priority';
     case ACTION.PLAY_LAND: return 'Play';
-    case ACTION.CAST_SPELL: return `Cast ${formatMana(card?.manaCost)}`;
+    case ACTION.CAST_SPELL: return `Cast ${formatMana(card?.manaCost)}${targetLabel(action, state)}`;
     case ACTION.TOGGLE_ATTACKER:
       return state.pendingDecision.attackers.includes(action.cardId) ? 'Cancel attack' : 'Attack';
     case ACTION.CONFIRM_ATTACKERS: return `Confirm attackers (${state.pendingDecision.attackers.length})`;
@@ -374,7 +396,7 @@ function actionLabel(action, card, state) {
       return Object.entries(action.assignment)
         .map(([id, n]) => `${n} to ${PLAYERS.some((p) => p.id === id) ? playerName(id) : id}`).join(', ');
     case ACTION.ACTIVATE_ABILITY:
-      return card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId;
+      return `${card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId}${targetLabel(action, state)}`;
     case ACTION.DISCARD: return 'Discard';
     default: return action.type;
   }
@@ -423,6 +445,10 @@ function summarize(name, p) {
     case 'combatDamageDealt': return (Object.keys(p.lifeGained ?? {}).length
       ? `${Object.entries(p.lifeGained).map(([id, n]) => `${who(id)} gained ${n}`).join(', ')}; ` : '') + p.damage.map((d) => `${d.sourceId} → ${d.targetPlayerId ? who(d.targetPlayerId) : d.targetCardId}: ${d.amount}`).join(', ') || 'no damage';
     case 'lifeGained': return `${who(p.playerId)} gained ${p.amount} (life ${p.life})`;
+    case 'attached': return `${p.cardName} (${p.cardId}) attached to ${p.attachedTo}`;
+    case 'unattached': return `${p.cardName} (${p.cardId}) unattached from ${p.from}`;
+    case 'permanentToGraveyard': return `${p.cardName} (${p.cardId}) went to the graveyard (${p.reason})`;
+    case 'stackObjectFizzled': return `${p.stackObjectId}: ${p.reason}`;
     case 'creatureDied': return `${p.cardName} (${p.cardId}) died`;
     case 'abilityActivated': return `${who(p.playerId)}: ${p.cardName} ${p.text}${p.usesStack ? ' → stack' : ''}`;
     case 'manaAdded': return `${who(p.playerId)} added ${formatMana(p.mana)} (pool ${formatMana(p.manaPool)})`;

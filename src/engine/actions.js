@@ -16,9 +16,13 @@ export const ACTION = Object.freeze({
 
 export const passPriority = (playerId) => ({ type: ACTION.PASS_PRIORITY, playerId });
 export const playLand = (playerId, cardId) => ({ type: ACTION.PLAY_LAND, playerId, cardId });
-export const castSpell = (playerId, cardId) => ({ type: ACTION.CAST_SPELL, playerId, cardId });
-export const activateAbility = (playerId, cardId, abilityId) => (
-  { type: ACTION.ACTIVATE_ABILITY, playerId, cardId, abilityId }
+/** `targets` (an array of ids) is only for spells that target, such as Auras. */
+export const castSpell = (playerId, cardId, targets) => (
+  { type: ACTION.CAST_SPELL, playerId, cardId, ...(targets ? { targets } : {}) }
+);
+/** `targets` (an array of ids) is only for abilities that target, such as equip. */
+export const activateAbility = (playerId, cardId, abilityId, targets) => (
+  { type: ACTION.ACTIVATE_ABILITY, playerId, cardId, abilityId, ...(targets ? { targets } : {}) }
 );
 export const toggleAttacker = (playerId, cardId) => ({ type: ACTION.TOGGLE_ATTACKER, playerId, cardId });
 export const confirmAttackers = (playerId) => ({ type: ACTION.CONFIRM_ATTACKERS, playerId });

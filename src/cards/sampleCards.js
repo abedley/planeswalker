@@ -1,4 +1,6 @@
-import { CARD_TYPE, KEYWORD } from './cards.js';
+import {
+  CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, equipAbility,
+} from './cards.js';
 
 /**
  * Sample creatures with one keyword each, for trying out combat rules (e.g. in the
@@ -26,4 +28,58 @@ export const SAMPLE_CARDS = Object.freeze({
 export const SAMPLE_DECK = Object.freeze([
   ...Array(18).fill('forest'),
   ...Object.keys(SAMPLE_CARDS).flatMap((id) => [id, id]),
+]);
+
+/**
+ * Sample artifacts, enchantments, Auras and Equipment. Like the creatures above,
+ * they're made up for trying out the rules.
+ */
+export const SAMPLE_PERMANENTS = Object.freeze({
+  sampleTalisman: {
+    id: 'sampleTalisman', name: 'Sample Talisman', manaCost: { generic: 1 }, types: [CARD_TYPE.ARTIFACT],
+    abilities: [{ id: 'tapForG', text: '{T}: Add {G}.', cost: { tap: true }, effect: { type: EFFECT.ADD_MANA, mana: { G: 1 } } }],
+    text: '{T}: Add {G}.',
+  },
+  sampleGolem: {
+    id: 'sampleGolem', name: 'Sample Golem', manaCost: { generic: 2 },
+    types: [CARD_TYPE.ARTIFACT, CARD_TYPE.CREATURE], subtypes: ['Golem'], power: 2, toughness: 2,
+  },
+  sampleAltar: {
+    id: 'sampleAltar', name: 'Sample Altar', manaCost: { G: 1 }, types: [CARD_TYPE.ENCHANTMENT],
+    abilities: [{ id: 'gainLife', text: '{2}: You gain 1 life.', cost: { mana: { generic: 2 } }, effect: { type: EFFECT.GAIN_LIFE, amount: 1 } }],
+    text: '{2}: You gain 1 life.',
+  },
+  sampleMight: {
+    id: 'sampleMight', name: 'Sample Might', manaCost: { G: 1 },
+    types: [CARD_TYPE.ENCHANTMENT], subtypes: [SUBTYPE.AURA], enchant: TARGET.CREATURE,
+    staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, toughness: 2, keywords: [KEYWORD.TRAMPLE] }],
+    text: 'Enchant creature\nEnchanted creature gets +2/+2 and has trample.',
+  },
+  sampleWings: {
+    id: 'sampleWings', name: 'Sample Wings', manaCost: { G: 1 },
+    types: [CARD_TYPE.ENCHANTMENT], subtypes: [SUBTYPE.AURA], enchant: TARGET.CREATURE,
+    staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, toughness: 1, keywords: [KEYWORD.FLYING] }],
+    text: 'Enchant creature\nEnchanted creature gets +0/+1 and has flying.',
+  },
+  sampleBlade: {
+    id: 'sampleBlade', name: 'Sample Blade', manaCost: { generic: 1 },
+    types: [CARD_TYPE.ARTIFACT], subtypes: [SUBTYPE.EQUIPMENT],
+    staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, keywords: [KEYWORD.FIRST_STRIKE] }],
+    abilities: [equipAbility({ generic: 1 })],
+    text: 'Equipped creature gets +2/+0 and has first strike.\nEquip {1}',
+  },
+  sampleMail: {
+    id: 'sampleMail', name: 'Sample Mail', manaCost: { generic: 2 },
+    types: [CARD_TYPE.ARTIFACT], subtypes: [SUBTYPE.EQUIPMENT],
+    staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, toughness: 2, keywords: [KEYWORD.VIGILANCE] }],
+    abilities: [equipAbility({ generic: 2 })],
+    text: 'Equipped creature gets +0/+2 and has vigilance.\nEquip {2}',
+  },
+});
+
+/** 40 cards: 17 Forests, 9 Llanowar Elves and two of each sample permanent. */
+export const SAMPLE_PERMANENTS_DECK = Object.freeze([
+  ...Array(17).fill('forest'),
+  ...Array(9).fill('llanowarElves'),
+  ...Object.keys(SAMPLE_PERMANENTS).flatMap((id) => [id, id]),
 ]);

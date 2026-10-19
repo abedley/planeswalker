@@ -11,6 +11,11 @@ of 20 Forests and 20 Elves, shuffles it, and draws 7 cards.
 Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
 blockers, divide combat damage, and discard when the cleanup step asks them to.
 
+**Artifacts, enchantments, Auras and Equipment** are implemented too, with targeting,
+attachments and "enchanted/equipped creature gets +N/+N and has …" bonuses. The debugger has an
+*Artifacts & enchantments sampler* deck (`SAMPLE_PERMANENTS` / `SAMPLE_PERMANENTS_DECK`) to try
+them.
+
 **Where this game differs from Magic:** each player has innate planeswalker-style abilities,
 granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
 or nothing. For now every player starts with one emblem, **Planeswalker**, with
@@ -49,10 +54,13 @@ npm run import-cards -- --dry-run "Birds of Paradise"      # report only, write 
 ```
 
 A card is only imported if the engine supports everything it does:
-- It's a single-faced creature or land with no supertype other than Basic.
+- It's a single-faced creature, land, artifact or enchantment, with no supertype other than
+  Basic.
 - Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
 - Its power and toughness are fixed numbers.
-- Its rules text is only supported keywords and "{T}: Add …" mana abilities.
+- Its rules text is only supported keywords, "{T}: Add …" mana abilities, and for Auras and
+  Equipment "Enchant creature", "Enchanted/Equipped creature gets +N/+N and has …" and
+  "Equip {N}".
 
 Every other card is skipped, and the report says what isn't supported, for example:
 
@@ -123,8 +131,8 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | --- | --- |
 | `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
 | `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
-| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated |
-| `{ type: 'CAST_SPELL', playerId, cardId }` | sorcery timing (the player's main phase, with priority and an empty stack) and the mana cost is already in their pool. There is one entry per castable card |
+| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId, targets? }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated, and one per legal target for abilities that target (e.g. equip) |
+| `{ type: 'CAST_SPELL', playerId, cardId, targets? }` | sorcery timing (the player's main phase, with priority and an empty stack) and the mana cost is already in their pool. There is one entry per castable card; an Aura has one entry per creature it could enchant, with `targets: [creatureId]` |
 | `{ type: 'TOGGLE_ATTACKER', playerId, cardId }` | declare attackers step (`pendingDecision.type === 'declareAttackers'`): adds the creature to, or removes it from, `pendingDecision.attackers`. There is one entry per creature that can attack |
 | `{ type: 'CONFIRM_ATTACKERS', playerId }` | declare attackers step: locks in the attack, which can be empty |
 | `{ type: 'SET_BLOCKER', playerId, cardId, attackerId }` | declare blockers step (`'declareBlockers'`): the creature blocks that attacker, or blocks nothing when `attackerId` is `null`. Updates `pendingDecision.blocks` |
@@ -285,6 +293,24 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
     id for trample.
   - Other keywords aren't implemented yet.
 - Damage on creatures wears off in the cleanup step (514.2).
+- Artifacts and enchantments (301, 303) are cast with sorcery timing and resolve onto the
+  battlefield. Summoning sickness only affects creatures, so a noncreature artifact can use {T}
+  abilities right away. An artifact creature is both types.
+- Targets (115): spells and abilities that target list one valid action per legal target. When
+  one resolves, its targets are checked again, and if they're all illegal it doesn't resolve
+  (608.2b). A spell that doesn't resolve goes to its owner's graveyard (`stackObjectFizzled`).
+  Target kinds so far: `creature` and `creatureYouControl`.
+- Auras (303.4): "Enchant creature" Auras target a creature when cast and enter attached to it.
+  An Aura that's attached to nothing, or to something it can't enchant, goes to its owner's
+  graveyard (704.5m).
+- Equipment (301.5): enters unattached. "Equip {N}" (702.6) is a sorcery-speed ability that
+  targets a creature you control. It uses the stack and moves the Equipment if it's already
+  attached. If the creature leaves, the Equipment stays on the battlefield, unattached (704.5n).
+- Continuous effects (613): each permanent keeps its printed `base` power, toughness and
+  keywords. The current values are recalculated whenever something enters, leaves, or is
+  attached. So far the only effects are static abilities on attached Auras and Equipment
+  (`affected: 'attachedPermanent'`), which add power, toughness and keywords. Combat and
+  keyword rules use the recalculated values.
 - State-based actions are checked before a player receives priority (117.5), and repeated until
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).
   A player loses at 0 life (704.5a), or after trying to draw from an empty library (704.5b). The
@@ -300,7 +326,8 @@ creatures for building combat scenarios.
 The basic AI (`BasicAIController`, `strategy: 'basic'`) plays lands and casts Elves. It attacks
 with everything when it has more creatures ready than the opponent has untapped blockers, and
 otherwise blocks one-for-one to trade. It uses emblem abilities that cost nothing. It only makes legal blocks: flyers only with flying or
-reach, and menace with two blockers or none. With trample, it sends as much damage to the player
+reach, and menace with two blockers or none. It casts artifacts and enchantments, puts Auras
+only on its own creatures, equips loose Equipment, and taps enough mana for generic costs. With trample, it sends as much damage to the player
 as it can. `strategy: 'passive'` only passes and makes empty
 declarations.
 

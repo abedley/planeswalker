@@ -64,4 +64,34 @@ export const FIXTURES = {
     oracle_text: 'When Kitchen Finks enters, you gain 2 life.\nPersist (When this creature dies, if it had no -1/-1 counters on it, return it to the battlefield under its owner\'s control with a -1/-1 counter on it.)',
     keywords: ['Persist'], power: '3', toughness: '2',
   }),
+  solRing: card({ name: 'Sol Ring', mana_cost: '{1}', type_line: 'Artifact', oracle_text: '{T}: Add {C}{C}.' }),
+  holyStrength: card({
+    name: 'Holy Strength', mana_cost: '{W}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature gets +1/+2.', keywords: ['Enchant'],
+  }),
+  arcaneFlight: card({
+    name: 'Arcane Flight', mana_cost: '{U}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature gets +1/+1 and has flying.', keywords: ['Enchant'],
+  }),
+  rancor: card({
+    name: 'Rancor', mana_cost: '{G}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature gets +2/+0 and has trample.\nWhen Rancor is put into a graveyard from the battlefield, return Rancor to its owner\'s hand.',
+    keywords: ['Enchant'],
+  }),
+  pacifism: card({
+    name: 'Pacifism', mana_cost: '{1}{W}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature can\'t attack or block.', keywords: ['Enchant'],
+  }),
+  bonesplitter: card({
+    name: 'Bonesplitter', mana_cost: '{1}', type_line: 'Artifact — Equipment',
+    oracle_text: 'Equipped creature gets +2/+0.\nEquip {1}', keywords: ['Equip'],
+  }),
+  lightningGreaves: card({
+    name: 'Lightning Greaves', mana_cost: '{2}', type_line: 'Artifact — Equipment',
+    oracle_text: 'Equipped creature has haste and shroud. (It can\'t be the target of spells or abilities.)\nEquip {0}',
+    keywords: ['Equip'],
+  }),
+  gloriousAnthem: card({
+    name: 'Glorious Anthem', mana_cost: '{1}{W}{W}', type_line: 'Enchantment', oracle_text: 'Creatures you control get +1/+1.',
+  }),
 };

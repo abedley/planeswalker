@@ -466,7 +466,7 @@ function startWithForest(options) {
 test('a Forest on the battlefield offers its mana ability', () => {
   const { game } = startWithForest();
   const forest = game.getState().battlefield[0];
-  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true }]);
+  assert.deepEqual(forest.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, timing: 'instant', target: null }]);
   assert.deepEqual(
     game.getState().validActions.filter((a) => a.type === ACTION.ACTIVATE_ABILITY),
     [{ type: ACTION.ACTIVATE_ABILITY, playerId: 'p1', cardId: forest.id, abilityId: 'tapForG' }],
@@ -697,7 +697,7 @@ test('Llanowar Elves is a 1/1 for {G} with "{T}: Add {G}."', () => {
     { manaCost: elves.manaCost, types: elves.types, subtypes: elves.subtypes, power: elves.power, toughness: elves.toughness },
     { manaCost: { G: 1 }, types: ['Creature'], subtypes: ['Elf', 'Druid'], power: 1, toughness: 1 },
   );
-  assert.deepEqual(elves.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true }]);
+  assert.deepEqual(elves.abilities, [{ id: 'tapForG', text: '{T}: Add {G}.', isManaAbility: true, cost: { tap: true }, timing: 'instant', target: null }]);
 });
 
 test('casting a creature needs {G} in the pool and sorcery timing', () => {

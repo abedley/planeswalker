@@ -3,7 +3,8 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, isLand, isCreature, isManaAbility, hasKeyword,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED,
+  isLand, isCreature, isAura, isEquipment, isManaAbility, hasKeyword,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
 import { emptyManaPool, addMana, planManaPayment, manaPoolTotal, MANA_TYPES } from './mana.js';
@@ -255,10 +256,18 @@ export class Game extends EventEmitter {
       }
     }
     if (this.#hasSorceryTiming(holder)) {
+      // 307.1 / 301.1 / 302.1 / 303.1: permanent spells are cast at sorcery speed.
       const pool = this.#zones.get(holder).manaPool;
       for (const card of hand.filter((c) => !isLand(c))) {
-        if (planManaPayment(pool, card.manaCost)) {
+        if (!planManaPayment(pool, card.manaCost)) continue;
+        const { enchant } = this.#cardDefinitions[card.cardId];
+        if (!enchant) {
           actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id });
+          continue;
+        }
+        // 303.4a / 601.2c: an Aura spell targets what it will enchant; one action per legal target.
+        for (const target of this.#legalTargets(enchant, holder, card.id)) {
+          actions.push({ type: ACTION.CAST_SPELL, playerId: holder, cardId: card.id, targets: [target.id] });
         }
       }
     }
@@ -270,10 +279,16 @@ export class Game extends EventEmitter {
     ];
     for (const source of sources) {
       for (const ability of this.#abilitiesOf(source)) {
-        if (this.#canActivate(holder, source, ability)) {
-          actions.push({
-            type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: source.id, abilityId: ability.id,
-          });
+        if (!this.#canActivate(holder, source, ability)) continue;
+        const base = { type: ACTION.ACTIVATE_ABILITY, playerId: holder, cardId: source.id, abilityId: ability.id };
+        if (!ability.target) {
+          actions.push(base);
+          continue;
+        }
+        for (const target of this.#legalTargets(ability.target, holder, source.id)) {
+          // Attaching to what it's already attached to would do nothing (701.3b).
+          if (ability.effect.type === EFFECT.ATTACH && source.attachedTo === target.id) continue;
+          actions.push({ ...base, targets: [target.id] });
         }
       }
     }
@@ -351,8 +366,8 @@ export class Game extends EventEmitter {
     switch (action.type) {
       case ACTION.PASS_PRIORITY: this.#passPriority(playerId); break;
       case ACTION.PLAY_LAND: this.#playLand(playerId, cardId); break;
-      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId); break;
-      case ACTION.ACTIVATE_ABILITY: this.#activateAbility(playerId, cardId, action.abilityId); break;
+      case ACTION.CAST_SPELL: this.#castSpell(playerId, cardId, action.targets); break;
+      case ACTION.ACTIVATE_ABILITY: this.#activateAbility(playerId, cardId, action.abilityId, action.targets); break;
       case ACTION.TOGGLE_ATTACKER: this.#toggleAttacker(cardId); break;
       case ACTION.CONFIRM_ATTACKERS: this.#confirmAttackers(); break;
       case ACTION.SET_BLOCKER: this.#setBlocker(cardId, action.attackerId); break;
@@ -427,10 +442,16 @@ export class Game extends EventEmitter {
       supertypes: [...(definition.supertypes ?? [])],
       types: [...definition.types],
       subtypes: [...(definition.subtypes ?? [])],
-      abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => (
-        { id, text, isManaAbility: isManaAbility(ability) }
-      )),
+      abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => ({
+        id,
+        text,
+        isManaAbility: isManaAbility(ability),
+        cost: structuredClone(ability.cost),
+        timing: ability.timing ?? ACTIVATION_TIMING.INSTANT,
+        target: ability.target ?? null,
+      })),
       keywords: [...(definition.keywords ?? [])],
+      text: definition.text ?? definition.oracleText ?? '',
       ownerId,
     };
     if (isCreature(definition)) Object.assign(card, { power: definition.power, toughness: definition.toughness });
@@ -473,17 +494,31 @@ export class Game extends EventEmitter {
 
   #putOntoBattlefield(card, controllerId) {
     const permanent = {
-      ...card, controllerId, tapped: false, summoningSick: true, damage: 0, damagedByDeathtouch: false,
+      ...card,
+      controllerId,
+      tapped: false,
+      summoningSick: true,
+      damage: 0,
+      damagedByDeathtouch: false,
+      attachedTo: null,
+      // Printed values; power, toughness and keywords are recalculated from these (613).
+      base: { power: card.power, toughness: card.toughness, keywords: [...card.keywords] },
     };
     this.#battlefield.push(permanent);
+    this.#applyContinuousEffects();
     return permanent;
   }
 
   /** Moves a permanent to its owner's graveyard, stripping battlefield-only state. */
   #putIntoGraveyard(permanent) {
     this.#battlefield.splice(this.#battlefield.indexOf(permanent), 1);
-    const { controllerId, tapped, summoningSick, damage, damagedByDeathtouch, ...card } = permanent;
+    const {
+      controllerId, tapped, summoningSick, damage, damagedByDeathtouch, attachedTo, base, ...card
+    } = permanent;
+    // 400.7: it becomes a new object with its printed characteristics.
+    Object.assign(card, base.power === undefined ? { keywords: base.keywords } : base);
     this.#zones.get(card.ownerId).graveyard.push(card);
+    this.#applyContinuousEffects();
     // 506.4: a permanent that leaves the battlefield is removed from combat.
     this.#combat.attackers = this.#combat.attackers.filter((a) => a.cardId !== permanent.id);
     for (const attacker of this.#combat.attackers) {
@@ -562,7 +597,7 @@ export class Game extends EventEmitter {
     return payment;
   }
 
-  #castSpell(playerId, cardId) {
+  #castSpell(playerId, cardId, targets) {
     // 601.2a: the card moves from hand to the stack; 601.2h: its cost is paid.
     // (Mana must already be in the pool; activating mana abilities mid-cast isn't modelled.)
     const zone = this.#zones.get(playerId);
@@ -575,11 +610,12 @@ export class Game extends EventEmitter {
       sourceName: card.name,
       text: card.name,
       card,
+      ...(targets ? { targets: [...targets] } : {}),
     };
     this.#stack.push(stackObject);
     const manaPaid = this.#payMana(playerId, card.manaCost);
     this.#emitEvent('spellCast', {
-      playerId, cardId, cardName: card.name, manaPaid, stackObjectId: stackObject.id,
+      playerId, cardId, cardName: card.name, manaPaid, stackObjectId: stackObject.id, targets: targets ?? [],
     });
     // 117.3c: the caster receives priority.
     this.#resetPasses();
@@ -622,7 +658,7 @@ export class Game extends EventEmitter {
     return paid;
   }
 
-  #activateAbility(playerId, cardId, abilityId) {
+  #activateAbility(playerId, cardId, abilityId, targets) {
     const permanent = this.#findSource(cardId);
     const ability = this.#abilitiesOf(permanent).find((a) => a.id === abilityId);
     const costPaid = this.#payCost(playerId, permanent, ability.cost);
@@ -650,9 +686,12 @@ export class Game extends EventEmitter {
       abilityId,
       text: ability.text,
       effect: structuredClone(ability.effect),
+      ...(targets ? { targets: [...targets], targetKind: ability.target } : {}),
     };
     this.#stack.push(stackObject);
-    this.#emitEvent('abilityActivated', { ...activation, usesStack: true, stackObjectId: stackObject.id });
+    this.#emitEvent('abilityActivated', {
+      ...activation, usesStack: true, stackObjectId: stackObject.id, targets: targets ?? [],
+    });
     // 117.3c: the player who activated the ability receives priority.
     this.#givePriority(playerId);
   }
@@ -661,12 +700,23 @@ export class Game extends EventEmitter {
     // 608.2: the top object resolves.
     const stackObject = this.#stack.pop();
     this.#emitEvent('stackObjectResolving', { stackObject: structuredClone(stackObject) });
-    if (stackObject.kind === 'spell') {
+    const { controllerId, targets = [] } = stackObject;
+    const targetKind = stackObject.targetKind
+      ?? (stackObject.kind === 'spell' ? this.#cardDefinitions[stackObject.card.cardId].enchant : null);
+    const legalTargets = targets.filter((id) => this.#isLegalTarget(targetKind, id, controllerId, stackObject.sourceId));
+
+    if (targets.length > 0 && legalTargets.length === 0) {
+      // 608.2b: with every target illegal, it doesn't resolve. A spell goes to its owner's graveyard.
+      if (stackObject.kind === 'spell') this.#zones.get(stackObject.card.ownerId).graveyard.push(stackObject.card);
+      this.#emitEvent('stackObjectFizzled', { stackObjectId: stackObject.id, reason: 'All targets are illegal.' });
+    } else if (stackObject.kind === 'spell') {
       // 608.3: a permanent spell enters the battlefield under its controller's control.
-      const permanent = this.#putOntoBattlefield(stackObject.card, stackObject.controllerId);
-      this.#emitEvent('permanentEntered', { playerId: stackObject.controllerId, card: structuredClone(permanent) });
+      const permanent = this.#putOntoBattlefield(stackObject.card, controllerId);
+      // 303.4f: an Aura spell enters attached to the object it targeted.
+      if (isAura(permanent)) this.#attach(permanent, legalTargets[0]);
+      this.#emitEvent('permanentEntered', { playerId: controllerId, card: structuredClone(permanent) });
     } else {
-      this.#applyEffect(stackObject.effect, stackObject.controllerId);
+      this.#applyEffect(stackObject.effect, controllerId, { sourceId: stackObject.sourceId, targets: legalTargets });
     }
     this.#emitEvent('stackObjectResolved', { stackObjectId: stackObject.id });
     // 117.3b: after resolution, the active player receives priority.
@@ -674,8 +724,14 @@ export class Game extends EventEmitter {
     this.#givePriority(this.#activePlayerId);
   }
 
-  #applyEffect(effect, controllerId) {
+  #applyEffect(effect, controllerId, { sourceId, targets = [] } = {}) {
     switch (effect.type) {
+      case EFFECT.ATTACH: {
+        // 701.3a: attach the source to the target; nothing happens if the source has left.
+        const source = this.#permanent(sourceId);
+        if (source && source.controllerId === controllerId) this.#attach(source, targets[0]);
+        break;
+      }
       case EFFECT.ADD_MANA: {
         const pool = this.#zones.get(controllerId).manaPool;
         addMana(pool, effect.mana);
@@ -693,6 +749,81 @@ export class Game extends EventEmitter {
       }
       default:
         throw new Error(`Unknown effect type: ${effect.type}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Targets, attachments and continuous effects (Comprehensive Rules 115, 301.5, 303.4, 613)
+
+  #isLegalTarget(kind, id, controllerId, sourceId) {
+    const permanent = this.#permanent(id);
+    if (!permanent || id === sourceId) return false;
+    switch (kind) {
+      case TARGET.CREATURE: return isCreature(permanent);
+      case TARGET.CREATURE_YOU_CONTROL: return isCreature(permanent) && permanent.controllerId === controllerId;
+      default: throw new Error(`Unknown target kind: ${kind}`);
+    }
+  }
+
+  #legalTargets(kind, controllerId, sourceId) {
+    return this.#battlefield.filter((p) => this.#isLegalTarget(kind, p.id, controllerId, sourceId));
+  }
+
+  /** Whether an attached Aura or Equipment is attached to something it legally can be. */
+  #isLegallyAttached(permanent) {
+    const host = this.#permanent(permanent.attachedTo);
+    if (!host || host.id === permanent.id) return false;
+    // 303.4a: an Aura's enchant ability says what it can be attached to.
+    if (isAura(permanent)) {
+      const { enchant } = this.#cardDefinitions[permanent.cardId];
+      return enchant === TARGET.CREATURE ? isCreature(host) : false;
+    }
+    // 301.5c: Equipment can be attached only to a creature.
+    if (isEquipment(permanent)) return isCreature(host);
+    return false;
+  }
+
+  #attach(permanent, hostId) {
+    const from = permanent.attachedTo;
+    permanent.attachedTo = hostId;
+    this.#emitEvent('attached', { cardId: permanent.id, cardName: permanent.name, attachedTo: hostId, from });
+    this.#applyContinuousEffects();
+  }
+
+  #unattach(permanent) {
+    const from = permanent.attachedTo;
+    permanent.attachedTo = null;
+    this.#emitEvent('unattached', { cardId: permanent.id, cardName: permanent.name, from });
+    this.#applyContinuousEffects();
+  }
+
+  /**
+   * 613: recalculates every permanent's power, toughness and keywords from its
+   * printed values plus continuous effects. Only ability-adding (layer 6) and
+   * power/toughness changes (layer 7c) exist so far, and those don't depend on
+   * the order they're applied in.
+   */
+  #applyContinuousEffects() {
+    for (const permanent of this.#battlefield) {
+      permanent.keywords = [...permanent.base.keywords];
+      if (permanent.base.power !== undefined) {
+        permanent.power = permanent.base.power;
+        permanent.toughness = permanent.base.toughness;
+      }
+    }
+    for (const source of this.#battlefield) {
+      for (const effect of this.#cardDefinitions[source.cardId].staticAbilities ?? []) {
+        if (effect.affected !== AFFECTED.ATTACHED_PERMANENT || !source.attachedTo) continue;
+        const host = this.#permanent(source.attachedTo);
+        if (!host) continue;
+        if (isCreature(host)) {
+          host.power += effect.power ?? 0;
+          host.toughness += effect.toughness ?? 0;
+        }
+        for (const keyword of effect.keywords ?? []) {
+          if (!host.keywords.includes(keyword)) host.keywords.push(keyword);
+        }
+      }
     }
   }
 
@@ -953,7 +1084,23 @@ export class Game extends EventEmitter {
       const dying = this.#battlefield.filter((p) => isCreature(p) && (
         p.toughness <= 0 || p.damage >= p.toughness || (p.damage > 0 && p.damagedByDeathtouch)
       ));
-      if (losers.length === 0 && dying.length === 0) return false;
+      // 704.5m: an Aura attached to an illegal object, or to nothing, goes to its owner's graveyard.
+      const fallenAuras = this.#battlefield.filter((p) => isAura(p) && !dying.includes(p) && !this.#isLegallyAttached(p));
+      // 704.5n: Equipment attached to an illegal permanent becomes unattached.
+      const looseEquipment = this.#battlefield.filter((p) => (
+        isEquipment(p) && p.attachedTo && !dying.includes(p) && !this.#isLegallyAttached(p)
+      ));
+      if (losers.length === 0 && dying.length === 0 && fallenAuras.length === 0 && looseEquipment.length === 0) {
+        return false;
+      }
+
+      for (const equipment of looseEquipment) this.#unattach(equipment);
+      for (const aura of fallenAuras) {
+        this.#putIntoGraveyard(aura);
+        this.#emitEvent('permanentToGraveyard', {
+          cardId: aura.id, cardName: aura.name, controllerId: aura.controllerId, reason: 'auraNotLegallyAttached',
+        });
+      }
 
       // 704.3: all applicable state-based actions happen simultaneously.
       for (const permanent of dying) {

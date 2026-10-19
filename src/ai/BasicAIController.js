@@ -1,7 +1,9 @@
 import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
-import { isCreature, hasKeyword, KEYWORD } from '../cards/cards.js';
+import {
+  isCreature, isLand, isAura, isEquipment, hasKeyword, manaValue, KEYWORD,
+} from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
 
 export const AI_STRATEGY = Object.freeze({
@@ -82,24 +84,45 @@ export class BasicAIController extends EventEmitter {
 
     const permanents = state.battlefield.filter((p) => p.controllerId === this.#playerId);
     const me = state.players.find((p) => p.id === this.#playerId);
-    const isManaSource = (a) => permanents.find((p) => p.id === a.cardId)
-      ?.abilities.find((ab) => ab.id === a.abilityId)?.isManaAbility;
-    const castable = me.hand.filter((c) => isCreature(c));
-    const wantsToCast = castable.length > 0
-      && state.activePlayerId === this.#playerId
-      && [ 'precombatMain', 'postcombatMain' ].includes(state.phase)
-      && state.stack.length === 0;
-
+    const myCreatures = new Set(permanents.filter(isCreature).map((p) => p.id));
+    const abilityOf = (a) => permanents.find((p) => p.id === a.cardId)?.abilities.find((ab) => ab.id === a.abilityId);
+    const isManaSource = (a) => abilityOf(a)?.isManaAbility;
+    // The sample Auras and Equipment are all bonuses: only put them on our own creatures.
+    const onOwnCreatures = (a) => (a.targets ?? []).every((id) => myCreatures.has(id));
+    const unattachedEquipment = permanents.filter((p) => isEquipment(p) && !p.attachedTo);
+    const isEquipForLooseEquipment = (a) => abilityOf(a)?.id === 'equip'
+      && unattachedEquipment.some((e) => e.id === a.cardId) && onOwnCreatures(a);
     // Emblem abilities that cost nothing are free value.
     const isFreeEmblemAbility = (a) => me.emblems.find((e) => e.id === a.cardId)
       ?.abilities.find((ab) => ab.id === a.abilityId && Object.keys(ab.cost).length === 0);
 
     return find(ACTION.PLAY_LAND)
-      ?? find(ACTION.CAST_SPELL)
+      ?? find(ACTION.CAST_SPELL, onOwnCreatures)
+      ?? find(ACTION.ACTIVATE_ABILITY, isEquipForLooseEquipment)
       ?? find(ACTION.ACTIVATE_ABILITY, isFreeEmblemAbility)
-      // Only make mana when there's a creature to spend it on.
-      ?? (wantsToCast && manaPoolTotal(me.manaPool) === 0 ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
+      // Only make mana when there's something affordable to spend it on.
+      ?? (this.#wantsMana(state, me, permanents, myCreatures, unattachedEquipment, mine.filter(isManaSource).length)
+        ? find(ACTION.ACTIVATE_ABILITY, isManaSource) : null)
       ?? find(ACTION.PASS_PRIORITY);
+  }
+
+  /**
+   * Whether to tap another mana source: at sorcery timing, when there's a spell
+   * (or an equip for loose Equipment) we'd use whose cost we could reach with the
+   * sources still untapped, but can't pay from the pool yet.
+   */
+  #wantsMana(state, me, permanents, myCreatures, unattachedEquipment, untappedSources) {
+    const sorceryTiming = state.activePlayerId === this.#playerId
+      && ['precombatMain', 'postcombatMain'].includes(state.phase)
+      && state.stack.length === 0;
+    if (!sorceryTiming || untappedSources === 0) return false;
+    const costs = [
+      ...me.hand.filter((c) => !isLand(c) && (!isAura(c) || myCreatures.size > 0)).map((c) => c.manaCost),
+      ...(myCreatures.size > 0 ? unattachedEquipment : [])
+        .map((e) => e.abilities.find((ab) => ab.id === 'equip')?.cost.mana).filter(Boolean),
+    ];
+    const available = manaPoolTotal(me.manaPool) + untappedSources;
+    return costs.some((cost) => manaValue(cost) <= available && manaValue(cost) > manaPoolTotal(me.manaPool));
   }
 
   /** Attack with everything if we have more ready creatures than they have untapped blockers. */

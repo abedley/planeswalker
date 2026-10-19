@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.js';
 import { importCards } from '../tools/import-cards.js';
 import { readImportedCards, writeImportedCards } from '../tools/scryfall/importedModule.js';
-import { Game, castSpell, activateAbility, playLand, passPriority, PHASE } from '../src/index.js';
+import { Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET } from '../src/index.js';
 import { FIXTURES } from './fixtures/scryfallCards.js';
 
 const convert = (key) => convertScryfallCard(FIXTURES[key]);
@@ -31,7 +31,7 @@ test('converts a vanilla creature with a generic mana cost', () => {
     {
       id: 'grizzlyBears', name: 'Grizzly Bears', manaCost: { generic: 1, G: 1 },
       supertypes: [], types: ['Creature'], subtypes: ['Bear'], power: 2, toughness: 2,
-      typeLine: 'Creature — Bear', oracleText: '', scryfallId: undefined, scryfallUri: undefined,
+      text: '', typeLine: 'Creature — Bear', oracleText: '', scryfallId: undefined, scryfallUri: undefined,
     },
   );
 });
@@ -135,4 +135,39 @@ test('imported cards work in a game', () => {
   const bears = hand().find((c) => c.cardId === 'grizzlyBears');
   assert.deepEqual([bears.power, bears.toughness, bears.manaCost], [2, 2, { generic: 1, G: 1 }]);
   assert.equal(game.dispatch(castSpell('p1', bears.id)).ok, false); // needs {G}
+});
+
+test('converts artifacts, Auras and Equipment', () => {
+  const solRing = convert('solRing').definition;
+  assert.deepEqual([solRing.types, solRing.manaCost], [['Artifact'], { generic: 1 }]);
+  assert.deepEqual(solRing.abilities[0].effect.mana, { C: 2 });
+
+  const holyStrength = convert('holyStrength').definition;
+  assert.deepEqual([holyStrength.types, holyStrength.subtypes, holyStrength.enchant], [['Enchantment'], ['Aura'], TARGET.CREATURE]);
+  assert.deepEqual(holyStrength.staticAbilities, [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 1, toughness: 2 }]);
+
+  const bonesplitter = convert('bonesplitter').definition;
+  assert.deepEqual(bonesplitter.staticAbilities, [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2 }]);
+  assert.deepEqual(bonesplitter.abilities.map((a) => [a.id, a.text, a.cost, a.target]),
+    [['equip', 'Equip {1}', { mana: { generic: 1 } }, TARGET.CREATURE_YOU_CONTROL]]);
+
+  assert.deepEqual(convert('arcaneFlight').definition.staticAbilities,
+    [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 1, toughness: 1, keywords: ['flying'] }]);
+});
+
+test('reports Aura and Equipment text the engine can\'t do', () => {
+  assert.deepEqual(problems('rancor'), [
+    'Unsupported rules text: "When Rancor is put into a graveyard from the battlefield, return Rancor to its owner\'s hand."',
+  ]);
+  assert.deepEqual(problems('pacifism'), ['Unsupported rules text: "Enchanted creature can\'t attack or block."']);
+  assert.deepEqual(problems('lightningGreaves'), ['Unsupported keyword granted: shroud.']);
+  assert.deepEqual(problems('gloriousAnthem'), ['Unsupported rules text: "Creatures you control get +1/+1."']);
+});
+
+test('imported Auras and Equipment work in a game', () => {
+  const { cards } = importCards([FIXTURES.holyStrength, FIXTURES.grizzlyBears]);
+  assert.ok(cards.holyStrength && cards.grizzlyBears);
+  const game = new Game({ players: [{ id: 'p1' }, { id: 'p2' }], cards, seed: 1 });
+  game.start();
+  assert.equal(game.getState().status, 'inProgress');
 });

@@ -18,6 +18,7 @@ import {
   SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK,
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
+import { LegacyAIController } from '../src/ai/LegacyAIController.js';
 
 export const DECKS = {
   standard: { deck: DEFAULT_DECK, cards: {} },
@@ -35,7 +36,10 @@ export const DECKS = {
  */
 export const CONTESTANTS = {
   basic: (playerId) => basicPolicy(playerId, AI_STRATEGY.BASIC),
-  legacy: (playerId) => basicPolicy(playerId, AI_STRATEGY.BASIC), // the same as basic until it improves
+  legacy: (playerId) => {
+    const ai = new LegacyAIController({ game: null, playerId });
+    return (state) => ai.chooseAction(state);
+  },
   passive: (playerId) => basicPolicy(playerId, AI_STRATEGY.PASSIVE),
 };
 

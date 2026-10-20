@@ -3,7 +3,7 @@
  * Plays AIs against each other to measure their strength. Node-only; the site
  * never loads it.
  *
- *   node tools/ai-arena.js <ai> <ai> [--games N] [--decks standard,effects,...] [--seed S]
+ *   node tools/ai-arena.js <ai> <ai> [--games N] [--decks standard,effects,...] [--seed S] [--workers N]
  *   node tools/ai-arena.js basic legacy --games 100
  *
  * Every deck is played as a mirror match. Each seed is played twice with the seats
@@ -19,6 +19,8 @@ import {
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
 import { LegacyAIController } from '../src/ai/LegacyAIController.js';
+import { searchPolicy } from '../src/ai/search.js';
+import { HAND_WEIGHTS } from '../src/ai/evaluate.js';
 
 export const DECKS = {
   standard: { deck: DEFAULT_DECK, cards: {} },
@@ -41,7 +43,29 @@ export const CONTESTANTS = {
     return (state) => ai.chooseAction(state);
   },
   passive: (playerId) => basicPolicy(playerId, AI_STRATEGY.PASSIVE),
+  greedy: (playerId) => searchPolicy(playerId, { algorithm: 'greedy', determinizations: 8 }),
+  search: (playerId) => searchPolicy(playerId, { algorithm: 'ismcts', budgetMs: 150 }),
 };
+
+/**
+ * A contestant by name, with optional search settings after a colon:
+ * `greedy:d=8,h=2` (determinizations, horizon in turns), `search:b=150,h=2,m=1,w=hand`
+ * (budget in ms, horizon, margin over the basic AI's choice, hand-picked weights).
+ */
+export function contestant(name) {
+  const [base, settings = ''] = name.split(':');
+  if (!settings) return CONTESTANTS[base];
+  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin' };
+  const options = Object.fromEntries(settings.split(',').map((pair) => {
+    const [key, value] = pair.split('=');
+    // w=hand: the hand-picked evaluation weights instead of the tuned ones.
+    if (key === 'w') return ['weights', value === 'hand' ? HAND_WEIGHTS : undefined];
+    return [keys[key] ?? key, Number(value)];
+  }));
+  const algorithm = { greedy: 'greedy', search: 'ismcts' }[base];
+  if (!algorithm) return undefined;
+  return (playerId) => searchPolicy(playerId, { algorithm, determinizations: 8, budgetMs: 150, ...options });
+}
 
 function basicPolicy(playerId, strategy) {
   const ai = new BasicAIController({ game: null, playerId, strategy });
@@ -69,7 +93,7 @@ export function playGame({ seats, deck, cards, seed, contestants = CONTESTANTS, 
   const time = { p1: 0, p2: 0 };
   const decisions = { p1: 0, p2: 0 };
   const policies = Object.fromEntries(players.map(({ id }) => {
-    const policy = contestants[seats[id]](id);
+    const policy = (contestants[seats[id]] ?? contestant(seats[id]))(id);
     return [id, (state) => {
       const started = performance.now();
       const action = policy(state, game);
@@ -87,41 +111,77 @@ export function playGame({ seats, deck, cards, seed, contestants = CONTESTANTS, 
   };
 }
 
-/** Plays `games` seeds per deck, each twice with the seats swapped. */
-export function runArena({ a, b, games = 20, decks = Object.keys(DECKS), seed = 1, contestants = CONTESTANTS, onGame }) {
-  const results = [];
-  for (const deckName of decks) {
-    const { deck, cards } = DECKS[deckName];
-    const row = { deck: deckName, aWins: 0, bWins: 0, draws: 0, turns: 0, games: 0 };
-    const time = { [a]: 0, [b]: 0 };
-    const decisions = { [a]: 0, [b]: 0 };
-    for (let i = 0; i < games; i++) {
-      for (const swap of [false, true]) {
-        const seats = swap ? { p1: b, p2: a } : { p1: a, p2: b };
-        const result = playGame({ seats, deck, cards, seed: seed + i, contestants });
-        const winner = result.winnerId ? seats[result.winnerId] : null;
-        if (winner === null) row.draws += 1;
-        // Mirror matches of the same AI count seat p1 as "a".
-        else if (a === b ? result.winnerId === (swap ? 'p2' : 'p1') : winner === a) row.aWins += 1;
-        else row.bWins += 1;
-        row.turns += result.turns;
-        row.games += 1;
-        for (const id of ['p1', 'p2']) {
-          time[seats[id]] += result.time[id];
-          decisions[seats[id]] += result.decisions[id];
-        }
-        onGame?.(deckName, row);
-      }
+/** The games of a match: `games` seeds per deck, each twice with the seats swapped. */
+export function arenaJobs({ a, b, games = 20, decks = Object.keys(DECKS), seed = 1 }) {
+  return decks.flatMap((deck) => Array.from({ length: games }, (_, i) => [false, true].map((swap) => ({
+    deck, seed: seed + i, seats: swap ? { p1: b, p2: a } : { p1: a, p2: b }, swap,
+  }))).flat());
+}
+
+/** Plays one job from arenaJobs(). */
+export function playJob(job, contestants = CONTESTANTS) {
+  const { deck, cards } = DECKS[job.deck];
+  return { job, result: playGame({ seats: job.seats, deck, cards, seed: job.seed, contestants }) };
+}
+
+/** Tallies played jobs into per-deck rows, totals, the first AI's win rate and its 95% interval. */
+export function tally({ a, b }, played) {
+  const rows = new Map();
+  for (const { job, result } of played) {
+    if (!rows.has(job.deck)) rows.set(job.deck, { deck: job.deck, aWins: 0, bWins: 0, draws: 0, turns: 0, games: 0, time: {}, decisions: {} });
+    const row = rows.get(job.deck);
+    const winner = result.winnerId ? job.seats[result.winnerId] : null;
+    if (winner === null) row.draws += 1;
+    // Mirror matches of the same AI count seat p1 as "a".
+    else if (a === b ? result.winnerId === (job.swap ? 'p2' : 'p1') : winner === a) row.aWins += 1;
+    else row.bWins += 1;
+    row.turns += result.turns;
+    row.games += 1;
+    for (const id of ['p1', 'p2']) {
+      const name = job.seats[id];
+      row.time[name] = (row.time[name] ?? 0) + result.time[id];
+      row.decisions[name] = (row.decisions[name] ?? 0) + result.decisions[id];
     }
-    row.msPerDecision = Object.fromEntries(Object.keys(time).map((name) => [name, time[name] / Math.max(1, decisions[name])]));
-    results.push(row);
   }
+  const results = [...rows.values()].map(({ time, decisions, ...row }) => ({
+    ...row,
+    msPerDecision: Object.fromEntries(Object.keys(time).map((name) => [name, time[name] / Math.max(1, decisions[name])])),
+  }));
   const totals = results.reduce((t, r) => ({
     aWins: t.aWins + r.aWins, bWins: t.bWins + r.bWins, draws: t.draws + r.draws, games: t.games + r.games,
   }), { aWins: 0, bWins: 0, draws: 0, games: 0 });
   // Draws count as half a win each.
   const score = totals.aWins + totals.draws / 2;
   return { results, totals, winRate: score / totals.games, interval: wilson(score, totals.games) };
+}
+
+/** Plays a whole match on this thread. */
+export function runArena({ a, b, games = 20, decks, seed = 1, contestants = CONTESTANTS, onGame }) {
+  const played = [];
+  for (const job of arenaJobs({ a, b, games, decks, seed })) {
+    played.push(playJob(job, contestants));
+    onGame?.(job.deck, played.length);
+  }
+  return tally({ a, b }, played);
+}
+
+/** Plays a whole match on `workers` threads. */
+export async function runArenaParallel({ a, b, games = 20, decks, seed = 1, workers = 4, onGame }) {
+  const { Worker } = await import('node:worker_threads');
+  const jobs = arenaJobs({ a, b, games, decks, seed });
+  const played = [];
+  await Promise.all(Array.from({ length: workers }, (_, w) => new Promise((resolve, reject) => {
+    const mine = jobs.filter((_, i) => i % workers === w);
+    if (mine.length === 0) return resolve();
+    const worker = new Worker(new URL('./arena-worker.js', import.meta.url), { workerData: mine });
+    worker.on('message', (entry) => {
+      played.push(entry);
+      onGame?.(entry.job.deck, played.length);
+    });
+    worker.on('error', reject);
+    worker.on('exit', resolve);
+  })));
+  return tally({ a, b }, played);
 }
 
 export function formatReport({ a, b }, { results, totals, winRate, interval }) {
@@ -138,7 +198,7 @@ export function formatReport({ a, b }, { results, totals, winRate, interval }) {
   return lines.join('\n');
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const option = (name, fallback) => {
     const index = args.indexOf(`--${name}`);
@@ -147,11 +207,12 @@ function main() {
     return value;
   };
   const games = Number(option('games', 20));
+  const workers = Number(option('workers', 1));
   const decks = option('decks', Object.keys(DECKS).join(',')).split(',');
   const seed = Number(option('seed', 1));
   const [a = 'basic', b = 'legacy'] = args;
   for (const name of [a, b]) {
-    if (!CONTESTANTS[name]) {
+    if (!contestant(name)) {
       console.error(`Unknown AI "${name}". Known: ${Object.keys(CONTESTANTS).join(', ')}`);
       process.exit(2);
     }
@@ -162,10 +223,11 @@ function main() {
       process.exit(2);
     }
   }
-  const report = runArena({
-    a, b, games, decks, seed,
-    onGame: process.stderr.isTTY ? (deck, row) => process.stderr.write(`\r${deck} ${row.games}/${games * 2}   `) : null,
-  });
+  const total = games * 2 * decks.length;
+  const onGame = process.stderr.isTTY ? (deck, done) => process.stderr.write(`\r${done}/${total} games   `) : null;
+  const report = workers > 1
+    ? await runArenaParallel({ a, b, games, decks, seed, workers, onGame })
+    : runArena({ a, b, games, decks, seed, onGame });
   if (process.stderr.isTTY) process.stderr.write('\r');
   console.log(formatReport({ a, b }, report));
 }

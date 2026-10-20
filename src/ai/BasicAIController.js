@@ -5,7 +5,10 @@ import { STEP, PHASE } from '../engine/turnStructure.js';
 import {
   isCreature, isLand, isInstant, isAura, hasKeyword, manaValue, KEYWORD, EFFECT, isHarmfulEffect,
 } from '../cards/cards.js';
-import { manaPoolTotal, canPayMana, MANA_TYPES } from '../engine/mana.js';
+import { manaPoolTotal, canPayMana } from '../engine/mana.js';
+import {
+  bestBy, manaSources, neededColors, canReach, chooseManaAction,
+} from './manaPlanning.js';
 import {
   creatureValue, planAttack, planBlocks, combatValue, damageWeight,
 } from './combat.js';
@@ -257,18 +260,8 @@ export class BasicAIController extends EventEmitter {
 // -----------------------------------------------------------------------------
 // Helpers
 
-function bestBy(items, score) {
-  let best = items[0];
-  let bestScore = -Infinity;
-  for (const item of items) {
-    const value = score(item);
-    if (value > bestScore) [best, bestScore] = [item, value];
-  }
-  return best;
-}
-
 /** Which acting window this is for `me`, or null when it's a moment to pass. */
-function windowOf(state, me) {
+export function windowOf(state, me) {
   const myTurn = state.activePlayerId === me;
   const top = state.stack[state.stack.length - 1];
   if (top) return top.kind === 'spell' && top.controllerId !== me ? WINDOW.RESPONSE : null;
@@ -400,56 +393,6 @@ function cheapestSacrifice(state, me, cost, sourceId) {
     && (cost.sacrifice !== 'creature' || isCreature(p)));
   if (fodder.length === 0) return -Infinity;
   return Math.max(...fodder.map((p) => costScore(state, me, {}, { sacrifice: [p.id] }, sourceId)));
-}
-
-/** Untapped mana sources: `{ cardId, actions, colors, sacrifices }` from the valid mana actions. */
-function manaSources(state, mine) {
-  const byCard = new Map();
-  for (const action of mine) {
-    if (action.type !== ACTION.ACTIVATE_ABILITY) continue;
-    const source = state.battlefield.find((p) => p.id === action.cardId);
-    const ability = source?.abilities.find((ab) => ab.id === action.abilityId);
-    if (!ability?.isManaAbility) continue;
-    if (!byCard.has(source.id)) {
-      byCard.set(source.id, { cardId: source.id, actions: [], colors: new Set(), sacrifices: !!ability.cost.sacrificeSelf, creature: isCreature(source) });
-    }
-    const entry = byCard.get(source.id);
-    entry.actions.push(action);
-    for (const effect of ability.effects) {
-      if (effect.anyColor) ['W', 'U', 'B', 'R', 'G'].forEach((c) => entry.colors.add(c));
-      for (const type of Object.keys(effect.mana ?? {})) entry.colors.add(type);
-    }
-  }
-  return [...byCard.values()];
-}
-
-/** Colored mana a cost still needs beyond the pool: `{ G: 1, ... }`. */
-function neededColors(cost, pool) {
-  const needed = {};
-  for (const type of MANA_TYPES) {
-    const missing = (cost?.[type] ?? 0) - pool[type];
-    if (missing > 0) needed[type] = missing;
-  }
-  return needed;
-}
-
-/** Whether the pool plus the untapped sources could pay a cost (approximately, per color). */
-function canReach(cost, pool, sources) {
-  if (manaValue(cost) > manaPoolTotal(pool) + sources.length) return false;
-  return Object.entries(neededColors(cost, pool))
-    .every(([type, n]) => sources.filter((s) => s.colors.has(type)).length >= n);
-}
-
-/**
- * Picks a mana ability to activate: one making a color we still need, preferring
- * lands to creatures and anything to sacrificing a Treasure.
- */
-function chooseManaAction(sources, needed) {
-  const rank = (source) => (source.sacrifices ? 10 : 0) + (source.creature ? 1 : 0);
-  const wanted = Object.keys(needed);
-  const useful = wanted.length ? sources.filter((s) => wanted.some((c) => s.colors.has(c))) : sources;
-  const source = bestBy(useful.length ? useful : sources, (s) => -rank(s));
-  return bestBy(source.actions, (a) => (a.manaColor ? needed[a.manaColor] ?? 0 : 0));
 }
 
 /** The most valuable set of candidates whose mana costs fit in `capacity` (each card at most once). */

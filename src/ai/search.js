@@ -83,10 +83,10 @@ export function greedyChoice(view, me, macros, {
  *
  * It races the candidates: each round deals one new guess of the hidden cards and
  * simulates every remaining candidate on that same guess (common random numbers),
- * so candidates are compared pair by pair on identical situations. After a few
- * rounds, a candidate whose paired difference from the leader is clearly negative
- * (its mean plus two standard errors is below zero) drops out, and the time goes
- * to the close contenders.
+ * so candidates are compared pair by pair on identical situations. After
+ * MIN_ROUNDS rounds, a candidate whose paired difference from the leader is
+ * clearly negative (its mean plus PRUNE_ERRORS standard errors is below zero)
+ * drops out, and the time goes to the close contenders.
  */
 export class MacroSearch {
   #view;
@@ -160,7 +160,7 @@ export class MacroSearch {
       const failed = e.scores.filter((x) => x === null).length;
       if (rounds >= 2 && failed > rounds / 2) e.dropped = true;
     }
-    if (rounds < 3) return;
+    if (rounds < MIN_ROUNDS) return;
     const leader = this.#entries.filter((e) => !e.dropped).reduce((best, e) => (adjusted(e) > adjusted(best) ? e : best));
     for (const e of this.#entries) {
       if (e.dropped || e === leader) continue;
@@ -170,10 +170,10 @@ export class MacroSearch {
         const b = leader.scores[r];
         if (typeof a === 'number' && typeof b === 'number') diffs.push(a + e.bonus - (b + leader.bonus));
       }
-      if (diffs.length < 3) continue;
+      if (diffs.length < MIN_ROUNDS) continue;
       const mean = diffs.reduce((sum, d) => sum + d, 0) / diffs.length;
       const sd = Math.sqrt(diffs.reduce((sum, d) => sum + (d - mean) ** 2, 0) / (diffs.length - 1));
-      if (mean + (2 * sd) / Math.sqrt(diffs.length) < 0) e.dropped = true;
+      if (mean + (PRUNE_ERRORS * sd) / Math.sqrt(diffs.length) < 0) e.dropped = true;
     }
   }
 
@@ -190,6 +190,11 @@ export class MacroSearch {
     return { ...rank(stats, { defaults: this.#defaults, margin: this.#margin }), iterations: this.iterations, rounds: this.#round + 1 };
   }
 }
+
+/** Rounds before any candidate can drop out of the race. */
+const MIN_ROUNDS = 6;
+/** How many standard errors below the leader a candidate must be to drop out. */
+const PRUNE_ERRORS = 2.5;
 
 /** A candidate's mean score plus its default bonus. */
 function adjusted(entry) {

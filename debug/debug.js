@@ -4,6 +4,7 @@ import {
   DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
   SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, isAura,
 } from '../src/index.js';
+import { SearchAIController } from '../src/ai/SearchAIController.js';
 
 const PLAYERS = [
   { id: 'p1', name: 'You' },
@@ -48,7 +49,11 @@ const CONTROLLER_KINDS = {
   human: { label: 'Human (buttons)' },
   ai: { label: 'AI: basic', strategy: AI_STRATEGY.BASIC },
   pass: { label: 'AI: passive', strategy: AI_STRATEGY.PASSIVE },
+  search: { label: 'AI: search (thinks ~2s)', search: true },
 };
+
+// What each search AI is thinking about: { active, candidates, iterations }.
+const thinking = new Map();
 
 // How each player is controlled. The opponent is an AI by default.
 const controllerKinds = new Map([['p1', 'human'], ['p2', 'ai']]);
@@ -91,7 +96,15 @@ function setController(playerId, kind) {
   controllerKinds.set(playerId, kind);
   controllers.get(playerId)?.detach();
   controllers.delete(playerId);
-  if (kind !== 'human') {
+  thinking.delete(playerId);
+  if (CONTROLLER_KINDS[kind].search) {
+    const controller = new SearchAIController({ game, playerId, responseMs: Math.max(200, aiDelay()) });
+    controller.on('thinking', (info) => {
+      thinking.set(playerId, { ...thinking.get(playerId), ...info });
+      if (latestState) renderPlayers(latestState);
+    });
+    controllers.set(playerId, controller);
+  } else if (kind !== 'human') {
     const { strategy } = CONTROLLER_KINDS[kind];
     controllers.set(playerId, new BasicAIController({ game, playerId, delayMs: aiDelay(), strategy }));
   }
@@ -184,6 +197,7 @@ function renderPlayers(state) {
     if (player.id === state.priorityPlayerId) badges.push(badge('Has priority', 'priority'));
     if (state.playersPassed.includes(player.id)) badges.push(badge('Passed', 'passed'));
     if (state.pendingDecision?.playerId === player.id) badges.push(badge('Deciding', 'priority'));
+    if (thinking.get(player.id)?.active) badges.push(badge('Thinking…', 'priority'));
 
     const select = el('select', { ariaLabel: `${player.name} controller` },
       Object.entries(CONTROLLER_KINDS).map(([value, { label }]) => el('option', { value, textContent: label })));
@@ -240,6 +254,7 @@ function renderPlayers(state) {
         ...general,
         ...(prompt ? [el('p', { className: 'muted', textContent: prompt })] : []),
       ]),
+      ...searchSummary(player.id, state),
       el('h3', { textContent: `Emblems (${player.emblems.length})` }),
       emblemRow(player.emblems, cardActions),
       el('h3', { textContent: `Hand (${player.hand.length})` }),
@@ -254,6 +269,35 @@ function renderPlayers(state) {
       ] : []),
     ]);
   }));
+}
+
+/** The search AI's latest candidates and their average scores. */
+function searchSummary(playerId, state) {
+  const info = thinking.get(playerId);
+  if (!info?.candidates?.length) return [];
+  return [
+    el('h3', { textContent: `Search (${info.iterations} simulations)` }),
+    el('ol', { className: 'search-candidates' }, info.candidates.map(({ macro, average, visits }) => el('li', {
+      textContent: `${describeMacro(macro, state)}: ${Number.isFinite(average) ? average.toFixed(1) : '—'} (${visits})`,
+    }))),
+  ];
+}
+
+function describeMacro(macro, state) {
+  const name = (id) => describeId(id, state);
+  const target = macro.targetId ? ` → ${name(macro.targetId)}` : '';
+  switch (macro.kind) {
+    case 'pass': return 'Pass';
+    case 'land': return `Play ${macro.cardId}`;
+    case 'cast': return `Cast ${name(macro.cardId)}${target}`;
+    case 'activate': return `${name(macro.cardId)}: ${macro.abilityId}${target}`;
+    case 'attack': return macro.attackers.length ? `Attack with ${macro.attackers.map(name).join(', ')}` : 'No attack';
+    case 'block': {
+      const blocks = Object.entries(macro.blocks);
+      return blocks.length ? `Block: ${blocks.map(([b, a]) => `${name(b)} → ${name(a)}`).join(', ')}` : 'No blocks';
+    }
+    default: return actionLabel(macro.action, null, state);
+  }
 }
 
 function decisionPrompt(decision) {

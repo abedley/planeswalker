@@ -144,11 +144,13 @@ export class Game extends EventEmitter {
    *   without an entry get DEFAULT_EMBLEMS.
    * @param {Record<string, object>} [options.emblemDefinitions] Extra emblem definitions,
    *   merged over EMBLEMS.
+   * @param {Record<string, number>} [options.startingLife] Starting life per player id
+   *   (default STARTING_LIFE), e.g. for a boss or a planeswalker's upgrades.
    * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
-    emblems = {}, emblemDefinitions = {}, silent = false,
+    emblems = {}, emblemDefinitions = {}, startingLife = {}, silent = false,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -178,7 +180,7 @@ export class Game extends EventEmitter {
         manaPool: emptyManaPool(),
         // 114.1: emblems live in the command zone.
         emblems: (emblems[id] ?? DEFAULT_EMBLEMS).map((emblemId, i) => this.#createEmblem(emblemId, id, i + 1)),
-        life: STARTING_LIFE,
+        life: startingLife[id] ?? STARTING_LIFE,
         landsPlayedThisTurn: 0,
         attemptedDrawFromEmptyLibrary: false,
         hasLost: false,

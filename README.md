@@ -47,6 +47,10 @@ reach, lifelink, defender and vigilance** are implemented. No real card has them
 40-card **keyword sampler** deck (`SAMPLE_CARDS` / `SAMPLE_DECK`: 18 Forests and two each of
 eleven {G} creatures, one per keyword) can be picked in the debugger.
 
+**Campaign:** the game will be a roguelite. You pick a planeswalker and a starting deck, then
+climb a ladder of ever harder CPU opponents up to a boss, earning cards and planeswalker powers
+with each win. The framework is in `src/campaign/`, with example content; see *Campaign* below.
+
 - `index.html`: landing page
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
 
@@ -169,6 +173,8 @@ const game = new Game({
   // seed: 42,                       // optional; makes shuffles reproducible
   // cards: { myCard: {...} },        // optional; extra card definitions (e.g. SAMPLE_CARDS)
   // shuffleLibraries: false,        // optional; keep decks in order (first 7 = opening hand)
+  // emblems: { p1: ['planeswalker'] }, emblemDefinitions: {...}, // optional; see Emblems
+  // startingLife: { p2: 25 },       // optional; per player, default 20
 });
 
 game.on('state', (state) => {
@@ -480,6 +486,87 @@ creatures for building combat scenarios.
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.
 
+
+## Campaign
+
+A run is a roguelite climb:
+1. **Start:** choose a planeswalker (its emblems and powers) and one of its starter decks.
+2. **Fight** up a **ladder** of tiers. Each tier has a number of fights, each against an
+   opponent drawn from the tier's pool, not one already faced. The last tier is the **boss**.
+3. **Win** and choose a **reward**: a card from the tier's card pool, a **planeswalker power**,
+   or removing a card from the deck (once it's above the minimum size). Or skip it.
+4. **Lose** and the run loses a **life**. Then retry the fight (new shuffle) or skip it with no
+   reward. A boss can't be skipped. With no lives left, the run is over. Beating the boss wins
+   the run.
+
+There's no campaign UI yet. The framework in `src/campaign/` is pure data and functions, ready
+for one:
+
+```js
+import {
+  SAMPLE_CAMPAIGN as content, startRun, matchSetup, recordResult, chooseReward, skipReward,
+  retryFight, skipFight, createCpuController, saveRun, loadRun, Game,
+} from './src/index.js';
+
+let run = loadRun(localStorage, content) ?? startRun(content, { planeswalkerId: 'warden', deckId: 'effects' });
+const { game: options, cpu, encounter } = matchSetup(run, content); // run.phase === 'fight'
+const game = new Game(options);                                    // players 'player' and 'cpu'
+const ai = createCpuController(game, cpu, { delayMs: 300 });       // basic or search AI, as the opponent says
+// ... play; when the game ends:
+run = recordResult(run, content, { won: game.getState().winnerId === 'player' });
+// 'reward':   run.offers → chooseReward(run, content, i[, { cardId }]) or skipReward(run, content)
+// 'defeated': retryFight(run) or skipFight(run, content) (canSkipFight: not a boss)
+// 'victory' / 'over': the run is finished
+saveRun(localStorage, run);
+```
+
+- **Runs are plain JSON.** The functions never mutate a run; they return the next one. A run
+  has its own seeded generator, so the same seed gives the same opponents, offers and shuffles.
+- **Saving:** `saveRun`, `loadRun` and `clearRun` work with any storage (`localStorage`). A
+  saved run that no longer fits the content loads as `null`: another `RUN_VERSION`, or a card,
+  opponent or power that's gone.
+
+### Content
+
+Everything a campaign has is data: see `SAMPLE_CAMPAIGN` in `src/campaign/sampleCampaign.js`,
+which is example content built from the sample decks. It contains:
+
+| Key | What |
+| --- | --- |
+| `rules` | `lives`, `minDeckSize`, and `rewards: { cards, powers, removeCard }`: what each win offers |
+| `cards` | definitions of every card the campaign uses (beyond `CARDS`) |
+| `emblems` | emblem definitions for planeswalkers, powers and bosses (see *Emblems*) |
+| `planeswalkers` | `{ name, text, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use |
+| `starterDecks` | `{ name, cards }` |
+| `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`) |
+| `opponents` | `{ name, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
+| `cardPools` | lists of card ids that rewards are drawn from |
+| `ladder` | tiers `{ id, name, fights, opponents, cardPool, rewards?, boss? }`, from easiest to the boss |
+
+Opponents get harder through their AI (basic → search with more thinking time), their deck,
+emblems and starting life. The example ladder has four tiers:
+- **Outskirts:** basic AIs.
+- **Deep Wilds:** search AIs with 500 ms to think.
+- **Citadel:** 1.5 s search, plus an emblem.
+- **Throne:** a boss with 25 life, two emblems and 2.5 s of search.
+
+To add a planeswalker, deck, opponent, power or tier, add it to the content. Then
+`validateCampaign(content)` lists anything inconsistent: unknown cards, emblems, powers or
+opponents, small decks, a tier with fewer opponents than fights, or a boss before the end. The
+test suite runs it on `SAMPLE_CAMPAIGN`.
+
+### Simulating runs
+
+```sh
+npm run campaign-sim -- --runs 20 --walker warden --deck effects --workers 4
+npm run campaign-sim -- --player "search:b=150" --budget 200
+```
+
+This plays whole runs with an AI standing in for you: it retries every loss and takes a power
+when one is offered, otherwise the first card. It reports how many runs were won, how far they
+got, and the win rate in each tier and against each opponent: a quick check that the ladder
+really gets harder. CPU searches are capped at `--budget` ms (default 100) so runs finish fast.
+That makes the CPUs weaker than in the browser.
 
 ## AI
 

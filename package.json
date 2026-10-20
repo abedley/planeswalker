@@ -11,7 +11,8 @@
     "import-cards": "node tools/import-cards.js",
     "arena": "node tools/ai-arena.js",
     "benchmark": "node tools/benchmark.js",
-    "tune-ai": "node tools/tune-ai.js"
+    "tune-ai": "node tools/tune-ai.js",
+    "campaign-sim": "node tools/campaign-sim.js"
   },
   "engines": {
     "node": ">=18"

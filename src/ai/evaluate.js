@@ -4,12 +4,13 @@
  * AIs score the positions their simulations reach with it.
  *
  * It's a weighted sum of features (each "ours minus theirs"), so the weights can
- * be fitted to game results (tools/tune-ai.js).
+ * be fitted to game results (tools/tune-ai.js), and each CPU deck can have its
+ * own (see weightsFor).
  */
 import { isCreature, isLand } from '../cards/cards.js';
 import { GAME_STATUS } from '../engine/Game.js';
 import { creatureValue, damageThrough } from './combat.js';
-import { TUNED_WEIGHTS } from './weights.js';
+import { TUNED_WEIGHTS, DECK_WEIGHTS } from './weights.js';
 
 /** Hand-picked starting weights (tools/tune-ai.js fits TUNED_WEIGHTS from these). */
 export const HAND_WEIGHTS = Object.freeze({
@@ -30,6 +31,34 @@ export const HAND_WEIGHTS = Object.freeze({
 export const DEFAULT_WEIGHTS = TUNED_WEIGHTS ?? HAND_WEIGHTS;
 
 export const FEATURES = Object.freeze(Object.keys(HAND_WEIGHTS));
+
+const adjust = (factors) => Object.freeze(Object.fromEntries(
+  FEATURES.map((f) => [f, Math.round(DEFAULT_WEIGHTS[f] * (factors[f] ?? 1) * 1000) / 1000]),
+));
+
+/**
+ * Starting points for kinds of deck, as adjustments of the default weights. A deck
+ * of that kind can use one as is, or as the base for its own tuning
+ * (`npm run tune-ai -- --deck <name> --from aggro`).
+ */
+export const ARCHETYPE_WEIGHTS = Object.freeze({
+  /** Races: a faster clock matters most; cards in hand and life total matter less. */
+  aggro: adjust({ clock: 2.5, hand: 0.6, life: 0.7 }),
+  /** Trades and grinds: cards and life matter more than speed. */
+  control: adjust({ clock: 0.4, hand: 1.6, life: 1.3, creatures: 0.8 }),
+  midrange: DEFAULT_WEIGHTS,
+});
+
+/**
+ * The weights for a CPU deck: the deck's own (DECK_WEIGHTS, from tuning it), an
+ * archetype's (ARCHETYPE_WEIGHTS), or the defaults. `profile` is a deck name, an
+ * archetype name, or a weights object (missing features use the defaults).
+ */
+export function weightsFor(profile) {
+  if (!profile) return DEFAULT_WEIGHTS;
+  if (typeof profile === 'object') return { ...DEFAULT_WEIGHTS, ...profile };
+  return DECK_WEIGHTS[profile] ?? ARCHETYPE_WEIGHTS[profile] ?? DEFAULT_WEIGHTS;
+}
 
 const WIN = 10000;
 

@@ -560,6 +560,25 @@ npm run benchmark                                        # silent playouts per s
 npm run tune-ai                                          # refit the evaluation weights
 ```
 
+### Weights for each CPU deck
+
+Each CPU deck can weigh things its own way. An aggro deck cares about its clock, while a control
+deck cares about cards and life. `weightsFor(profile)` (`evaluate.js`) picks a deck's weights:
+1. **Its own tuned weights:** `DECK_WEIGHTS[deckName]` in `src/ai/weights.js`.
+2. **An archetype's:** `aggro`, `control` or `midrange` (`ARCHETYPE_WEIGHTS`), adjustments of the
+   defaults.
+3. **The defaults.**
+
+Pass the profile to the search AI: `new SearchAIController({ game, playerId, weights: 'goblins' })`,
+or `weights: 'aggro'`, or a weights object. The debugger uses the selected deck's name.
+
+To tune a deck, add it to `DECKS` in `tools/ai-arena.js`, then run
+`npm run tune-ai -- --deck goblins [--from aggro]`. That plays it against every deck from its own
+side and writes `DECK_WEIGHTS.goblins`. Tuning is deliberately light: the fit starts from the
+general weights (or `--from`'s) and is pulled back towards them, so a deck's weights move only as
+far as its games clearly show. The sample decks are just examples, so none of them has its own
+weights yet. In the arena, `w=<deck or archetype>` picks weights, e.g. `"search:b=150,w=aggro"`.
+
 The arena plays each seed twice with the seats swapped and reports win rates with 95% confidence
 intervals. `tools/tune-ai.js` fits the evaluation weights to the results of basic-AI games
 (logistic regression on positions from games decided by life totals) and writes

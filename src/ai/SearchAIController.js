@@ -8,6 +8,7 @@ import { listMacros, nextAction } from './macroActions.js';
 import { worthSearching, defaultMacros } from './search.js';
 import { actingPlayerId } from './simulate.js';
 import { createSearchRunner } from './searchRunner.js';
+import { weightsFor } from './evaluate.js';
 
 /**
  * A computer player that searches (see search.js): it simulates its options in
@@ -26,7 +27,8 @@ import { createSearchRunner } from './searchRunner.js';
  *   it would face if the opponent passed, so its answer is ready in time.
  * - It only ever sends the search game.getPlayerView(playerId).
  *
- * Options: `budgetMs` (thinking time, default 2000), `responseMs` (default 500),
+ * Options: `weights` (the deck's evaluation weights: a deck or archetype name, or
+ * weights, see weightsFor), `budgetMs` (thinking time, default 2000), `responseMs` (default 500),
  * `jitterMs` (default 250), `seed`, `runner` (a search runner, see searchRunner.js),
  * `timers` (`{ setTimeout, clearTimeout, now }`, for tests).
  */
@@ -43,6 +45,7 @@ export class SearchAIController extends EventEmitter {
   #runner;
   #timers;
   #fallback;
+  #weights;
   #unsubscribers;
   #current = null;
   #ponder = null;
@@ -50,7 +53,7 @@ export class SearchAIController extends EventEmitter {
   #turnOf = 0;
 
   constructor({
-    game, playerId, budgetMs = 2000, responseMs = 500, jitterMs = 250, seed = Math.floor(Math.random() * 2 ** 32),
+    game, playerId, weights, budgetMs = 2000, responseMs = 500, jitterMs = 250, seed = Math.floor(Math.random() * 2 ** 32),
     runner = createSearchRunner(), timers = {
       setTimeout: (...args) => setTimeout(...args),
       clearTimeout: (id) => clearTimeout(id),
@@ -68,6 +71,7 @@ export class SearchAIController extends EventEmitter {
     this.#runner = runner;
     this.#timers = timers;
     this.#fallback = new BasicAIController({ game: null, playerId });
+    this.#weights = weightsFor(weights);
     this.#unsubscribers = [
       game.on('state', (state) => this.#onState(state)),
       game.listenTo(this),
@@ -148,7 +152,8 @@ export class SearchAIController extends EventEmitter {
     if (this.#ponder?.key === key) result = await this.#ponder.result;
     this.#ponder = null;
     result ??= await this.#runner.search({
-      view, me, macros, budgetMs, seed: Math.floor(this.#random() * 2 ** 32), defaults: defaultMacros(state, me, macros, this.#fallback),
+      view, me, macros, budgetMs, seed: Math.floor(this.#random() * 2 ** 32), weights: this.#weights,
+      defaults: defaultMacros(state, me, macros, this.#fallback),
     });
     if (!result) return null; // superseded by a newer state
     if (thinking) this.emit('thinking', { active: true, candidates: result.ranked, iterations: result.iterations });
@@ -179,7 +184,7 @@ export class SearchAIController extends EventEmitter {
       // No longer than an answer may take, so waiting for it never makes an answer late.
       result: this.#runner.search({
         view, me, macros, budgetMs: this.#responseMs * 0.8, seed: Math.floor(this.#random() * 2 ** 32),
-        defaults: defaultMacros(next, me, macros, this.#fallback),
+        weights: this.#weights, defaults: defaultMacros(next, me, macros, this.#fallback),
       }),
     };
   }

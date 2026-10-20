@@ -18,7 +18,7 @@ import { GAME_STATUS } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 import { determinize } from './determinize.js';
 import { listMacros, nextAction, applyMacro } from './macroActions.js';
-import { evaluate, DEFAULT_WEIGHTS } from './evaluate.js';
+import { evaluate, DEFAULT_WEIGHTS, weightsFor } from './evaluate.js';
 import { playout, actingPlayerId } from './simulate.js';
 import { BasicAIController, windowOf } from './BasicAIController.js';
 
@@ -254,9 +254,11 @@ export function worthSearching(state, me) {
  * searching and plays the chosen macro out over the following actions. It only
  * ever looks at `game.getPlayerView(me)`.
  *
- * @param {object} options `{ algorithm: 'greedy' | 'ismcts', seed, determinizations, budgetMs, weights, onSearch }`
+ * @param {object} options `{ algorithm: 'greedy' | 'ismcts', seed, determinizations, budgetMs, weights, onSearch }`,
+ *   where `weights` is anything weightsFor() takes (a deck or archetype name, or weights).
  */
-export function searchPolicy(me, options = {}) {
+export function searchPolicy(me, { weights, ...rest } = {}) {
+  const options = { ...rest, weights: weightsFor(weights) };
   const fallback = new BasicAIController({ game: null, playerId: me });
   const random = seededRandom(options.seed ?? 1);
   let current = null;

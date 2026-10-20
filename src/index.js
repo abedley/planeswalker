@@ -24,3 +24,7 @@ export {
 export { BasicAIController, AI_STRATEGY } from './ai/BasicAIController.js';
 export { seededRandom, shuffle } from './engine/random.js';
 export { copyGameData } from './engine/Game.js';
+export { SearchAIController } from './ai/SearchAIController.js';
+export {
+  evaluate, weightsFor, DEFAULT_WEIGHTS, HAND_WEIGHTS, ARCHETYPE_WEIGHTS,
+} from './ai/evaluate.js';

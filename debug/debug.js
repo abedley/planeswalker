@@ -38,7 +38,7 @@ const ui = {
 
 const DECKS = {
   standard: DEFAULT_DECK,
-  sampler: SAMPLE_DECK,
+  keywords: SAMPLE_DECK,
   permanents: SAMPLE_PERMANENTS_DECK,
   spells: SAMPLE_SPELLS_DECK,
   effects: SAMPLE_EFFECTS_DECK,
@@ -98,7 +98,10 @@ function setController(playerId, kind) {
   controllers.delete(playerId);
   thinking.delete(playerId);
   if (CONTROLLER_KINDS[kind].search) {
-    const controller = new SearchAIController({ game, playerId, responseMs: Math.max(200, aiDelay()) });
+    // Each deck can have its own evaluation weights (DECK_WEIGHTS, by deck name); others get the defaults.
+    const controller = new SearchAIController({
+      game, playerId, responseMs: Math.max(200, aiDelay()), weights: ui.deck.value,
+    });
     controller.on('thinking', (info) => {
       thinking.set(playerId, { ...thinking.get(playerId), ...info });
       if (latestState) renderPlayers(latestState);

@@ -50,7 +50,8 @@ export const CONTESTANTS = {
 /**
  * A contestant by name, with optional search settings after a colon:
  * `greedy:d=8,h=2` (determinizations, horizon in turns), `search:b=150,h=2,m=1,w=hand`
- * (budget in ms, horizon, margin over the basic AI's choice, hand-picked weights).
+ * (budget in ms, horizon, margin over the basic AI's choice, evaluation weights:
+ * `hand`, an archetype such as `aggro`, or a deck name with tuned weights).
  */
 export function contestant(name) {
   const [base, settings = ''] = name.split(':');
@@ -58,8 +59,8 @@ export function contestant(name) {
   const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin' };
   const options = Object.fromEntries(settings.split(',').map((pair) => {
     const [key, value] = pair.split('=');
-    // w=hand: the hand-picked evaluation weights instead of the tuned ones.
-    if (key === 'w') return ['weights', value === 'hand' ? HAND_WEIGHTS : undefined];
+    // w=hand: the hand-picked evaluation weights; w=<deck or archetype>: see weightsFor.
+    if (key === 'w') return ['weights', value === 'hand' ? HAND_WEIGHTS : value];
     return [keys[key] ?? key, Number(value)];
   }));
   const algorithm = { greedy: 'greedy', search: 'ismcts' }[base];

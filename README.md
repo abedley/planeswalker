@@ -466,26 +466,119 @@ the top of `cards.js`). An ability that adds mana and doesn't target is a mana a
 can list `keywords`. The tests add test-only cards through the `cards` option, including free (0-cost)
 creatures for building combat scenarios.
 
-The basic AI (`BasicAIController`, `strategy: 'basic'`) plays lands and casts Elves. It attacks
-with everything when it has more creatures ready than the opponent has untapped blockers, and
-otherwise blocks one-for-one to trade. It uses emblem abilities that cost nothing. It only makes legal blocks: flyers only with flying or
-reach, and menace with two blockers or none. It casts artifacts and enchantments, puts Auras
-only on its own creatures, equips loose Equipment, and taps enough mana for generic costs. Damage
-and destroy spells go at the opponent: their biggest creature it can kill, otherwise their face.
-Spells and non-mana abilities are scored effect by effect:
-- **Valued highly:** killing, exiling or bouncing the opponent's creatures.
-- **Valued a little:** hitting their face, drawing cards, making tokens, adding counters, and
-  pumping a creature that can still attack.
-- **Counted against:** hurting itself, and paying sacrifices or life (sacrificing a token is
-  cheap).
-
-It casts the best-scoring option when the score is positive. It picks targets for its triggered abilities the same way. It cracks Clues and eats Food when
-it has spare mana, which it values more when its life is low. It taps lands and Elves before
-sacrificing Treasures, and picks the Treasure's color its hand needs most. It activates abilities in its
-main phase, and taps mana on the opponent's turn only for instants. That lets it counter the
-opponent's spells, but it doesn't otherwise play combat tricks or respond. With trample, it
-sends as much damage to the player as it can. `strategy: 'passive'` only passes and makes empty
-declarations.
+**Snapshots and simulation** (for AI search and saving games):
+- **Copying the game:** `game.serialize()` returns the whole game, including the random number
+  generator's state, and `Game.deserialize(snapshot)` rebuilds it. `game.clone()` is a fast
+  independent copy.
+- **Hiding information:** `game.getPlayerView(playerId)` is a snapshot without what that player
+  can't know: the opponent's hand, the order of every library, and the random state. The unknown
+  cards are listed as a pool. `determinize(view, random)` (`src/ai/determinize.js`) deals that
+  pool into a playable guess.
+- **Simulating fast:** `silent: true` games emit no events, `applyTrusted(action)` skips
+  re-validation, and `peekState()` reads the state without copying it.
 
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.
+
+
+## AI
+
+There are three computer players, all in `src/ai/`. Each listens to the game's `state` events and
+emits `action` events. None of them looks at the opponent's hand or any library.
+
+### Basic AI (`BasicAIController`)
+
+A fast heuristic player, also used to play out the search AI's simulations (5–20 µs per decision).
+- **Combat** (`combat.js`):
+  - **Attacks:** with creatures the opponent can't block profitably, and with everything when
+    that's lethal through the best possible blocks. It keeps enough blockers home to survive
+    the crack-back, and goes all in when it's losing the race to deck out.
+  - **Blocks:** kills attackers or trades up, double-blocks big threats, and chump-blocks only
+    to survive.
+  - **Predictions:** its combat predictions follow the engine's rules (first strike, double
+    strike, deathtouch, trample, lifelink); a test checks them against real combats for every
+    keyword pairing.
+- **Mana:** in its main phase it picks the most valuable set of spells and abilities it can
+  afford (a small knapsack over its hand). It keeps mana up for instants it would rather cast
+  later, and taps lands and Elves before sacrificing Treasures.
+- **Instants:**
+  - combat tricks once blockers are declared, when they win the fight
+  - removal on attackers
+  - counterspells on spells worth countering
+  - everything else at the end of the opponent's turn
+- **Scoring** (`scoring.js`): spells and abilities are scored effect by effect, in the same points
+  as creature values. Removal goes at the biggest threat, and burn goes to the face when it's
+  lethal.
+
+`LegacyAIController` is the first version, kept unchanged as a baseline. `strategy: 'passive'`
+only passes and makes empty declarations.
+
+### Search AI (`SearchAIController`)
+
+At each real decision, the search AI chooses among *macro actions* (`macroActions.js`), whole
+decisions rather than the engine's raw actions:
+- "cast this at that, tapping mana as needed"
+- "attack with these creatures"
+- "these blocks"
+- "pass"
+
+It simulates each one many times (`search.js`):
+1. **Guess the hidden cards.** Each simulation starts from `determinize(game.getPlayerView(me))`.
+   The player view hides the opponent's hand, the order of every library and the random number
+   generator's state. The guess deals the unknown cards at random and reseeds the generator, so
+   the AI never relies on anything it couldn't know, including its own next draws. A test checks
+   that its choices don't change when the hidden cards, the library orders or the seed change.
+2. **Play the macro**, then let the basic AI play both sides up to the AI's next turn.
+3. **Score the result** with `evaluate.js`: a weighted sum of life (concave), creature values,
+   lands, other permanents, cards in hand, each side's clock, and deck-out danger.
+4. **Race the candidates:** each round deals one new guess and simulates every remaining
+   candidate on it, so candidates are compared pair by pair on identical situations. After 6
+   rounds, a candidate 2.5 standard errors behind the leader drops out, and the time goes to the
+   close contenders. The basic AI's own choice is the default, and another candidate has to beat
+   it by a margin of 1 point.
+
+It runs in a module Web Worker (`aiWorker.js`, with an inline time-sliced fallback), so the page
+stays responsive.
+
+It gives nothing away:
+- **Uniform timing:** every time it gets priority it answers after the same delay, plus random
+  jitter. That holds whether it passes or acts, and whether or not it holds an instant; a test
+  checks the delays are identical with and without one.
+- **Visible thinking only at public moments:** it shows "Thinking…" and takes about 2 s only at
+  its own main phases and declarations, which happen every turn whatever its hand.
+- **Pondering:** while the opponent decides, it already searches the position it would face if
+  they passed.
+
+In the debugger, pick "AI: search" for a player to see its top candidates and simulation count.
+
+### Measuring strength
+
+```sh
+npm run arena -- basic legacy --games 50 --workers 4    # mirror matches on every sample deck
+npm run arena -- "search:b=150" basic --decks effects,keywords
+npm run benchmark                                        # silent playouts per second
+npm run tune-ai                                          # refit the evaluation weights
+```
+
+The arena plays each seed twice with the seats swapped and reports win rates with 95% confidence
+intervals. `tools/tune-ai.js` fits the evaluation weights to the results of basic-AI games
+(logistic regression on positions from games decided by life totals) and writes
+`src/ai/weights.js`.
+
+Results:
+
+| Match | Games | First AI's win rate (95% CI) |
+| --- | --- | --- |
+| basic vs legacy | 600, all six decks | 70.3% (66.6–73.8%) |
+| greedy (8 guesses, 2-turn horizon) vs basic | 100, five decks* | 64.0% (54.2–72.7%) |
+| search (250 ms) vs basic | 100, five decks* | 62.0% (52.2–70.9%) |
+| search (250 ms) vs greedy | 100, five decks* | 50.0% (40.4–59.6%) |
+| search (1 s) vs greedy | 100, five decks* | 48.0% (38.5–57.7%) |
+| greedy, 3-turn vs 2-turn horizon | 100, five decks* | 54.0% (44.3–63.4%) |
+| greedy, tuned vs hand-picked weights | 100, five decks* | 52.0% (42.3–61.5%) |
+
+\* Every deck except the Forest + Elves mirror, where games are 1/1s trading evenly until someone
+decks out, so the seat decides them. The search AI's lead comes from its simulations, which the
+time budget doesn't change much: given enough simulations, greedy and search agree, so a better
+rollout policy or evaluation, not more time, is what would make it stronger.
+

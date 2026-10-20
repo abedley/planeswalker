@@ -10,7 +10,8 @@
     "serve": "python3 -m http.server 8000",
     "import-cards": "node tools/import-cards.js",
     "arena": "node tools/ai-arena.js",
-    "benchmark": "node tools/benchmark.js"
+    "benchmark": "node tools/benchmark.js",
+    "tune-ai": "node tools/tune-ai.js"
   },
   "engines": {
     "node": ">=18"

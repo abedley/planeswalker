@@ -15,6 +15,16 @@ export const FIXTURES = {
   forest: card({ name: 'Forest', mana_cost: '', type_line: 'Basic Land — Forest', oracle_text: '({T}: Add {G}.)' }),
   wastes: card({ name: 'Wastes', mana_cost: '', type_line: 'Basic Land', oracle_text: '({T}: Add {C}.)' }),
   grizzlyBears: card({ name: 'Grizzly Bears', mana_cost: '{1}{G}', type_line: 'Creature — Bear', power: '2', toughness: '2' }),
+  // With the presentation fields Scryfall returns for every card.
+  runeclawBear: card({
+    name: 'Runeclaw Bear', mana_cost: '{1}{G}', type_line: 'Creature — Bear', power: '2', toughness: '2',
+    image_uris: {
+      small: 'https://cards.scryfall.io/small/front/r/b/runeclaw.jpg',
+      normal: 'https://cards.scryfall.io/normal/front/r/b/runeclaw.jpg',
+      art_crop: 'https://cards.scryfall.io/art_crop/front/r/b/runeclaw.jpg',
+    },
+    artist: 'Jesper Ejsing', colors: ['G'], rarity: 'common', set: 'm12', collector_number: '197',
+  }),
   giantSpider: card({
     name: 'Giant Spider', mana_cost: '{3}{G}', type_line: 'Creature — Spider',
     oracle_text: 'Reach', keywords: ['Reach'], power: '2', toughness: '4',

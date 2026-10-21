@@ -1,6 +1,6 @@
 export { EventEmitter } from './engine/EventEmitter.js';
 export {
-  Game, GAME_STATUS, DECISION, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN,
+  Game, GAME_STATUS, DECISION, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN, GAME_LIMITS,
 } from './engine/Game.js';
 export {
   ACTION, passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,

@@ -38,6 +38,18 @@ test('converts a vanilla creature with a generic mana cost', () => {
   );
 });
 
+test('keeps the art, artist, colors, rarity and set the app shows', () => {
+  const { definition } = convert('runeclawBear');
+  assert.deepEqual(definition.image, {
+    art: 'https://cards.scryfall.io/art_crop/front/r/b/runeclaw.jpg',
+    card: 'https://cards.scryfall.io/normal/front/r/b/runeclaw.jpg',
+  });
+  assert.deepEqual(
+    [definition.artist, definition.colors, definition.rarity, definition.set, definition.collectorNumber],
+    ['Jesper Ejsing', ['G'], 'common', 'm12', '197'],
+  );
+});
+
 test('converts supported keywords, including several on one line and reminder text', () => {
   assert.deepEqual(convert('serraAngel').definition.keywords, ['flying', 'vigilance']);
   assert.deepEqual(convert('serraAngel').definition.manaCost, { generic: 3, W: 2 });

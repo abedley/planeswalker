@@ -135,6 +135,10 @@ Not imported — uses things the game doesn't support yet (2):
       Unsupported rules text: "Noncreature spells cost {1} more to cast."
 ```
 
+Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
+art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist` (credited
+whenever the art is shown), `colors`, `rarity`, `set` and `collectorNumber`.
+
 The exit code is 1 when anything was skipped or not found. Re-importing a card updates it. Cards
 defined by hand in `src/cards/cards.js` (Forest, Llanowar Elves) aren't overwritten. The
 importer's tests use hand-written card objects in Scryfall's format
@@ -175,6 +179,7 @@ const game = new Game({
   // shuffleLibraries: false,        // optional; keep decks in order (first 7 = opening hand)
   // emblems: { p1: ['planeswalker'] }, emblemDefinitions: {...}, // optional; see Emblems
   // startingLife: { p2: 25 },       // optional; per player, default 20
+  // limits: GAME_LIMITS,            // optional; caps so a board fits on a phone (see Limits)
 });
 
 game.on('state', (state) => {
@@ -302,6 +307,22 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
   (e.g. `p1-emblem-1`) as `cardId`.
 - Effects: anything an ability can do, plus `{ type: 'gainLife', amount }`, which emits a
   `lifeGained` event.
+
+### Limits (this game's screen-size rules)
+
+So that a whole board fits on a phone screen, a game can impose limits (the `limits` option;
+`GAME_LIMITS` is `{ hand: 7, creatures: 10, permanents: 8 }`, and the campaign uses it). A game
+has none unless asked:
+- **Hand:** a card drawn into a full hand, or returned to one, is **burned**: it goes to the
+  graveyard, with a `cardBurned { playerId, cardId, cardName, reason: 'draw' | 'returnToHand' }`
+  event. A burned draw still appears in `cardsDrawn`.
+- **Creatures:** creature spells can't be cast while the player controls that many creatures
+  (their creature spells on the stack count too), and creature tokens beyond the cap aren't
+  created (`tokensLimited { playerId, count, sourceId }`).
+- **Other permanents:** the same for nonland, noncreature permanents (artifacts, enchantments,
+  Treasure and other tokens). Lands are unlimited.
+
+Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simulations obey them.
 
 ### Rules implemented
 
@@ -533,13 +554,13 @@ which is example content built from the sample decks. It contains:
 
 | Key | What |
 | --- | --- |
-| `rules` | `lives`, `minDeckSize`, and `rewards: { cards, powers, removeCard }`: what each win offers |
+| `rules` | `lives`, `minDeckSize`, `rewards: { cards, powers, removeCard }` (what each win offers), `limits` (game limits, default `GAME_LIMITS`) and `maxAbilities` (planeswalker abilities over all of a player's emblems, default 4) |
 | `cards` | definitions of every card the campaign uses (beyond `CARDS`) |
 | `emblems` | emblem definitions for planeswalkers, powers and bosses (see *Emblems*) |
-| `planeswalkers` | `{ name, text, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use |
+| `planeswalkers` | `{ name, text, color?, art?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use |
 | `starterDecks` | `{ name, cards }` |
 | `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`) |
-| `opponents` | `{ name, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
+| `opponents` | `{ name, color?, art?, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
 | `cardPools` | lists of card ids that rewards are drawn from |
 | `ladder` | tiers `{ id, name, fights, opponents, cardPool, rewards?, boss? }`, from easiest to the boss |
 

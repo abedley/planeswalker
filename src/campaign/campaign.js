@@ -20,7 +20,7 @@
  */
 import { CARDS } from '../cards/cards.js';
 import { EMBLEMS } from '../cards/emblems.js';
-import { STARTING_LIFE } from '../engine/Game.js';
+import { STARTING_LIFE, GAME_LIMITS } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 
 /** Bumped when the shape of a run changes, so old saves are dropped (save.js). */
@@ -67,6 +67,10 @@ export const AI_KIND = Object.freeze({ BASIC: 'basic', SEARCH: 'search' });
 const DEFAULT_RULES = Object.freeze({
   lives: 3,
   minDeckSize: 40,
+  /** Game limits for every fight (see GAME_LIMITS), so a board fits on a phone screen. */
+  limits: GAME_LIMITS,
+  /** Most planeswalker abilities (over all of a player's emblems) a player can have. */
+  maxAbilities: 4,
   rewards: Object.freeze({ cards: 2, powers: 1, removeCard: false }),
 });
 
@@ -75,6 +79,12 @@ const rewardsOf = (content, tier) => ({ ...DEFAULT_RULES.rewards, ...content.rul
 const cardsOf = (content) => ({ ...CARDS, ...content.cards });
 const emblemsOf = (content) => ({ ...EMBLEMS, ...content.emblems });
 const newSeed = (random) => Math.floor(random() * 2 ** 32);
+
+/** How many abilities a list of emblems gives, all together. */
+export function abilityCount(content, emblemIds = []) {
+  const emblems = emblemsOf(content);
+  return emblemIds.reduce((sum, id) => sum + (emblems[id]?.abilities?.length ?? 0), 0);
+}
 
 export const currentTier = (run, content) => content.ladder[run.tierIndex];
 
@@ -209,6 +219,7 @@ export function matchSetup(run, content, { playerId = 'player', cpuId = 'cpu', p
       emblems: { [playerId]: playerEmblems, [cpuId]: [...(opponent.emblems ?? [])] },
       emblemDefinitions,
       startingLife: { [playerId]: run.startingLife, [cpuId]: opponent.startingLife ?? STARTING_LIFE },
+      limits: { ...rulesOf(content).limits },
     },
     cpu: {
       playerId: cpuId, opponentId, name: opponent.name, ai: { ...opponent.ai, weights: opponent.ai.weights ?? opponentId },
@@ -222,8 +233,11 @@ export function matchSetup(run, content, { playerId = 'player', cpuId = 'cpu', p
 /** Whether the run can still gain a power (repeatable ones always can). */
 function powerAvailable(run, content, powerId) {
   const power = content.powers[powerId];
+  if (power.kind === POWER.EMBLEM) {
+    return !run.emblems.includes(power.emblemId)
+      && abilityCount(content, [...run.emblems, power.emblemId]) <= rulesOf(content).maxAbilities;
+  }
   if (power.repeatable) return true;
-  if (power.kind === POWER.EMBLEM) return !run.emblems.includes(power.emblemId);
   if (power.kind === POWER.ACTIVATIONS && !run.emblems.includes(power.emblemId)) return false;
   return !run.powers.includes(powerId);
 }
@@ -348,7 +362,11 @@ export function validateCampaign(content) {
   const problems = [];
   const cards = cardsOf(content);
   const emblems = emblemsOf(content);
-  const { minDeckSize } = rulesOf(content);
+  const { minDeckSize, maxAbilities } = rulesOf(content);
+  const checkAbilities = (where, ids = []) => {
+    const count = abilityCount(content, ids);
+    if (count > maxAbilities) problems.push(`${where}: ${count} abilities, more than ${maxAbilities}`);
+  };
   const checkCards = (where, ids) => {
     for (const id of new Set(ids)) if (!cards[id]) problems.push(`${where}: unknown card "${id}"`);
   };
@@ -365,6 +383,7 @@ export function validateCampaign(content) {
   if (walkers.length === 0) problems.push('no planeswalkers');
   for (const [id, walker] of walkers) {
     checkEmblems(`planeswalker ${id}`, walker.emblems);
+    checkAbilities(`planeswalker ${id}`, walker.emblems);
     for (const powerId of walker.powers ?? []) {
       if (!content.powers?.[powerId]) problems.push(`planeswalker ${id}: unknown power "${powerId}"`);
     }
@@ -385,6 +404,7 @@ export function validateCampaign(content) {
   for (const [id, opponent] of Object.entries(content.opponents ?? {})) {
     checkDeck(`opponent ${id}`, opponent.deck);
     checkEmblems(`opponent ${id}`, opponent.emblems);
+    checkAbilities(`opponent ${id}`, opponent.emblems);
     if (!Object.values(AI_KIND).includes(opponent.ai?.kind)) problems.push(`opponent ${id}: unknown AI kind "${opponent.ai?.kind}"`);
   }
 

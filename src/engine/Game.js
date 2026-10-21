@@ -30,6 +30,19 @@ export const OPENING_HAND_SIZE = 7; // 103.5
 export const MAX_HAND_SIZE = 7; // 402.2
 export const LAND_PLAYS_PER_TURN = 1; // 305.2
 
+/**
+ * Limits this game imposes on top of Magic's rules, so a whole board fits on a
+ * phone screen (pass them as the `limits` option; a game has none by default):
+ * - `hand`: a card drawn into, or returned to, a full hand is burned (put into
+ *   the graveyard, with a `cardBurned` event);
+ * - `creatures`: creature spells can't be cast, and creature tokens aren't
+ *   created, once a player controls that many creatures (counting their creature
+ *   spells on the stack);
+ * - `permanents`: the same for other nonland permanents (artifacts, enchantments,
+ *   Treasure and other tokens).
+ */
+export const GAME_LIMITS = Object.freeze({ hand: 7, creatures: 10, permanents: 8 });
+
 const MAIN_PHASES = new Set([PHASE.PRECOMBAT_MAIN, PHASE.POSTCOMBAT_MAIN]);
 
 /** Recursive structural equality for plain JSON-like values. */
@@ -129,6 +142,7 @@ export class Game extends EventEmitter {
   #queue = [];
   #processing = false;
   #silent = false;
+  #limits = {};
 
   /**
    * @param {object} options
@@ -146,11 +160,12 @@ export class Game extends EventEmitter {
    *   merged over EMBLEMS.
    * @param {Record<string, number>} [options.startingLife] Starting life per player id
    *   (default STARTING_LIFE), e.g. for a boss or a planeswalker's upgrades.
+   * @param {{hand?: number, creatures?: number, permanents?: number}} [options.limits] See GAME_LIMITS.
    * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
-    emblems = {}, emblemDefinitions = {}, startingLife = {}, silent = false,
+    emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -168,6 +183,7 @@ export class Game extends EventEmitter {
     this.#emblemDefinitions = { ...EMBLEMS, ...emblemDefinitions };
     this.#shuffleLibraries = shuffleLibraries;
     this.#silent = silent;
+    this.#limits = { ...limits };
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
@@ -309,6 +325,7 @@ export class Game extends EventEmitter {
       startingPlayerId: this.#startingPlayerId,
       randomState: this.#random.getState(),
       shuffleLibraries: this.#shuffleLibraries,
+      limits: this.#limits,
       status: this.#status,
       winnerId: this.#winnerId,
       turn: this.#turn,
@@ -367,6 +384,7 @@ export class Game extends EventEmitter {
       emblemDefinitions: snapshot.emblemDefinitions,
       decks: empty,
       emblems: empty,
+      limits: snapshot.limits,
       silent,
     });
     game.#restore(copyGameData(snapshot));
@@ -380,6 +398,7 @@ export class Game extends EventEmitter {
       startingPlayerId: this.#startingPlayerId,
       decks: Object.fromEntries(this.#players.map((p) => [p.id, []])),
       emblems: Object.fromEntries(this.#players.map((p) => [p.id, []])),
+      limits: this.#limits,
       silent,
     });
     copy.#cardDefinitions = { ...this.#cardDefinitions };
@@ -477,6 +496,7 @@ export class Game extends EventEmitter {
       // 302.1 / 303.1: sorceries and permanent spells only at sorcery speed.
       if (!isInstant(card) && !sorceryTiming) continue;
       if (!canPayMana(pool, card.manaCost)) continue;
+      if (this.#atLimit(holder, card)) continue;
       const definition = this.#cardDefinitions[card.cardId];
       const additionalCost = definition.additionalCost ?? {};
       if (!this.#canPayCost(holder, null, additionalCost)) continue;
@@ -755,8 +775,12 @@ export class Game extends EventEmitter {
    * 111.1: a token with the characteristics the effect gives it: a predefined token
    * (a TOKEN name such as 'treasure', 111.10) or a creature token's description.
    */
+  #tokenCardId(token) {
+    return typeof token === 'string' ? this.#predefinedTokenId(token) : this.#creatureTokenId(token);
+  }
+
   #createToken(token, controllerId) {
-    const cardId = typeof token === 'string' ? this.#predefinedTokenId(token) : this.#creatureTokenId(token);
+    const cardId = this.#tokenCardId(token);
     // 111.2: the player who creates a token is its owner.
     const card = this.#createCard(cardId, controllerId, `${controllerId}-token-${this.#nextTokenNumber++}`);
     return this.#putOntoBattlefield(card, controllerId);
@@ -884,6 +908,7 @@ export class Game extends EventEmitter {
   #drawCards(playerId, count) {
     const zone = this.#zones.get(playerId);
     const drawn = [];
+    const burned = [];
     for (let i = 0; i < count; i++) {
       if (zone.library.length === 0) {
         // 121.4: the player loses the next time state-based actions are checked.
@@ -894,10 +919,41 @@ export class Game extends EventEmitter {
       const card = zone.library.shift(); // index 0 is the top of the library
       zone.hand.push(card);
       drawn.push(card.id);
+      if (zone.hand.length > (this.#limits.hand ?? Infinity)) burned.push(zone.hand.pop());
     }
     if (drawn.length) {
       this.#emitEvent('cardsDrawn', { playerId, cardIds: drawn, librarySize: zone.library.length });
     }
+    for (const card of burned) this.#burn(playerId, card, 'draw');
+  }
+
+  #burn(playerId, card, reason) {
+    this.#zones.get(playerId).graveyard.push(card);
+    this.#emitEvent('cardBurned', { playerId, cardId: card.id, cardName: card.name, reason });
+  }
+
+  /** The hand limit (GAME_LIMITS): a card that took a full hand over it is burned. */
+  #burnIfHandFull(playerId, cardId, reason) {
+    const zone = this.#zones.get(playerId);
+    if (!(zone.hand.length > (this.#limits.hand ?? Infinity))) return;
+    const index = zone.hand.findIndex((c) => c.id === cardId);
+    if (index === -1) return;
+    this.#burn(playerId, zone.hand.splice(index, 1)[0], reason);
+  }
+
+  /**
+   * Whether `playerId` already has as many creatures (or other nonland permanents,
+   * for a noncreature `card`) as the limits allow, counting their spells on the stack.
+   */
+  #atLimit(playerId, card) {
+    if (isLand(card) || !isPermanentCard(card)) return false;
+    const creature = isCreature(card);
+    const limit = creature ? this.#limits.creatures : this.#limits.permanents;
+    if (limit === undefined) return false;
+    const counts = (c) => !isLand(c) && isCreature(c) === creature;
+    const onBattlefield = this.#battlefield.filter((p) => p.controllerId === playerId && counts(p)).length;
+    const onStack = this.#stack.filter((o) => o.kind === 'spell' && o.controllerId === playerId && isPermanentCard(o.card) && counts(o.card)).length;
+    return onBattlefield + onStack >= limit;
   }
 
   /**
@@ -1175,6 +1231,7 @@ export class Game extends EventEmitter {
           this.#emitEvent('permanentReturnedToHand', {
             cardId: permanent.id, cardName: permanent.name, ownerId: permanent.ownerId, sourceId,
           });
+          if (!permanent.token) this.#burnIfHandFull(permanent.ownerId, permanent.id, 'returnToHand');
         }
         break;
       case EFFECT.TAP:
@@ -1266,6 +1323,11 @@ export class Game extends EventEmitter {
       case EFFECT.CREATE_TOKEN:
         for (const playerId of players) {
           for (let i = 0; i < (effect.count ?? 1); i++) {
+            const cardId = this.#tokenCardId(effect.token);
+            if (this.#atLimit(playerId, this.#cardDefinitions[cardId])) {
+              this.#emitEvent('tokensLimited', { playerId, count: (effect.count ?? 1) - i, sourceId });
+              break;
+            }
             const token = this.#createToken(effect.token, playerId);
             this.#emitEvent('tokenCreated', { playerId, card: this.#forEvent(token), sourceId });
           }

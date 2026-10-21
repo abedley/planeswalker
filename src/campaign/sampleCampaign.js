@@ -81,12 +81,14 @@ export const SAMPLE_CAMPAIGN = deepFreeze({
   planeswalkers: {
     warden: {
       name: 'The Warden',
+      color: 'green',
       text: 'Grows an army, one counter at a time.',
       emblems: ['wardenGrowth'],
       powers: ['wardenSprouts', 'wardenTwice', 'toughHide', 'secondWind'],
     },
     sage: {
       name: 'The Sage',
+      color: 'blue',
       text: 'Outlasts opponents with cards and tricks.',
       emblems: ['sageInsight'],
       startingLife: 18,

@@ -324,6 +324,8 @@ export function convertScryfallCard(card) {
     ...(additionalCost ? { additionalCost } : {}),
     ...(staticAbilities.length ? { staticAbilities } : {}),
     text: card.oracle_text ?? '',
+    // Presentation (the app shows the art and credits the artist).
+    ...presentation(card),
     // Provenance, for reference only.
     typeLine: card.type_line,
     oracleText: card.oracle_text ?? '',
@@ -331,4 +333,22 @@ export function convertScryfallCard(card) {
     scryfallUri: card.scryfall_uri,
   };
   return { ok: true, id, definition };
+}
+
+/**
+ * What the app needs to show a card: Scryfall's image URLs (`art`: the art crop for
+ * the board and hand, `card`: the full card for inspecting it), the artist to
+ * credit, colors (as W/U/B/R/G), rarity, set and collector number. Only the
+ * fields Scryfall provides are kept.
+ */
+function presentation(card) {
+  const images = card.image_uris;
+  return {
+    ...(images ? { image: { art: images.art_crop, card: images.normal } } : {}),
+    ...(card.artist ? { artist: card.artist } : {}),
+    ...(card.colors ? { colors: card.colors } : {}),
+    ...(card.rarity ? { rarity: card.rarity } : {}),
+    ...(card.set ? { set: card.set } : {}),
+    ...(card.collector_number ? { collectorNumber: card.collector_number } : {}),
+  };
 }

@@ -295,3 +295,26 @@ test('campaign-sim plays whole runs and summarises them', async () => {
   const fights = summary.tiers.reduce((sum, t) => sum + t.won + t.lost, 0);
   assert.equal(fights, runs.reduce((sum, r) => sum + r.history.filter((h) => h.result !== 'skipped').length, 0));
 });
+
+test('fights use the game limits, and planeswalkers have at most 4 abilities', () => {
+  const run = start();
+  assert.deepEqual(matchSetup(run, content).game.limits, { hand: 7, creatures: 10, permanents: 8 });
+  const many = {
+    ...content,
+    emblems: {
+      ...content.emblems,
+      big: { id: 'big', name: 'Big', abilities: ['a', 'b', 'c'].map((id) => ({ id, text: id, cost: {}, effects: [] })) },
+    },
+    planeswalkers: { ...content.planeswalkers, greedy: { name: 'Greedy', emblems: ['big', 'wardenGrowth', 'sageInsight'], powers: [] } },
+  };
+  assert.ok(validateCampaign(many).includes('planeswalker greedy: 5 abilities, more than 4'));
+  // An emblem power that would go over the cap isn't offered.
+  const capped = {
+    ...many,
+    planeswalkers: { ...many.planeswalkers, warden: { ...many.planeswalkers.warden, emblems: ['big', 'wardenGrowth'] } },
+  };
+  for (let rng = 0; rng < 30; rng++) {
+    const offers = recordResult({ ...startRun(capped, { planeswalkerId: 'warden', deckId: 'effects', seed: 3 }), rng }, capped, { won: true }).offers;
+    assert.ok(!offers.some((o) => o.powerId === 'wardenSprouts'));
+  }
+});

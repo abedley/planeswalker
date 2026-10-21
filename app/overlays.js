@@ -5,7 +5,6 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { fullCard } from './cardView.js';
-import { presentationOf } from './art.js';
 import { manaValue } from '../src/cards/cards.js';
 import { symbolText } from './symbols.js';
 
@@ -37,19 +36,20 @@ export function createOverlays(app) {
     return el;
   }
 
-  /** A big view of a card, with its artist credited when it has real art. */
+  /** A big view of a card (real cards show their full image, artist included). Tap anywhere to close it. */
   function inspect(card, { actions = [] } = {}) {
-    const full = presentationOf(card, app.definitions);
     app.sound('select');
-    show(h('div.inspect',
+    const view = h('div.inspect',
       fullCard(card, app.definitions, { big: true }),
-      full.artist ? h('div.credit', `Art: ${full.artist}`) : null,
       actions.length ? h('div.inspect-actions', actions.map((a) => h('button.btn', {
         class: a.primary ? 'primary' : '',
         disabled: a.disabled,
         onclick: () => { close(); a.onPick(); },
-      }, a.label))) : null,
-      h('button.btn.ghost', { onclick: close }, 'Close')), { kind: 'inspect' });
+      }, a.label))) : null);
+    view.addEventListener('click', (event) => {
+      if (!event.target.closest('button')) close();
+    });
+    show(view, { kind: 'inspect' });
   }
 
   /** A list of choices. `options`: `[{ label, sub?, onPick, disabled?, primary? }]`. */

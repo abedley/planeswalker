@@ -80,7 +80,7 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 **Playing:**
 - **Tap** a card in hand to see it big, at any time, even while the opponent is thinking or
   playing. A **Play** button appears when it can be played, and the preview stays open, updating,
-  until you close it or tap the card again. **Drag** it
+  until you tap anywhere else (or the card again). **Drag** it
   up to play it, or, for a spell with a target, drag out an arrow and release on the target.
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
@@ -91,7 +91,8 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 - **Auto-pass:** like MTG Arena's smart stops, the app passes priority for you unless you could
   act: your main phases, the opponent's spells, their attacks, after blocks, and their end step.
   Hold the main button for full control.
-- **Long-press** any card to inspect it, with its artist credited when it has real art.
+- **Long-press** any card to inspect it: real cards show their full Scryfall image, artist
+  included. Tap anywhere to close it.
 - **The opponent** thinks visibly (a ring around its portrait) only at moments that give nothing
   away, as described under *Search AI*.
 
@@ -226,8 +227,7 @@ Foundations. Forest and Llanowar Elves are defined by hand, so for those the imp
 their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
-art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist` (credited
-whenever the art is shown), `colors`, `rarity`, `set` and `collectorNumber`.
+art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist`, `colors`, `rarity`, `set` and `collectorNumber`.
 
 The exit code is 1 when anything was skipped or not found. Re-importing a card updates it. Cards
 defined by hand in `src/cards/cards.js` (Forest, Llanowar Elves) aren't overwritten. The

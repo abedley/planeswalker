@@ -263,15 +263,15 @@ export class Battle {
       this.#refresh();
       return;
     }
-    const close = { label: 'Close', onPick: () => this.#cancel() };
+    // No Close button: tapping anywhere else closes the preview.
     if (this.#interactive) {
       const actions = this.#handActions(card);
-      this.#view.showPreview(card, [...actions, close], { key: `${card.id}|act|${actions.map((a) => a.label).join()}` });
+      this.#view.showPreview(card, actions, { key: `${card.id}|act|${actions.map((a) => a.label).join()}` });
       return;
     }
     if (this.#view.previewKey?.startsWith(`${card.id}|`) && state.activePlayerId === this.#me) return;
     const status = state.activePlayerId === this.#me ? 'Waiting…' : 'Opponent\'s turn';
-    this.#view.showPreview(card, [{ label: status, disabled: true }, close], { key: `${card.id}|wait|${status}` });
+    this.#view.showPreview(card, [{ label: status, disabled: true }], { key: `${card.id}|wait|${status}` });
   }
 
   /** The preview buttons for a hand card when you have priority. */
@@ -404,7 +404,9 @@ export class Battle {
 
   #targetOf(node) {
     if (!(node instanceof Element)) return { kind: 'empty' };
-    if (node.closest('.preview, .menu-btn, .versus')) return null;
+    // The preview's buttons handle themselves; tapping the big card closes it.
+    if (node.closest('.preview-actions, .menu-btn, .versus')) return null;
+    if (node.closest('.preview')) return { kind: 'preview' };
     const main = node.closest('.main-btn');
     if (main) return { kind: 'main' };
     const ability = node.closest('.ability-btn');
@@ -554,6 +556,10 @@ export class Battle {
     if (!state) return;
     this.#app.sound('tap');
     const mode = this.#mode;
+    if (target.kind === 'preview') {
+      this.#cancel();
+      return;
+    }
     // Targeting: tap a target, or anything else to cancel.
     if (mode.kind === 'targeting') {
       const id = target.kind === 'player' ? target.id
@@ -692,7 +698,7 @@ export class Battle {
   #select(target, card, actions) {
     this.#mode = { kind: 'selected', id: target.id, zone: target.zone };
     this.#app.sound('select');
-    this.#view.showPreview(card, [...actions, { label: 'Close', onPick: () => this.#cancel() }]);
+    this.#view.showPreview(card, actions);
     this.#refresh();
   }
 

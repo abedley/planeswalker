@@ -626,7 +626,6 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .seg { display: flex; gap: 4px; }
 .inspect { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(300px, 82vw); }
 .inspect > .card-face { width: 100%; aspect-ratio: 63 / 88; height: auto; }
-.inspect .credit { color: var(--muted); font-size: 12px; }
 .inspect-actions { display: flex; gap: 8px; width: 100%; }
 .inspect-actions .btn { flex: 1; }
 .deck-view { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; padding: calc(10px + var(--safe-top)) 12px calc(10px + var(--safe-bottom)); background: linear-gradient(180deg, rgba(20, 24, 50, .98), rgba(8, 10, 22, .98)); }

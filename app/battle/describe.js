@@ -1,6 +1,6 @@
 /** Words for things on the battlefield: names, choices, phases and prompts. */
 import { DECISION } from '../../src/engine/Game.js';
-import { PHASE, STEP } from '../../src/engine/turnStructure.js';
+import { PHASE } from '../../src/engine/turnStructure.js';
 import { formatMana } from '../../src/engine/mana.js';
 
 
@@ -72,7 +72,11 @@ export function promptFor(state, me) {
     }
   }
   if (decision) return decision.type === DECISION.DECLARE_BLOCKERS ? 'Opponent is blocking…' : 'Opponent is deciding…';
-  if (state.step === STEP.DECLARE_ATTACKERS && state.activePlayerId !== me) return 'You are being attacked';
+  // Only once the opponent has actually declared attackers (combat.attackers).
+  const attackers = state.combat?.attackers ?? [];
+  if (state.activePlayerId !== me && state.phase === PHASE.COMBAT && attackers.length) {
+    return `${attackers.length} attacking`;
+  }
   return '';
 }
 

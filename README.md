@@ -78,6 +78,9 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 (sound, animation speed, auto-pass). The run is saved between fights.
 
 **Playing:**
+- **Whose turn:** the badge in the middle lane reads *Your turn* (gold) or *Opponent's turn*
+  (red), with the turn number. The active side's half of the board and portrait glow in the
+  same color. The prompt says *N attacking* only once the opponent has declared attackers.
 - **Tap** a card in hand to see it big, at any time, even while the opponent is thinking or
   playing. A **Play** button appears when it can be played, and the preview stays open, updating,
   until you tap anywhere else (or the card again). **Drag** it

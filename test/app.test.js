@@ -5,6 +5,7 @@ import {
 } from '../src/index.js';
 import { playOptions, variantsFor, perform, sameAction } from '../app/battle/play.js';
 import { shouldAutoPass, primaryAction } from '../app/battle/autopass.js';
+import { promptFor } from '../app/battle/describe.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const cards = { ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS };
@@ -155,4 +156,14 @@ test('vendor-fonts reads glyph codepoints from icon stylesheets', async () => {
   const sheet = renderStylesheet({ mana: { g: 'e604' }, sets: { m19: 'e941' } });
   assert.match(sheet, /\.ms-g::before \{ content: "\\e604"; \}/);
   assert.match(sheet, /\.ss-m19::before \{ content: "\\e941"; \}/);
+});
+
+test('promptFor only reports an attack once the opponent has declared attackers', () => {
+  const base = { activePlayerId: 'p2', phase: PHASE.COMBAT, step: STEP.DECLARE_ATTACKERS, pendingDecision: null };
+  assert.equal(promptFor({ ...base, combat: { attackers: [] } }, 'p1'), '');
+  assert.equal(promptFor({ ...base, combat: null }, 'p1'), '');
+  assert.equal(promptFor({ ...base, step: STEP.DECLARE_BLOCKERS, combat: { attackers: [{ cardId: 'a', blockerIds: [] }] } }, 'p1'),
+    '1 attacking');
+  assert.equal(promptFor({ ...base, combat: { attackers: [{ cardId: 'a' }, { cardId: 'b' }] } }, 'p1'), '2 attacking');
+  assert.equal(promptFor({ ...base, activePlayerId: 'p1', combat: { attackers: [{ cardId: 'a' }] } }, 'p1'), '');
 });

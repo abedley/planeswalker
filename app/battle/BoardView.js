@@ -81,7 +81,9 @@ export class BoardView {
     const meCreatures = h('div.zone.creatures.zone-me');
     const pips = h('div.pips-turn', TURN_PIPS.map((p) => h('span.tp', { dataset: { pip: p.id } }, p.label)));
     const prompt = h('div.prompt');
-    const lane = h('div.lane', pips, prompt);
+    // Whose turn it is: a badge in the middle of the board (and the active side lights up).
+    const turnBadge = h('div.turn-badge', h('span.tb-who'), h('span.tb-n'));
+    const lane = h('div.lane', turnBadge, pips, prompt);
     const hand = h('div.hand');
     const stack = h('div.stack-zone');
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -89,7 +91,7 @@ export class BoardView {
     const fx = h('div.fx');
     const preview = h('div.preview');
     this.#parts = {
-      opp: opp.parts, me: me.parts, oppStrip, meStrip, oppCreatures, meCreatures, pips, prompt, lane, hand, stack, lines, fx, preview,
+      opp: opp.parts, me: me.parts, oppStrip, meStrip, oppCreatures, meCreatures, pips, prompt, lane, hand, stack, lines, fx, preview, turnBadge,
     };
     return h('div.battle',
       opp.bar, oppStrip.el, oppCreatures, lane, meCreatures, meStrip.el, me.bar, hand,
@@ -461,6 +463,18 @@ export class BoardView {
   #renderPips(state) {
     const mine = state.activePlayerId === this.#me;
     toggle(this.#parts.pips, 'theirs', !mine);
+    // Whose turn: the badge, and the active side's panel and portrait.
+    const badge = this.#parts.turnBadge;
+    if (state.activePlayerId && badge.dataset.turn !== String(state.turn)) {
+      const changed = badge.dataset.turn !== undefined;
+      badge.dataset.turn = String(state.turn);
+      setText(badge.querySelector('.tb-who'), mine ? 'Your turn' : 'Opponent\'s turn');
+      setText(badge.querySelector('.tb-n'), String(Math.ceil(state.turn / 2)));
+      if (changed) badge.animate([{ transform: 'scale(1.25)' }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+    toggle(badge, 'theirs', !mine);
+    toggle(this.el, 'my-turn', Boolean(state.activePlayerId) && mine);
+    toggle(this.el, 'their-turn', Boolean(state.activePlayerId) && !mine);
     for (const el of this.#parts.pips.children) {
       const pip = TURN_PIPS.find((p) => p.id === el.dataset.pip);
       toggle(el, 'now', pip.match(state));

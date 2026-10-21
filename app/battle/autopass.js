@@ -26,6 +26,8 @@ export function shouldAutoPass(state, me, { hasOptions, fullControl = false, end
   const myTurn = state.activePlayerId === me;
   if (myTurn) {
     if (endingTurn) return true;
+    // After blocks: a chance to pump or remove a creature before damage.
+    if (state.step === STEP.DECLARE_BLOCKERS && !top && state.combat?.attackers?.length) return false;
     return !(isMain(state) && !top);
   }
   // Their turn: stop when they attack, after blocks, and at their end step.
@@ -67,6 +69,7 @@ export function primaryAction(state, me) {
   const pass = find(ACTION.PASS_PRIORITY);
   if (state.stack.length) return { label: 'Resolve', action: pass };
   if (state.activePlayerId !== me) return { label: 'Pass', action: pass };
+  if (state.phase === PHASE.COMBAT && state.combat?.attackers?.length) return { label: 'Deal damage', action: pass };
   if (state.phase === PHASE.PRECOMBAT_MAIN && readyAttackers(state, me).length) return { label: 'Attack', action: pass };
   return { label: 'End turn', action: pass, endTurn: true };
 }

@@ -83,7 +83,7 @@ export class BoardView {
     const prompt = h('div.prompt');
     // Whose turn it is: a badge in the middle of the board (and the active side lights up).
     const turnBadge = h('div.turn-badge', h('span.tb-who'), h('span.tb-n'));
-    const lane = h('div.lane', turnBadge, pips, prompt);
+    const lane = h('div.lane', turnBadge, prompt, pips);
     const hand = h('div.hand');
     const stack = h('div.stack-zone');
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

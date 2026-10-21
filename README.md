@@ -90,9 +90,10 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
   target, or which creature to sacrifice.
 - **Combat:** tap creatures to attack; to block, tap your creature, then an attacker.
 - **The main button** says what passing does: *End turn*, *Attack*, *Resolve*, *Pass*,
-  *Attack (2)*, *No blocks*.
+  *Attack (2)*, *No blocks*, *Deal damage*.
 - **Auto-pass:** like MTG Arena's smart stops, the app passes priority for you unless you could
-  act: your main phases, the opponent's spells, their attacks, after blocks, and their end step.
+  act: your main phases, after blocks when you attack (to pump or remove a creature before
+  damage), the opponent's spells, their attacks, after blocks, and their end step.
   Hold the main button for full control.
 - **Long-press** any card to inspect it: real cards show their full Scryfall image, artist
   included. Tap anywhere to close it.

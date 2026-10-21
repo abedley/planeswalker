@@ -104,6 +104,11 @@ test('auto-pass stops only where the player could sensibly act', () => {
   assert.equal(pass({ stack: [{ controllerId: 'p2' }] }), false, 'the opponent cast something');
   assert.equal(pass({ stack: [{ controllerId: 'p2' }] }, { endingTurn: true }), false);
   assert.equal(pass({ stack: [{ controllerId: 'p1' }] }), true, 'own spell: let it resolve');
+  const myCombat = { phase: PHASE.COMBAT, combat: { attackers: [{ cardId: 'a', blockerIds: [] }] } };
+  assert.equal(pass({ ...myCombat, step: STEP.DECLARE_BLOCKERS }), false, 'own attack, after blocks');
+  assert.equal(pass({ ...myCombat, step: STEP.DECLARE_BLOCKERS }, { hasOptions: false }), true, 'after blocks, nothing to cast');
+  assert.equal(pass({ ...myCombat, step: STEP.DECLARE_BLOCKERS, combat: { attackers: [] } }), true, 'no attack');
+  assert.equal(pass({ ...myCombat, step: STEP.DECLARE_ATTACKERS }), true);
   const theirs = { activePlayerId: 'p2', phase: PHASE.COMBAT };
   assert.equal(pass({ ...theirs, step: STEP.BEGINNING_OF_COMBAT }), true);
   assert.equal(pass({ ...theirs, step: STEP.DECLARE_ATTACKERS }), false, 'they attack');
@@ -124,6 +129,8 @@ test('the main button follows the game', () => {
   assert.equal(label({ battlefield: [{ ...bear, summoningSick: true }] }), 'End turn');
   assert.equal(label({ stack: [{ controllerId: 'p2' }] }), 'Resolve');
   assert.equal(label({ activePlayerId: 'p2' }), 'Pass');
+  const afterBlocks = label({ phase: PHASE.COMBAT, step: STEP.DECLARE_BLOCKERS, combat: { attackers: [{ cardId: 'a' }] } });
+  assert.equal(afterBlocks, 'Deal damage');
   assert.equal(label({ priorityPlayerId: 'p2' }), 'Opponent');
   assert.equal(label({ pendingDecision: { type: DECISION.DECLARE_ATTACKERS, playerId: 'p1', attackers: ['x', 'y'] } }), 'Attack (2)');
   assert.equal(label({ pendingDecision: { type: DECISION.DECLARE_BLOCKERS, playerId: 'p1', blocks: {} } }), 'No blocks');

@@ -132,6 +132,8 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 /* Small cards: the name gets the whole top line, and the cost sits on the art's corner. */
 .card-face:not(.big) > .cf-top .pips { position: absolute; top: calc(4px + 2.25em); right: 6px; z-index: 1; padding: 1.5px 2px; border-radius: 9px; background: rgba(8, 8, 14, .72); font-size: 9.5px; }
 .card-face:not(.big) > .cf-top { min-height: 2.2em; font-size: 8.5px; }
+/* In the fanned hand the next card covers the right edge, so the cost sits under the name. */
+.hand .card-face:not(.big) > .cf-top .pips { right: auto; left: 5px; }
 .cf-type { display: flex; align-items: center; gap: 2px; font-size: 7px; opacity: .95; }
 .cf-typeline { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cf-type .ss { font-size: 1.7em; flex: none; }
@@ -417,8 +419,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 
 /* lane: turn pips and prompt */
 .lane { position: relative; display: flex; align-items: center; gap: 8px; padding: 0 2px; z-index: 2; }
-.pips-turn { display: flex; gap: 3px; }
-.pips-turn { align-items: center; }
+.pips-turn { display: flex; align-items: center; gap: 3px; flex: none; margin-left: auto; }
 .tp { font: 700 8.5px var(--ui); letter-spacing: .05em; text-transform: uppercase; width: 7px; height: 7px; padding: 0; border-radius: 4px; color: transparent; background: rgba(255, 255, 255, .14); overflow: hidden; white-space: nowrap; transition: width .2s var(--ease); }
 .tp.now { width: auto; height: auto; padding: 3px 6px; color: #241a03; background: var(--gold); }
 .pips-turn.theirs .tp.now { color: #fff; background: #b8414b; }
@@ -433,7 +434,8 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .battle.their-turn .bar-opp .avatar .crest { box-shadow: 0 0 0 2px #ff6b6b, 0 0 14px 3px rgba(229, 72, 77, .7); }
 .prompt { flex: 1; min-width: 0; text-align: center; font: 600 12px var(--ui); color: #ffe3a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .battle.targeting .prompt { color: #ff9fb3; }
-.battle.stacked .prompt { padding-right: 96px; text-align: right; }
+/* Keep the phase pips clear of the stack, which sits over the lane's right end. */
+.battle.stacked .lane { padding-right: 100px; }
 
 /* the stack: cards waiting to resolve, at the right of the center line */
 .stack-zone { position: absolute; right: 12px; top: 50%; width: 88px; height: 122px; margin-top: -61px; z-index: 4; pointer-events: none; }

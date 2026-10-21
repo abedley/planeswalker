@@ -162,7 +162,7 @@ export class Battle {
         const { version } = state;
         this.#autoTimer = setTimeout(() => {
           if (this.#game.peekState().version !== version) return;
-          this.#dispatch({ type: ACTION.PASS_PRIORITY, playerId: me });
+          this.#dispatch({ type: ACTION.PASS_PRIORITY, playerId: me }, { auto: true });
         }, 60);
         this.#refresh();
         return;
@@ -185,7 +185,8 @@ export class Battle {
 
   #setInteractive(on) {
     this.#interactive = on;
-    if (!on) this.#mode = { kind: 'idle' };
+    // Inspecting a hand card outlasts the opponent's moves; other modes don't.
+    if (!on && !this.#mode.inspecting) this.#mode = { kind: 'idle' };
     this.#refresh();
   }
 
@@ -201,8 +202,12 @@ export class Battle {
     if (!this.#interactive) {
       ctx.main.waiting = actingPlayerId(state) !== me && state.status === GAME_STATUS.IN_PROGRESS;
       ctx.main.disabled = true;
+      if (this.#mode.inspecting) {
+        ctx.selected = this.#mode.id;
+        ctx.selectedHand = this.#mode.id;
+      }
       this.#view.setInteraction(ctx);
-      this.#view.showPreview(null);
+      this.#syncPreview();
       return;
     }
     const mine = state.validActions.filter((a) => a.playerId === me);
@@ -237,15 +242,67 @@ export class Battle {
       ctx.selectedHand = mode.zone === 'hand' ? mode.id : null;
     }
     this.#view.setInteraction(ctx);
+    this.#syncPreview();
+  }
+
+  /**
+   * Keeps the preview of an inspected hand card current: what it can do when you
+   * have priority, otherwise a status line. While the board animates on your turn
+   * it's left as it is, so it doesn't flicker.
+   */
+  #syncPreview() {
+    const mode = this.#mode;
+    if (!mode.inspecting) return;
+    const state = this.#state;
+    const card = state.players.find((p) => p.id === this.#me).hand.find((c) => c.id === mode.id);
+    const decision = state.pendingDecision;
+    // Gone from the hand, or a decision of yours needs the board: stop inspecting.
+    if (!card || (this.#interactive && decision?.playerId === this.#me)) {
+      this.#mode = { kind: 'idle' };
+      this.#view.showPreview(null);
+      this.#refresh();
+      return;
+    }
+    const close = { label: 'Close', onPick: () => this.#cancel() };
+    if (this.#interactive) {
+      const actions = this.#handActions(card);
+      this.#view.showPreview(card, [...actions, close], { key: `${card.id}|act|${actions.map((a) => a.label).join()}` });
+      return;
+    }
+    if (this.#view.previewKey?.startsWith(`${card.id}|`) && state.activePlayerId === this.#me) return;
+    const status = state.activePlayerId === this.#me ? 'Waiting…' : 'Opponent\'s turn';
+    this.#view.showPreview(card, [{ label: status, disabled: true }, close], { key: `${card.id}|wait|${status}` });
+  }
+
+  /** The preview buttons for a hand card when you have priority. */
+  #handActions(card) {
+    const option = this.#options.find((o) => o.sourceId === card.id);
+    if (!option) return [{ label: this.#whyNot(card), disabled: true }];
+    const label = option.kind === 'land' ? 'Play land' : option.targets.length ? 'Cast → target' : 'Cast';
+    return [{ label, primary: true, onPick: () => this.#interactive && this.#begin(option) }];
+  }
+
+  /** Tapping a hand card: inspect it (and, on your move, see what it can do); tap again to close. */
+  #inspectHand(target) {
+    if (this.#mode.inspecting && this.#mode.id === target.id) {
+      this.#cancel();
+      return;
+    }
+    this.#mode = { kind: 'selected', id: target.id, zone: 'hand', inspecting: true };
+    this.#app.sound('select');
+    this.#refresh();
   }
 
   // ---------------------------------------------------------------------------
   // Acting
 
-  #dispatch(action) {
+  /** Takes an action. `auto`: passing for the player, which leaves an open inspection alone. */
+  #dispatch(action, { auto = false } = {}) {
     clearTimeout(this.#autoTimer);
-    this.#mode = { kind: 'idle' };
-    this.#view.showPreview(null);
+    if (!auto || !this.#mode.inspecting) {
+      this.#mode = { kind: 'idle' };
+      this.#view.showPreview(null);
+    }
     const result = timed(`dispatch ${action.type}`, () => this.#game.dispatch(action));
     if (!result.ok) this.#view.toast(result.reason ?? 'Not allowed');
     return result;
@@ -393,6 +450,7 @@ export class Battle {
       this.el.setPointerCapture?.(g.pointerId);
       g.drag.el.style.willChange = 'transform';
       g.drag.el.classList.add('dragging');
+      this.#mode = { kind: 'idle' };
       this.#view.showPreview(null);
     }
     const { option, el } = g.drag;
@@ -517,8 +575,10 @@ export class Battle {
       return;
     }
     if (!this.#interactive) {
-      // Still inspectable while waiting.
-      if (target.kind === 'card' && target.zone !== 'hand') this.#longPress(target);
+      // Cards stay inspectable while the opponent acts.
+      if (target.kind === 'card' && target.zone === 'hand') this.#inspectHand(target);
+      else if (target.kind === 'card') this.#longPress(target);
+      else if (target.kind === 'empty' && this.#mode.inspecting) this.#cancel();
       return;
     }
     const decision = state.pendingDecision;
@@ -615,11 +675,7 @@ export class Battle {
     }
     const options = this.#options.filter((o) => o.sourceId === target.id);
     if (target.zone === 'hand') {
-      const option = options[0];
-      const actions = option
-        ? [{ label: option.kind === 'land' ? 'Play land' : option.targets.length ? 'Cast → target' : 'Cast', primary: true, onPick: () => this.#begin(option) }]
-        : [{ label: this.#whyNot(card), disabled: true }];
-      this.#select(target, card, actions);
+      this.#inspectHand(target);
       return;
     }
     if (!card.abilities?.some((a) => !a.isManaAbility)) {

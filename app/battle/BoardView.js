@@ -37,6 +37,7 @@ export class BoardView {
   #selectedHandId = null;
   #state = null;
   #lineTimer = null;
+  #previewKey = null;
 
   constructor(app, { me, opp, meInfo, oppInfo }) {
     this.#app = app;
@@ -638,16 +639,26 @@ export class BoardView {
     toggle(this.#parts.opp.avatar, 'thinking', on);
   }
 
-  /** The preview above the hand: a big card and buttons. Pass null to hide it. */
-  showPreview(card, actions = []) {
+  /** What the open preview shows (the `key` it was last shown with), or null. */
+  get previewKey() { return this.#previewKey; }
+
+  /**
+   * The preview above the hand: a big card and buttons. Pass null to hide it. With
+   * `key`, showing the same key again does nothing (no flicker on re-renders).
+   */
+  showPreview(card, actions = [], { key = null } = {}) {
     const preview = this.#parts.preview;
     if (!card) {
+      this.#previewKey = null;
       if (preview.classList.contains('open')) {
         preview.classList.remove('open');
         preview.replaceChildren();
       }
       return;
     }
+    if (key && key === this.#previewKey && preview.classList.contains('open')) return;
+    const wasOpen = preview.classList.contains('open') && this.#previewKey?.split('|')[0] === key?.split('|')[0];
+    this.#previewKey = key;
     preview.replaceChildren(
       h('div.preview-card', fullCard(card, this.#app.definitions, { big: true })),
       h('div.preview-actions', actions.map((a) => h('button.btn', {
@@ -661,7 +672,8 @@ export class BoardView {
       }, a.label, a.sub ? h('small', a.sub) : null))),
     );
     preview.classList.add('open');
-    preview.animate([{ opacity: 0, transform: 'translateY(16px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
+    // Only animate when a card is first shown, not when its buttons change.
+    if (!wasOpen) preview.animate([{ opacity: 0, transform: 'translateY(16px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
   }
 
   /** A targeting arrow from a point to the finger (for dragged spells). */

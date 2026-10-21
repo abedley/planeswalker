@@ -78,7 +78,9 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 (sound, animation speed, auto-pass). The run is saved between fights.
 
 **Playing:**
-- **Tap** a card in hand to see it big, with a **Play** button when it can be played. **Drag** it
+- **Tap** a card in hand to see it big, at any time, even while the opponent is thinking or
+  playing. A **Play** button appears when it can be played, and the preview stays open, updating,
+  until you close it or tap the card again. **Drag** it
   up to play it, or, for a spell with a target, drag out an arrow and release on the target.
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the

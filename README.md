@@ -120,8 +120,11 @@ color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
 - **The AI** thinks in a Web Worker.
 - **Catching up:** the board plays the engine's events back as a queue, which speeds up when it
   falls behind and skips ahead when far behind.
-- **Measured:** in Chromium emulating an iPhone 13 Pro with the CPU slowed 4×, a render takes at
-  most about 35 ms, and no task runs over 75 ms during play.
+- **Measured:** in Chromium emulating an iPhone 13 Pro with the CPU slowed 4× (roughly a phone's
+  speed) and real card art:
+  - typical renders take 10–35 ms, and the slowest about 100 ms, when the first board appears
+  - a tap that plays a card takes about 60 ms, and a CPU move about 35 ms
+  - image decoding totals about 0.2 s over a minute of play
 
 **Code:**
 - `app/main.js`: the router and settings

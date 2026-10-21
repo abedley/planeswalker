@@ -100,8 +100,8 @@ function boot() {
   const root = document.getElementById('app');
   const app = createApp(root);
   window.planeswalker = app;
-  // Sound needs a user gesture to start.
-  window.addEventListener('pointerdown', unlockAudio, { capture: true });
+  // Sound needs a user gesture to start (iOS counts touchend and click, not pointerdown).
+  for (const type of ['pointerdown', 'touchend', 'click']) window.addEventListener(type, unlockAudio, { capture: true, passive: true });
   // No pinch or double-tap zoom on iOS.
   document.addEventListener('gesturestart', (event) => event.preventDefault());
   document.addEventListener('dblclick', (event) => event.preventDefault());

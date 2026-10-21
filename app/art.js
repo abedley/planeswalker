@@ -40,8 +40,22 @@ function hash(text) {
   return value >>> 0;
 }
 
-/** The presentation fields for a card: the definition's (images, artist) over the instance. */
-export const presentationOf = (card, definitions) => ({ ...card, ...(definitions?.[card.cardId] ?? {}), id: card.id });
+/**
+ * A card with its presentation fields (art, artist, colors, type line) from its
+ * definition. Game values (power, counters, ...) stay the instance's own.
+ */
+export function presentationOf(card, definitions) {
+  const definition = definitions?.[card.cardId];
+  if (!definition) return card;
+  return {
+    ...card,
+    image: card.image ?? definition.image,
+    artist: card.artist ?? definition.artist,
+    colors: card.colors ?? definition.colors,
+    typeLine: card.typeLine ?? definition.typeLine,
+    rarity: card.rarity ?? definition.rarity,
+  };
+}
 
 /** Art for a card: its Scryfall art crop, or generated. */
 export function cardArt(card) {

@@ -47,11 +47,11 @@ reach, lifelink, defender and vigilance** are implemented. No real card has them
 40-card **keyword sampler** deck (`SAMPLE_CARDS` / `SAMPLE_DECK`: 18 Forests and two each of
 eleven {G} creatures, one per keyword) can be picked in the debugger.
 
-**Campaign:** the game will be a roguelite. You pick a planeswalker and a starting deck, then
-climb a ladder of ever harder CPU opponents up to a boss, earning cards and planeswalker powers
-with each win. The framework is in `src/campaign/`, with example content; see *Campaign* below.
+**Campaign:** the game is a roguelite. You pick a planeswalker and a starting deck, then climb a
+ladder of ever harder CPU opponents up to a boss, earning cards and planeswalker powers with each
+win. The framework is in `src/campaign/`, with example content; see *Campaign* below.
 
-- `index.html`: landing page
+- `index.html` + `app/`: **the game**, a single-page app for phones held upright (see *The app*)
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
 
 ## Running locally
@@ -60,9 +60,75 @@ ES modules have to be served over HTTP, so opening the files directly won't work
 
 ```sh
 npm run serve        # python3 -m http.server 8000
-# open http://localhost:8000/debug/
+# open http://localhost:8000/ (the game) or http://localhost:8000/debug/
 npm test             # node --test (Node 18+)
 ```
+
+## The app
+
+`index.html` and `app/` are the game: one page, no build step, aimed at phones held upright
+(designed on an iPhone 13 Pro, 390×844, and down to 390×664 with Safari's toolbars showing).
+Add it to the home screen to play full screen; the service worker (`sw.js`) caches the app and
+card images, so it then works offline. It's registered only when not on localhost, so local
+edits show up on reload.
+
+**Screens:** title → new run (a carousel of planeswalkers, then a starter deck) → run map (the
+ladder, lives, deck, the next opponent) → battle → reward (offers dealt face down and flipped) or
+defeat (retry or skip) → … → run won or over. There's also Quick Match, and a settings sheet
+(sound, animation speed, auto-pass). The run is saved between fights.
+
+**Playing:**
+- **Tap** a card in hand to see it big, with a **Play** button when it can be played. **Drag** it
+  up to play it, or, for a spell with a target, drag out an arrow and release on the target.
+- **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
+  lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
+  target, or which creature to sacrifice.
+- **Combat:** tap creatures to attack; to block, tap your creature, then an attacker.
+- **The main button** says what passing does: *End turn*, *Attack*, *Resolve*, *Pass*,
+  *Attack (2)*, *No blocks*.
+- **Auto-pass:** like MTG Arena's smart stops, the app passes priority for you unless you could
+  act: your main phases, the opponent's spells, their attacks, after blocks, and their end step.
+  Hold the main button for full control.
+- **Long-press** any card to inspect it, with its artist credited when it has real art.
+- **The opponent** thinks visibly (a ring around its portrait) only at moments that give nothing
+  away, as described under *Search AI*.
+
+**Screen limits:** fights use `GAME_LIMITS` (7 cards in hand, 10 creatures, 8 other permanents)
+and planeswalkers have at most 4 abilities, so a whole board always fits. Lands are shown grouped
+("Forest ×5, 3 ready"), and a side with more than five creatures switches to two rows.
+
+**Art:** imported cards use Scryfall's images (`image.art` on the board and in hand, `image.card`
+when inspecting). Cards without art, such as the samples and tokens, get generated art: a gradient
+in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
+can have `art` and `color`; otherwise they get a monogram crest.
+
+**Performance**, especially for older iPhones:
+- **Animation:** everything animates only `transform` and `opacity` (Web Animations), and glows
+  are pseudo-elements whose opacity changes.
+- **Rendering:** each card keeps one element for its whole life and moves between zones with
+  FLIP.
+- **Updates:** each state is one render with one layout read.
+- **The AI** thinks in a Web Worker.
+- **Catching up:** the board plays the engine's events back as a queue, which speeds up when it
+  falls behind and skips ahead when far behind.
+- **Measured:** in Chromium emulating an iPhone 13 Pro with the CPU slowed 4×, a render takes at
+  most about 35 ms, and no task runs over 75 ms during play.
+
+**Code:**
+- `app/main.js`: the router and settings
+- `app/screens/`: one module per screen
+- `app/battle/`:
+  - `Battle.js`: the game, input and the animation queue
+  - `BoardView.js`: rendering and FLIP
+  - `fx.js`: effects
+  - `play.js`: one-tap plays
+  - `autopass.js`: smart stops and the main button
+- `app/cardView.js` and `app/art.js`: how cards look
+- `app/overlays.js`: sheets, inspect, deck viewer and settings
+- `app/audio.js`: synthesized sound
+
+`play.js` and `autopass.js` are plain logic and are tested in Node (`test/app.test.js`).
+`tools/make-icons.js` renders the home-screen icons from `app/icons/icon.svg`.
 
 ## Importing cards from Scryfall
 
@@ -520,8 +586,8 @@ A run is a roguelite climb:
    reward. A boss can't be skipped. With no lives left, the run is over. Beating the boss wins
    the run.
 
-There's no campaign UI yet. The framework in `src/campaign/` is pure data and functions, ready
-for one:
+The framework in `src/campaign/` is pure data and functions; the app (*The app*, above) drives it
+like this:
 
 ```js
 import {

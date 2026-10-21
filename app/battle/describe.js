@@ -33,7 +33,13 @@ export function nameOf(state, id, me) {
 export function variantLabel(state, variant, me) {
   const parts = [];
   const { sacrifice = [], discard = [] } = variant.costChoices ?? {};
-  if (sacrifice.length) parts.push(`Sacrifice ${sacrifice.map((id) => nameOf(state, id, me)).join(', ')}`);
+  const withStats = (id) => {
+    const card = findCard(state, id);
+    if (card?.power === undefined) return nameOf(state, id, me);
+    const hurt = card.damage ? `, ${card.damage} damage` : '';
+    return `${card.name} (${card.power}/${card.toughness}${card.tapped ? ', tapped' : ''}${hurt})`;
+  };
+  if (sacrifice.length) parts.push(`Sacrifice ${sacrifice.map(withStats).join(', ')}`);
   if (discard.length) parts.push(`Discard ${discard.map((id) => nameOf(state, id, me)).join(', ')}`);
   if (variant.manaColor) parts.push(`Add ${COLOR_WORDS[variant.manaColor] ?? variant.manaColor} mana`);
   return parts.join(' · ') || 'Play';

@@ -128,3 +128,18 @@ test('the main button follows the game', () => {
   assert.equal(label({ pendingDecision: { type: DECISION.DECLARE_BLOCKERS, playerId: 'p1', blocks: {} } }), 'No blocks');
   assert.equal(label({ pendingDecision: { type: DECISION.DISCARD_TO_HAND_SIZE, playerId: 'p1', count: 2 } }), 'Discard 2');
 });
+
+test('presentation fields come from the definition, game values from the permanent', async () => {
+  const { presentationOf, frameOf, colorsOf } = await import('../app/art.js');
+  const definitions = {
+    bear: { id: 'bear', name: 'Bear', power: 2, toughness: 2, image: { art: 'a.jpg', card: 'c.jpg' }, artist: 'Someone', colors: ['G'] },
+  };
+  const permanent = { id: 'p1-3', cardId: 'bear', name: 'Bear', power: 5, toughness: 5, counters: { '+1/+1': 3 }, types: ['Creature'], manaCost: { G: 1 } };
+  const shown = presentationOf(permanent, definitions);
+  assert.deepEqual([shown.power, shown.toughness, shown.id], [5, 5, 'p1-3']);
+  assert.deepEqual([shown.image.art, shown.artist], ['a.jpg', 'Someone']);
+  assert.equal(frameOf(shown), 'green');
+  assert.deepEqual(colorsOf({ colors: ['green', 'blue'] }), ['G', 'U']);
+  assert.equal(frameOf({ types: ['Land'] }), 'land');
+  assert.equal(frameOf({ types: ['Artifact'], manaCost: { generic: 2 } }), 'colorless');
+});

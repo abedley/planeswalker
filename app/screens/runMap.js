@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { crest } from '../art.js';
-import { loadRun, saveRun } from '../../src/campaign/save.js';
+import { loadRun, saveRun, clearRun } from '../../src/campaign/save.js';
 import { RUN_PHASE, runProgress, retryFight, skipFight, canSkipFight } from '../../src/campaign/campaign.js';
 import { header, personInfo, difficultyOf, difficultyPips, hearts } from './common.js';
 
@@ -78,7 +78,7 @@ export function runMapScreen(app) {
 
   async function abandon() {
     if (!(await app.overlays.confirm({ title: 'Abandon this run?', text: 'Your progress will be lost.', yes: 'Abandon', danger: true }))) return;
-    app.storage.removeItem('planeswalker.campaign.run');
+    clearRun(app.storage);
     app.go('title');
   }
 

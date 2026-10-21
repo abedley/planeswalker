@@ -388,11 +388,13 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 /* lane: turn pips and prompt */
 .lane { position: relative; display: flex; align-items: center; gap: 8px; padding: 0 2px; z-index: 2; }
 .pips-turn { display: flex; gap: 3px; }
-.tp { font: 600 8.5px var(--ui); letter-spacing: .04em; text-transform: uppercase; padding: 3px 5px; border-radius: 6px; color: #7d86a8; background: rgba(255, 255, 255, .04); }
-.tp.now { color: #241a03; background: var(--gold); }
+.pips-turn { align-items: center; }
+.tp { font: 700 8.5px var(--ui); letter-spacing: .05em; text-transform: uppercase; width: 7px; height: 7px; padding: 0; border-radius: 4px; color: transparent; background: rgba(255, 255, 255, .14); overflow: hidden; white-space: nowrap; transition: width .2s var(--ease); }
+.tp.now { width: auto; height: auto; padding: 3px 6px; color: #241a03; background: var(--gold); }
 .pips-turn.theirs .tp.now { color: #fff; background: #b8414b; }
-.prompt { flex: 1; min-width: 0; text-align: right; padding-right: 100px; font: 600 12px var(--ui); color: #ffe3a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prompt { flex: 1; min-width: 0; text-align: center; font: 600 12px var(--ui); color: #ffe3a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .battle.targeting .prompt { color: #ff9fb3; }
+.battle.stacked .prompt { padding-right: 96px; text-align: right; }
 
 /* the stack: cards waiting to resolve, at the right of the center line */
 .stack-zone { position: absolute; right: 12px; top: 50%; width: 88px; height: 122px; margin-top: -61px; z-index: 4; pointer-events: none; }
@@ -499,6 +501,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 
 /* ---------------------------------------------------------------- run map */
 .screen-runMap { overflow-y: auto; }
+.screen-runMap header.top { position: sticky; top: 0; z-index: 3; background: linear-gradient(180deg, rgba(13, 16, 34, .96) 70%, rgba(13, 16, 34, 0)); }
 .run-status { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 4px 16px 10px; }
 .run-facts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .run-abilities { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; }

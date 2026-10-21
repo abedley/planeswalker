@@ -283,9 +283,19 @@ export class Battle {
       return;
     }
     const state = this.#state;
+    // Choices that read the same (two identical tokens) are the same choice: list one.
+    const byLabel = new Map();
+    for (const variant of variants) {
+      const label = variantLabel(state, variant, this.#me);
+      if (!byLabel.has(label)) byLabel.set(label, variant);
+    }
+    if (byLabel.size === 1) {
+      go(variants[0]);
+      return;
+    }
     this.#app.overlays.sheet({
       title: 'Choose how to pay',
-      options: variants.map((variant) => ({ label: variantLabel(state, variant, this.#me), onPick: () => go(variant) })),
+      options: [...byLabel].map(([label, variant]) => ({ label, onPick: () => go(variant) })),
       onCancel: () => this.#cancel(),
     });
   }

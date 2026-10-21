@@ -365,6 +365,7 @@ export class BoardView {
       toggle(el, 'under', fromTop > 0);
     });
     toggle(this.#parts.stack, 'active', cards.length > 0);
+    toggle(this.el, 'stacked', cards.length > 0);
   }
 
   /** Two rows of smaller cards once a side has more than five creatures. */
@@ -517,6 +518,8 @@ export class BoardView {
     const hit = (targetId, amount) => {
       const target = at(targetId);
       if (!target) return;
+      // A buzz when you're hit, where phones support it (not iOS).
+      if (targetId === this.#me) navigator.vibrate?.(40);
       floatText(this.#parts.fx, target.rect.cx, target.rect.cy, `−${amount}`, 'damage', { speed });
       shake(target.el, { speed });
     };

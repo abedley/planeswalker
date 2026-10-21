@@ -3,7 +3,6 @@ import { DECISION } from '../../src/engine/Game.js';
 import { PHASE, STEP } from '../../src/engine/turnStructure.js';
 import { formatMana } from '../../src/engine/mana.js';
 
-const COLOR_WORDS = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
 
 /** Finds a card anywhere in a state (battlefield, hands, graveyards, exile, stack). */
 export function findCard(state, id) {
@@ -41,7 +40,7 @@ export function variantLabel(state, variant, me) {
   };
   if (sacrifice.length) parts.push(`Sacrifice ${sacrifice.map(withStats).join(', ')}`);
   if (discard.length) parts.push(`Discard ${discard.map((id) => nameOf(state, id, me)).join(', ')}`);
-  if (variant.manaColor) parts.push(`Add ${COLOR_WORDS[variant.manaColor] ?? variant.manaColor} mana`);
+  if (variant.manaColor) parts.push(`Add {${variant.manaColor}}`);
   return parts.join(' · ') || 'Play';
 }
 

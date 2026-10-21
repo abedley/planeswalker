@@ -2,6 +2,7 @@
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { AI_KIND } from '../../src/campaign/campaign.js';
+import { symbolText, inlineSymbols } from '../symbols.js';
 
 /** Name, color and art for a planeswalker or opponent (for crests). */
 export const personInfo = (person, fallbackName) => ({ name: person?.name ?? fallbackName, color: person?.color, art: person?.art });
@@ -37,6 +38,6 @@ export function powerFace(power, content) {
     h('div.cf-top', h('span.cf-name', power.name)),
     h('div.power-glyph', icon(glyph)),
     h('div.cf-type', 'Planeswalker power'),
-    h('div.cf-text', power.text ?? ''),
-    emblem ? h('div.power-ability', emblem.abilities.map((a) => a.text).join('\n')) : null);
+    h('div.cf-text', symbolText(power.text ?? '')),
+    emblem ? h('div.power-ability', emblem.abilities.map((a) => h('div', inlineSymbols(a.text)))) : null);
 }

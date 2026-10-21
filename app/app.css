@@ -129,11 +129,16 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .cf-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2px; min-height: 13px; }
 .cf-name { font: 700 8.5px/1.08 var(--display); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
 .card-face.big .cf-name, .deck-card .cf-name { -webkit-line-clamp: 1; white-space: nowrap; text-overflow: ellipsis; display: block; }
-.cf-type { font-size: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .9; }
+/* Small cards: the name gets the whole top line, and the cost sits on the art's corner. */
+.card-face:not(.big) > .cf-top .pips { position: absolute; top: calc(4px + 2.25em); right: 6px; z-index: 1; padding: 1.5px 2px; border-radius: 9px; background: rgba(8, 8, 14, .72); font-size: 9.5px; }
+.card-face:not(.big) > .cf-top { min-height: 2.2em; font-size: 8.5px; }
+.cf-type { display: flex; align-items: center; gap: 2px; font-size: 7px; opacity: .95; }
+.cf-typeline { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-type .ss { font-size: 1.7em; flex: none; }
 .cf-pt { position: absolute; right: 3px; bottom: 3px; padding: 0 4px; border-radius: 5px; background: rgba(10, 10, 16, .85); color: #fff; border: 1px solid var(--gold2); font: 700 11px/1.35 var(--display); }
 .cf-token { position: absolute; left: 4px; bottom: 3px; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
 .card-face .kws { display: flex; gap: 2px; min-height: 10px; color: var(--t); }
-.card-face .kws .kw { font-size: 10px; }
+.card-face .kws .kw { font-size: 9px; }
 .art { position: relative; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden; background: #0b0b12; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5); }
 .art-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .art.gen {
@@ -143,26 +148,50 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
     conic-gradient(from var(--a), transparent 0 25%, rgba(255, 255, 255, .09) 30%, transparent 40% 70%, rgba(0, 0, 0, .18) 80%, transparent),
     radial-gradient(130% 100% at var(--x) var(--y), var(--g1), var(--c) 38%, var(--g2) 85%);
 }
-.gen-glyph { width: 46%; height: 46%; color: rgba(255, 255, 255, .55); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }
+.gen-glyph { display: grid; place-items: center; font-size: 26px; color: rgba(255, 255, 255, .55); text-shadow: 0 2px 3px rgba(0, 0, 0, .35); }
+.gen-glyph .icon { width: 1.4em; height: 1.4em; }
+.card-face.big .gen-glyph, .inspect .gen-glyph { font-size: 64px; }
+.offer .gen-glyph, .deck-card .gen-glyph { font-size: 34px; }
 
-/* mana symbols */
-.pips { display: inline-flex; gap: 1px; flex: none; }
-.pip { width: 10px; height: 10px; border-radius: 50%; display: inline-grid; place-items: center; font: 700 7.5px/1 var(--ui); color: #111; box-shadow: 0 1px 1px rgba(0, 0, 0, .5); }
-.pip-generic, .pip-C { background: #cbc5c0; }
-.pip-W { background: #f8f2cf; }
-.pip-U { background: #a6d8f6; }
-.pip-B { background: #b7aaa8; }
-.pip-R { background: #f6a184; }
-.pip-G { background: #93d1a8; }
+/* Magic symbols (Mana font, app/vendor/symbols.css): colored circles for mana, like on cards */
+.pips { display: inline-flex; gap: .08em; flex: none; font-size: 9px; }
+.ms-cost {
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #111;
+  background: #cac5c0;
+  box-shadow: -.05em .09em 0 rgba(0, 0, 0, .85);
+  flex: none;
+}
+.ms-cost::before { font-size: .86em; }
+.ms-cost.ms-w { background: #f8f6d8; }
+.ms-cost.ms-u { background: #c1d7e9; }
+.ms-cost.ms-b { background: #bab1ab; }
+.ms-cost.ms-r { background: #e49977; }
+.ms-cost.ms-g { background: #a3c095; }
+.ms-cost.ms-c { background: #cbc2bf; }
+.ms-cost.ms-tap::before, .ms-cost.ms-untap::before { font-size: .78em; }
+.ss-common { color: #1a1718; text-shadow: 0 0 1px rgba(255, 255, 255, .7); }
+.ss-uncommon { color: #b6c0cc; text-shadow: 0 0 1px #000; }
+.ss-rare { color: #e2c46e; text-shadow: 0 0 1px #000; }
+.ss-mythic { color: #f2742c; text-shadow: 0 0 1px #000; }
+.reminder { opacity: .75; }
 
 /* the big version: previews and inspect */
 .card-face.big { border-radius: 14px; padding: 8px; gap: 6px; }
 .card-face.big .cf-top { min-height: 24px; }
 .card-face.big .cf-name { font-size: 16px; }
-.card-face.big .pip { width: 18px; height: 18px; font-size: 12px; }
+.card-face.big .pips { font-size: 15px; gap: 2px; }
 .card-face.big .art { flex: 0 0 44%; border-radius: 8px; }
 .card-face.big .cf-type { font-size: 12px; font-weight: 600; }
-.cf-text { flex: 1; background: rgba(250, 246, 235, .93); color: #1d1a14; border-radius: 6px; padding: 7px 8px; font-size: 12.5px; line-height: 1.32; white-space: pre-line; overflow: hidden; }
+.cf-text { flex: 1; background: rgba(250, 246, 235, .93); color: #1d1a14; border-radius: 6px; padding: 7px 8px; font-size: 12.5px; line-height: 1.32; overflow: hidden; }
+.cf-text p { margin: 0 0 .4em; }
+.cf-text p:last-child { margin-bottom: 0; }
+.cf-text .ms-cost { font-size: .9em; vertical-align: -.15em; }
+.card-face.big .cf-type { font-size: 12px; font-weight: 600; }
 .card-face.big .cf-pt { font-size: 18px; padding: 1px 8px; border-radius: 8px; right: 8px; bottom: 8px; }
 .card-face.big .cf-token { font-size: 10px; left: 10px; bottom: 9px; }
 
@@ -269,6 +298,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .ability-btn.ready { opacity: 1; border-color: var(--gold); }
 .ability-btn.ready::after { content: ''; position: absolute; inset: -3px; border-radius: 11px; box-shadow: 0 0 10px 1px rgba(233, 196, 106, .7); animation: glow 1.6s ease-in-out infinite; pointer-events: none; }
 .ab-cost { font: 700 10px var(--ui); color: var(--gold); display: flex; }
+.ab-cost .pips { font-size: 10px; }
 .ab-text { font-size: 9px; line-height: 1.05; max-height: 19px; overflow: hidden; text-align: center; color: #ddd8f0; font-weight: 600; }
 .ab-uses { font-size: 10px; line-height: 6px; color: var(--gold); letter-spacing: 1px; }
 
@@ -314,7 +344,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .land-u { font-size: 9px; color: var(--muted); }
 .land-group.spent { opacity: .55; }
 .pool { display: flex; }
-.pool .pip { width: 14px; height: 14px; animation: glow 1.2s ease-in-out infinite; }
+.pool .pips { font-size: 13px; animation: glow 1.2s ease-in-out infinite; }
 .perms { display: flex; gap: 4px; margin-left: auto; min-width: 0; }
 .chip-face { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; padding: 2px; background: linear-gradient(160deg, var(--c), var(--c2)); box-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
 .chip-face .art { border-radius: 50%; height: 100%; }
@@ -351,7 +381,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .board-face::after { content: ''; position: absolute; inset: 0; border-radius: 9px; background: #000; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .tapped .board-face::after { opacity: .38; }
 .board-face .kws { position: absolute; top: 4px; left: 4px; right: 4px; display: flex; gap: 2px; }
-.board-face .kw { width: 13px; height: 13px; padding: 1.5px; border-radius: 50%; background: rgba(0, 0, 0, .65); color: #fff; }
+.board-face .kw { width: 15px; height: 15px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .7); color: #fff; font-size: 9.5px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .25); }
 .stat {
   position: absolute;
   bottom: -5px;
@@ -556,6 +586,8 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .power-glyph { flex: 1; display: grid; place-items: center; font-size: 40px; color: var(--gold); filter: drop-shadow(0 0 10px rgba(233, 196, 106, .6)); }
 .power-face .cf-text { flex: none; font-size: 9px; padding: 4px 5px; }
 .power-ability { font-size: 8px; color: #d6cff8; padding: 2px; }
+.ability-line .ms-cost, .power-ability .ms-cost, .sheet .ms-cost, .preview-actions .ms-cost { font-size: .95em; vertical-align: -.2em; }
+.sheet-text p { margin: 0; }
 .remove-face { background: linear-gradient(160deg, #5a2b33, #22101a); }
 
 /* ---------------------------------------------------------------- results */

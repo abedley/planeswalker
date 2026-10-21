@@ -4,6 +4,7 @@ import { crest } from '../art.js';
 import { loadRun, saveRun, clearRun } from '../../src/campaign/save.js';
 import { RUN_PHASE, runProgress, retryFight, skipFight, canSkipFight } from '../../src/campaign/campaign.js';
 import { header, personInfo, difficultyOf, difficultyPips, hearts } from './common.js';
+import { inlineSymbols } from '../symbols.js';
 
 /** The ladder of tiers up to the boss, the run's state, and the next fight. */
 export function runMapScreen(app) {
@@ -73,7 +74,7 @@ export function runMapScreen(app) {
         hearts(run.lives),
         h('button.chip-btn', { onclick: () => app.overlays.deck(run.deck, { title: 'Your deck' }) }, icon('cards'), ` ${run.deck.length} cards`),
         h('span.chip-btn', icon('heart'), ` ${run.startingLife} life`)),
-      h('div.run-abilities', abilities.map((a) => h('div.ability-line', a.text)))),
+      h('div.run-abilities', abilities.map((a) => h('div.ability-line', inlineSymbols(a.text))))),
     ladder, next);
 
   async function abandon() {

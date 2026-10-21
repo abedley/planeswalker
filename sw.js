@@ -3,8 +3,11 @@
  * cache and refreshed in the background (so a new version shows on the next
  * visit); card images from Scryfall's CDN and fonts are cached once and kept.
  */
-const VERSION = 'planeswalker-v1';
-const SHELL = ['./', 'index.html', 'app/app.css', 'app/main.js', 'manifest.webmanifest', 'app/icons/icon.svg'];
+const VERSION = 'planeswalker-v2';
+const SHELL = [
+  './', 'index.html', 'app/app.css', 'app/main.js', 'manifest.webmanifest', 'app/icons/icon.svg',
+  'app/vendor/symbols.css', 'app/vendor/mana.woff2', 'app/vendor/keyrune.woff2',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

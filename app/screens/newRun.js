@@ -4,6 +4,7 @@ import { crest } from '../art.js';
 import { startRun, startingDecks } from '../../src/campaign/campaign.js';
 import { saveRun } from '../../src/campaign/save.js';
 import { header, personInfo } from './common.js';
+import { inlineSymbols } from '../symbols.js';
 import { manaValue, isLand } from '../../src/cards/cards.js';
 
 /** Choose a planeswalker (a swipeable carousel), then a starter deck. */
@@ -23,7 +24,7 @@ export function newRunScreen(app) {
       h('h3', walker.name),
       h('p.walker-text', walker.text ?? ''),
       h('div.walker-stats', h('span', icon('heart'), ` ${walker.startingLife ?? 20} life`)),
-      h('div.walker-abilities', abilities.map((a) => h('div.ability-line', a.text))),
+      h('div.walker-abilities', abilities.map((a) => h('div.ability-line', inlineSymbols(a.text)))),
       h('div.walker-powers-title', 'Powers to earn'),
       h('div.walker-powers', (walker.powers ?? []).map((p) => h('span.power-chip', { onclick: () => app.overlays.sheet({ title: content.powers[p].name, text: content.powers[p].text, options: [], cancel: 'Close' }) }, content.powers[p].name))));
   }

@@ -7,6 +7,7 @@ import { icon } from './icons.js';
 import { fullCard } from './cardView.js';
 import { presentationOf } from './art.js';
 import { manaValue } from '../src/cards/cards.js';
+import { symbolText } from './symbols.js';
 
 export function createOverlays(app) {
   let open = null;
@@ -56,7 +57,7 @@ export function createOverlays(app) {
     show(h('div.sheet',
       h('div.sheet-grip'),
       title ? h('h3', title) : null,
-      text ? h('p.sheet-text', text) : null,
+      text ? h('div.sheet-text', symbolText(text)) : null,
       h('div.sheet-options', options.map((o) => h('button.btn.option', {
         class: o.primary ? 'primary' : '',
         disabled: o.disabled,

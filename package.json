@@ -12,7 +12,8 @@
     "arena": "node tools/ai-arena.js",
     "benchmark": "node tools/benchmark.js",
     "tune-ai": "node tools/tune-ai.js",
-    "campaign-sim": "node tools/campaign-sim.js"
+    "campaign-sim": "node tools/campaign-sim.js",
+    "vendor-fonts": "node tools/vendor-fonts.js"
   },
   "engines": {
     "node": ">=18"

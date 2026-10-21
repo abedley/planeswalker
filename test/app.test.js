@@ -143,3 +143,16 @@ test('presentation fields come from the definition, game values from the permane
   assert.equal(frameOf({ types: ['Land'] }), 'land');
   assert.equal(frameOf({ types: ['Artifact'], manaCost: { generic: 2 } }), 'colorless');
 });
+
+test('vendor-fonts reads glyph codepoints from icon stylesheets', async () => {
+  const { codepoint, renderStylesheet, MANA_GLYPHS } = await import('../tools/vendor-fonts.js');
+  const css = '.ms-g::before {\n  content: "\\e604";\n}\n.ms-planeswalker::before, .ms-watermark-planeswalker::before {\n  content: "\\e623";\n}\n.ss-m19:before{content:"\\E941"}';
+  assert.equal(codepoint(css, 'ms', 'g'), 'e604');
+  assert.equal(codepoint(css, 'ms', 'planeswalker'), 'e623');
+  assert.equal(codepoint(css, 'ss', 'm19'), 'e941');
+  assert.throws(() => codepoint(css, 'ms', 'u'), /No glyph/);
+  assert.ok(MANA_GLYPHS.includes('tap') && MANA_GLYPHS.includes('ability-flying'));
+  const sheet = renderStylesheet({ mana: { g: 'e604' }, sets: { m19: 'e941' } });
+  assert.match(sheet, /\.ms-g::before \{ content: "\\e604"; \}/);
+  assert.match(sheet, /\.ss-m19::before \{ content: "\\e941"; \}/);
+});

@@ -3,9 +3,13 @@ import { crest } from '../art.js';
 import { startRun, startingDecks, currentTier } from '../../src/campaign/campaign.js';
 import { header, personInfo, difficultyOf, difficultyPips } from './common.js';
 
-/** One battle outside a run: pick a planeswalker, a deck and an opponent. */
+/** One battle outside a run: pick a planeswalker, any deck (starter or opponent's) and an opponent. */
 export function quickMatchScreen(app) {
   const { content } = app;
+  const decks = {
+    ...Object.fromEntries(Object.entries(content.starterDecks).map(([id, d]) => [id, { name: d.name, cards: d.cards }])),
+    ...Object.fromEntries(Object.entries(content.opponents).map(([id, o]) => [`opponent:${id}`, { name: `${o.name}'s deck`, cards: o.deck }])),
+  };
   const choice = {
     walker: Object.keys(content.planeswalkers)[0],
     deck: null,
@@ -26,8 +30,9 @@ export function quickMatchScreen(app) {
     }, extra ?? null, h('span', label)))));
 
   const play = () => {
-    // A throwaway run whose first fight is against the chosen opponent; nothing is saved.
-    const run = startRun(content, { planeswalkerId: choice.walker, deckId: choice.deck });
+    // A throwaway run with the chosen deck, whose first fight is against the chosen opponent; nothing is saved.
+    const run = startRun(content, { planeswalkerId: choice.walker, deckId: startingDecks(content, choice.walker)[0] });
+    run.deck = [...decks[choice.deck].cards];
     run.encounter = { ...run.encounter, opponentId: choice.opponent, tierId: currentTier(run, content).id };
     app.go('battle', { mode: 'quick', quick: { run } });
   };
@@ -36,7 +41,7 @@ export function quickMatchScreen(app) {
     header({ title: 'Quick match', onBack: () => app.go('title') }),
     h('div.qm-body',
       group('Planeswalker', Object.entries(content.planeswalkers).map(([id, w]) => ({ id, label: w.name, extra: crest(personInfo(w), { size: 'sm' }) })), 'walker'),
-      group('Deck', Object.entries(content.starterDecks).map(([id, d]) => ({ id, label: d.name })), 'deck'),
+      group('Deck', Object.entries(decks).map(([id, d]) => ({ id, label: d.name })), 'deck'),
       group('Opponent', Object.entries(content.opponents).map(([id, o]) => ({
         id, label: o.name, extra: h('span.qm-opp', crest(personInfo(o), { size: 'sm' }), difficultyPips(difficultyOf(o, bossIds.has(id)))),
       })), 'opponent')),

@@ -5,6 +5,7 @@
  */
 import { h } from './dom.js';
 import { icon } from './icons.js';
+import { typeSymbol } from './symbols.js';
 
 const COLOR_NAMES = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
 const NAME_COLORS = Object.fromEntries(Object.entries(COLOR_NAMES).map(([k, v]) => [v, k]));
@@ -22,6 +23,8 @@ export function frameOf(card) {
   if (colors.length > 1) return 'gold';
   return colors.length ? COLOR_NAMES[colors[0]] : 'colorless';
 }
+
+const TYPE_SYMBOLS = new Set(['creature', 'land', 'instant', 'sorcery', 'artifact', 'enchantment']);
 
 /** The main type, for the generated art's emblem. */
 export function mainType(card) {
@@ -54,6 +57,7 @@ export function presentationOf(card, definitions) {
     colors: card.colors ?? definition.colors,
     typeLine: card.typeLine ?? definition.typeLine,
     rarity: card.rarity ?? definition.rarity,
+    set: card.set ?? definition.set,
   };
 }
 
@@ -72,7 +76,7 @@ export function generatedArt(card) {
   const seed = hash(card.name ?? card.cardId ?? '');
   return h(`div.art.gen.f-${frameOf(card)}`, {
     style: { '--a': `${seed % 360}deg`, '--x': `${20 + (seed >> 9) % 60}%`, '--y': `${20 + (seed >> 17) % 50}%` },
-  }, icon(mainType(card), 'gen-glyph'));
+  }, h('span.gen-glyph', TYPE_SYMBOLS.has(mainType(card)) ? typeSymbol(mainType(card)) : icon(mainType(card))));
 }
 
 const decoded = new Map();

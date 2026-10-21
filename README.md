@@ -102,6 +102,15 @@ when inspecting). Cards without art, such as the samples and tokens, get generat
 in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
 can have `art` and `color`; otherwise they get a monogram crest.
 
+**Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
+color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
+[Keyrune](https://keyrune.andrewgioia.com) fonts by Andrew Gioia, vendored in `app/vendor/`.
+- **Size:** they're cut down to the glyphs the app uses, about 12 KB in all.
+- **Rules text:** `app/symbols.js` turns "{T}: Add {G}." into symbols, and sets reminder text in
+  italics.
+- **Adding sets or glyphs:** run `npm run vendor-fonts` (`tools/vendor-fonts.js`), which needs
+  fonttools: `pip install fonttools brotli`.
+
 **Performance**, especially for older iPhones:
 - **Animation:** everything animates only `transform` and `opacity` (Web Animations), and glows
   are pseudo-elements whose opacity changes.
@@ -139,7 +148,8 @@ from `tools/`.
 
 ```sh
 npm run import-cards -- "Serra Angel" "Vampire Nighthawk"
-npm run import-cards -- --file my-cards.txt                # one name per line, # for comments
+npm run import-cards -- "Shock (M21)"                      # a particular printing (for its art)
+npm run import-cards -- --file cards/real-cards.txt        # one card per line, # for comments
 npm run import-cards -- --query "set:fdn t:creature c:g"   # any Scryfall search
 npm run import-cards -- --dry-run "Birds of Paradise"      # report only, write nothing
 ```
@@ -200,6 +210,15 @@ Not imported — uses things the game doesn't support yet (2):
       Unsupported supertype: Legendary.
       Unsupported rules text: "Noncreature spells cost {1} more to cast."
 ```
+
+Card names are looked up 75 at a time with Scryfall's collection endpoint. If Scryfall rate-limits
+the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`, `Shock|m21`, or
+`4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
+(Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
+
+`cards/real-cards.txt` lists the real cards the campaign uses: 86 cards from M19, M20, M21 and
+Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
+their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
 art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist` (credited
@@ -615,15 +634,24 @@ saveRun(localStorage, run);
 
 ### Content
 
-Everything a campaign has is data: see `SAMPLE_CAMPAIGN` in `src/campaign/sampleCampaign.js`,
-which is example content built from the sample decks. It contains:
+Everything a campaign has is data. There are two campaigns:
+- **`CAMPAIGN`** (`src/campaign/realCampaign.js`) is the one the app plays, built from real cards.
+  - **Decks:** `REAL_DECKS` (`src/campaign/decks.js`), a mono-color 40-card deck per color, lighter
+    builds for the early opponents, and the boss's dragons.
+  - **Planeswalkers:** the Warden plays Green Stompy and the Sage plays Blue Skies.
+  - **Opponents** climb from basic-AI White, Black and Red, through searching full builds and
+    the other planeswalker's color, to **the Dragonlord**.
+- **`SAMPLE_CAMPAIGN`** (`src/campaign/sampleCampaign.js`) uses the made-up sample cards, for
+  tests.
+
+A campaign contains:
 
 | Key | What |
 | --- | --- |
 | `rules` | `lives`, `minDeckSize`, `rewards: { cards, powers, removeCard }` (what each win offers), `limits` (game limits, default `GAME_LIMITS`) and `maxAbilities` (planeswalker abilities over all of a player's emblems, default 4) |
 | `cards` | definitions of every card the campaign uses (beyond `CARDS`) |
 | `emblems` | emblem definitions for planeswalkers, powers and bosses (see *Emblems*) |
-| `planeswalkers` | `{ name, text, color?, art?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use |
+| `planeswalkers` | `{ name, text, color?, art?, colors?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use. With `colors` (e.g. `['G']`), card rewards are only cards in those colors or colorless (`poolFor`) |
 | `starterDecks` | `{ name, cards }` |
 | `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`) |
 | `opponents` | `{ name, color?, art?, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |

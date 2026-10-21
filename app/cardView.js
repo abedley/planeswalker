@@ -3,22 +3,13 @@
  * the round chip for small permanents, and the card back.
  */
 import { h } from './dom.js';
-import { icon, hasIcon } from './icons.js';
+import { icon } from './icons.js';
 import { cardArt, frameOf, presentationOf } from './art.js';
+import { costSymbols, abilitySymbol, setSymbol, symbolText } from './symbols.js';
 
-const ORDER = ['generic', 'W', 'U', 'B', 'R', 'G', 'C'];
-
-/** Mana symbols for a cost: `{ generic: 2, G: 1 }` → (2)(G). */
+/** Mana symbols for a cost: `{ generic: 2, G: 1 }` → {2}{G}. */
 export function manaPips(cost, extraClass = '') {
-  cost ??= {};
-  const pips = [];
-  for (const type of ORDER) {
-    const n = cost[type] ?? 0;
-    if (!n) continue;
-    if (type === 'generic') pips.push(h('span.pip.pip-generic', String(n)));
-    else for (let i = 0; i < n; i++) pips.push(h(`span.pip.pip-${type}`));
-  }
-  return h(`span.pips${extraClass ? `.${extraClass}` : ''}`, pips);
+  return h(`span.pips${extraClass ? `.${extraClass}` : ''}`, costSymbols(cost ?? {}));
 }
 
 export function typeLine(card) {
@@ -38,14 +29,12 @@ export function rulesText(card) {
   return parts.join('\n');
 }
 
-const KEYWORD_ICONS = {
-  flying: 'flying', 'first strike': 'firstStrike', 'double strike': 'doubleStrike', deathtouch: 'deathtouch',
-  lifelink: 'lifelink', trample: 'trample', menace: 'menace', reach: 'reach', vigilance: 'vigilance',
-  haste: 'haste', defender: 'defender',
-};
+const KEYWORDS = new Set(['flying', 'first strike', 'double strike', 'deathtouch', 'lifelink', 'trample', 'menace',
+  'reach', 'vigilance', 'haste', 'defender']);
 
+/** Keyword ability symbols (at most four). */
 export function keywordIcons(keywords = []) {
-  return h('div.kws', keywords.filter((k) => hasIcon(KEYWORD_ICONS[k])).slice(0, 4).map((k) => icon(KEYWORD_ICONS[k], `kw kw-${KEYWORD_ICONS[k]}`)));
+  return h('div.kws', keywords.filter((k) => KEYWORDS.has(k)).slice(0, 4).map((k) => h('span.kw', abilitySymbol(k))));
 }
 
 /** The full card: cost, art, name, type, text, power/toughness. `big` adds the text. */
@@ -58,8 +47,8 @@ export function fullCard(cardIn, definitions, { big = false } = {}) {
   return h(`div.card-face.f-${frameOf(card)}${big ? '.big' : ''}`,
     h('div.cf-top', h('span.cf-name', card.name), manaPips(card.manaCost)),
     cardArt(card),
-    h('div.cf-type', typeLine(card)),
-    big ? h('div.cf-text', rulesText(card)) : keywordIcons(card.keywords),
+    h('div.cf-type', h('span.cf-typeline', typeLine(card)), card.set ? setSymbol(card.set, card.rarity) : null),
+    big ? h('div.cf-text', symbolText(rulesText(card))) : keywordIcons(card.keywords),
     isCreature ? h('div.cf-pt', `${card.power}/${card.toughness}`) : null,
     card.token ? h('div.cf-token', 'Token') : null);
 }

@@ -19,6 +19,7 @@ import { playOptions, variantsFor, perform } from './play.js';
 import { shouldAutoPass, primaryAction } from './autopass.js';
 import { promptFor, variantLabel, assignmentLabel, nameOf, findCard } from './describe.js';
 import { relRect } from './fx.js';
+import { inlineSymbols } from '../symbols.js';
 
 const LONG_PRESS_MS = 430;
 
@@ -295,7 +296,7 @@ export class Battle {
     }
     this.#app.overlays.sheet({
       title: 'Choose how to pay',
-      options: [...byLabel].map(([label, variant]) => ({ label, onPick: () => go(variant) })),
+      options: [...byLabel].map(([label, variant]) => ({ label: inlineSymbols(label), onPick: () => go(variant) })),
       onCancel: () => this.#cancel(),
     });
   }
@@ -627,7 +628,7 @@ export class Battle {
     }
     const actions = card.abilities.filter((a) => !a.isManaAbility).map((ability) => {
       const option = options.find((o) => o.abilityId === ability.id);
-      return { label: ability.text, disabled: !option, onPick: () => option && this.#begin(option) };
+      return { label: inlineSymbols(ability.text), disabled: !option, onPick: () => option && this.#begin(option) };
     });
     this.#select(target, card, actions);
   }

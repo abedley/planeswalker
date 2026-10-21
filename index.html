@@ -2,26 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d18">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Planeswalker">
+  <meta name="description" content="A roguelite card battler on Magic: The Gathering rules. Choose a planeswalker, climb the ladder, defeat the boss.">
   <title>Planeswalker</title>
-  <style>
-    :root { --bg: #f6f7f9; --text: #1c2026; --muted: #69717d; --accent: #6b4fd8; color-scheme: light; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg: #14161a; --text: #e4e7ec; --muted: #8e96a3; --accent: #a08bff; color-scheme: dark; }
-    }
-    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
-    main { max-width: 640px; margin: 15vh auto 0; padding: 0 16px; }
-    h1 { margin: 0 0 8px; }
-    p { color: var(--muted); }
-    a { color: var(--accent); }
-  </style>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="app/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="app/icons/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&display=swap">
+  <link rel="stylesheet" href="app/app.css">
+  <link rel="modulepreload" href="app/main.js">
+  <script type="module" src="app/main.js"></script>
 </head>
 <body>
-  <main>
-    <h1>Planeswalker</h1>
-    <p>A single-player game built on a subset of Magic: The Gathering rules. Under construction:
-      the engine currently models the turn structure, priority, drawing, and playing Forests.</p>
-    <p><a href="debug/">Open the engine debugger →</a></p>
-  </main>
+  <div id="app"></div>
+  <noscript>Planeswalker needs JavaScript.</noscript>
 </body>
 </html>

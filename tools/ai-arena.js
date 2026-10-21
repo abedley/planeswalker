@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import {
   Game, GAME_STATUS, BasicAIController, AI_STRATEGY, DEFAULT_DECK,
   SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS, SAMPLE_SPELLS_DECK,
-  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK,
+  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, REAL_DECKS,
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
 import { LegacyAIController } from '../src/ai/LegacyAIController.js';
@@ -29,6 +29,12 @@ export const DECKS = {
   spells: { deck: SAMPLE_SPELLS_DECK, cards: SAMPLE_SPELLS },
   effects: { deck: SAMPLE_EFFECTS_DECK, cards: SAMPLE_EFFECTS },
   triggers: { deck: SAMPLE_TRIGGERS_DECK, cards: SAMPLE_TRIGGERS },
+  // Real cards (imported from Scryfall), one deck per color.
+  white: { deck: REAL_DECKS.whiteWeenie, cards: {} },
+  blue: { deck: REAL_DECKS.blueSkies, cards: {} },
+  black: { deck: REAL_DECKS.blackRemoval, cards: {} },
+  red: { deck: REAL_DECKS.redBurn, cards: {} },
+  green: { deck: REAL_DECKS.greenStompy, cards: {} },
 };
 
 /**

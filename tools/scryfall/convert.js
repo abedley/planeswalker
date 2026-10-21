@@ -36,6 +36,7 @@ const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill', 'investigate', 'treasure', 'f
 export function cardIdFromName(name) {
   const words = name
     .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/['’]/g, '') // "Healer's Hawk" -> healersHawk
     .replace(/[^A-Za-z0-9 ]+/g, ' ')
     .trim().split(/\s+/);
   return words.map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())).join('');
@@ -341,7 +342,7 @@ export function convertScryfallCard(card) {
  * credit, colors (as W/U/B/R/G), rarity, set and collector number. Only the
  * fields Scryfall provides are kept.
  */
-function presentation(card) {
+export function presentation(card) {
   const images = card.image_uris;
   return {
     ...(images ? { image: { art: images.art_crop, card: images.normal } } : {}),

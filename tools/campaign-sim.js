@@ -15,7 +15,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import {
-  Game, GAME_STATUS, BasicAIController, SAMPLE_CAMPAIGN, RUN_PHASE, REWARD, AI_KIND,
+  Game, GAME_STATUS, BasicAIController, CAMPAIGN, SAMPLE_CAMPAIGN, RUN_PHASE, REWARD, AI_KIND,
   startRun, matchSetup, recordResult, chooseReward, skipReward, retryFight, startingDecks,
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
@@ -52,7 +52,9 @@ function playFight(run, content, { player, budget }) {
 }
 
 /** Plays one whole run. Returns the final run. */
-export function simulateRun({ content = SAMPLE_CAMPAIGN, planeswalkerId, deckId, seed, player = 'basic', budget = 100 }) {
+export function simulateRun({ content: given = CAMPAIGN, planeswalkerId, deckId, seed, player = 'basic', budget = 100 }) {
+  // Workers get the content by name.
+  const content = given === 'sample' ? SAMPLE_CAMPAIGN : given === 'real' ? CAMPAIGN : given;
   let run = startRun(content, { planeswalkerId, deckId, seed });
   while (run.phase !== RUN_PHASE.VICTORY && run.phase !== RUN_PHASE.OVER) {
     if (run.phase === RUN_PHASE.FIGHT) run = recordResult(run, content, { won: playFight(run, content, { player, budget }) });
@@ -68,7 +70,7 @@ export function simulateRun({ content = SAMPLE_CAMPAIGN, planeswalkerId, deckId,
 }
 
 /** Summarises finished runs: victories, furthest tiers, and win rates per tier and opponent. */
-export function summarize(runs, content = SAMPLE_CAMPAIGN) {
+export function summarize(runs, content = CAMPAIGN) {
   const tiers = content.ladder.map((tier) => ({ id: tier.id, reached: 0, won: 0, lost: 0 }));
   const opponents = {};
   for (const run of runs) {
@@ -113,7 +115,9 @@ async function runParallel(jobs, workers) {
 async function main() {
   const args = process.argv.slice(2);
   const option = (name, fallback) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
-  const content = SAMPLE_CAMPAIGN;
+  // --content sample plays the sample campaign (made-up cards).
+  const contentName = option('content', 'real') === 'sample' ? 'sample' : 'real';
+  const content = contentName === 'sample' ? SAMPLE_CAMPAIGN : CAMPAIGN;
   const planeswalkerId = option('walker', Object.keys(content.planeswalkers)[0]);
   const deckId = option('deck', startingDecks(content, planeswalkerId)[0]);
   const count = Number(option('runs', 10));
@@ -121,7 +125,7 @@ async function main() {
   const workers = Number(option('workers', 1));
   const player = option('player', 'basic');
   const budget = Number(option('budget', 100));
-  const jobs = Array.from({ length: count }, (_, i) => ({ planeswalkerId, deckId, seed: seed + i, player, budget }));
+  const jobs = Array.from({ length: count }, (_, i) => ({ content: contentName, planeswalkerId, deckId, seed: seed + i, player, budget }));
   console.log(`${count} runs: ${planeswalkerId} with ${deckId}, played by ${player}; CPU search capped at ${budget} ms`);
   const runs = workers > 1 ? await runParallel(jobs, workers) : jobs.map((job) => simulateRun(job));
   console.log(formatSummary(summarize(runs, content)));

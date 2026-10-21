@@ -30,8 +30,11 @@ export {
 } from './ai/evaluate.js';
 export {
   RUN_VERSION, RUN_PHASE, POWER, REWARD, AI_KIND, startRun, startingDecks, matchSetup, recordResult, chooseReward,
-  skipReward, retryFight, skipFight, canSkipFight, currentTier, runProgress, validateCampaign, validateRun,
+  skipReward, retryFight, skipFight, canSkipFight, currentTier, runProgress, validateCampaign, validateRun, poolFor,
 } from './campaign/campaign.js';
 export { SAVE_KEY, saveRun, loadRun, clearRun } from './campaign/save.js';
 export { createCpuController } from './campaign/cpu.js';
 export { SAMPLE_CAMPAIGN } from './campaign/sampleCampaign.js';
+export { CAMPAIGN } from './campaign/realCampaign.js';
+export { REAL_DECKS, REWARD_ONLY_CARDS } from './campaign/decks.js';
+export { CARD_PRESENTATION } from './cards/importedCards.js';

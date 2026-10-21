@@ -3,7 +3,8 @@
  * battle, rewards, results), for phones held upright.
  */
 import { CARDS } from '../src/cards/cards.js';
-import { SAMPLE_CAMPAIGN } from '../src/campaign/sampleCampaign.js';
+import { CARD_PRESENTATION } from '../src/cards/importedCards.js';
+import { CAMPAIGN } from '../src/campaign/realCampaign.js';
 import { h, wait } from './dom.js';
 import { installIcons } from './icons.js';
 import { unlockAudio, setSoundEnabled, play } from './audio.js';
@@ -60,9 +61,13 @@ function createApp(root) {
 
   const app = {
     root,
-    content: SAMPLE_CAMPAIGN,
-    /** Every card definition, for art and text lookups by `cardId`. */
-    definitions: { ...CARDS, ...SAMPLE_CAMPAIGN.cards },
+    content: CAMPAIGN,
+    /** Every card definition, for art and text lookups by `cardId` (with art for the hand-written ones). */
+    definitions: {
+      ...CARDS,
+      ...Object.fromEntries(Object.entries(CARD_PRESENTATION).map(([id, look]) => [id, { ...CARDS[id], ...look }])),
+      ...CAMPAIGN.cards,
+    },
     storage,
     get settings() { return settings; },
     updateSettings(changes) {

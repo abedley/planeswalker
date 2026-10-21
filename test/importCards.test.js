@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.js';
-import { importCards } from '../tools/import-cards.js';
-import { readImportedCards, writeImportedCards } from '../tools/scryfall/importedModule.js';
+import { importCards, parseCardLine } from '../tools/import-cards.js';
+import { readImportedCards, readImportedModule, writeImportedCards } from '../tools/scryfall/importedModule.js';
 import {
   Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER,
 } from '../src/index.js';
@@ -22,6 +22,7 @@ test('card ids are camelCased names', () => {
   assert.equal(cardIdFromName('Llanowar Elves'), 'llanowarElves');
   assert.equal(cardIdFromName('Thalia, Guardian of Thraben'), 'thaliaGuardianOfThraben');
   assert.equal(cardIdFromName('Boggart Brute'), 'boggartBrute');
+  assert.equal(cardIdFromName('Healer\'s Hawk'), 'healersHawk');
 });
 
 test('converts a vanilla creature with a generic mana cost', () => {
@@ -112,6 +113,33 @@ test('importCards merges supported cards and reports the rest', () => {
   assert.deepEqual(skipped.map((s) => s.name), ['Sign in Blood', 'Llanowar Elves']);
   assert.match(skipped[1].problems[0], /defined by hand/);
   assert.equal(existing.grizzlyBears.name, 'Old Bears'); // not mutated
+});
+
+test('card list lines can pin a printing', () => {
+  assert.deepEqual(parseCardLine('Shock'), { name: 'Shock' });
+  assert.deepEqual(parseCardLine('Shock (M21)'), { name: 'Shock', set: 'm21' });
+  assert.deepEqual(parseCardLine('  Hero\'s Downfall|fdn  # removal'), { name: 'Hero\'s Downfall', set: 'fdn' });
+  assert.deepEqual(parseCardLine('4 Serra Angel (M19)'), { name: 'Serra Angel', set: 'm19' });
+  assert.deepEqual(parseCardLine('Fire Elemental'), { name: 'Fire Elemental' });
+  assert.equal(parseCardLine('# just a comment'), null);
+  assert.equal(parseCardLine('   '), null);
+});
+
+test('hand-written cards get their art recorded instead of being replaced', async () => {
+  const elves = { ...FIXTURES.llanowarElves, image_uris: { art_crop: 'art.jpg', normal: 'card.jpg' }, artist: 'Someone', colors: ['G'], set: 'm19', rarity: 'common' };
+  const { cards, presentation, decorated } = importCards([elves]);
+  assert.deepEqual(cards, {});
+  assert.deepEqual(decorated, ['Llanowar Elves']);
+  assert.deepEqual(presentation.llanowarElves, { image: { art: 'art.jpg', card: 'card.jpg' }, artist: 'Someone', colors: ['G'], rarity: 'common', set: 'm19' });
+  const dir = await mkdtemp(join(tmpdir(), 'planeswalker-import-'));
+  try {
+    const path = join(dir, 'importedCards.js');
+    await writeImportedCards(path, cards, presentation);
+    assert.deepEqual(await readImportedModule(path), { cards, presentation });
+    assert.deepEqual((await import(path)).CARD_PRESENTATION, presentation);
+  } finally {
+    await rm(dir, { recursive: true });
+  }
 });
 
 test('the generated module round-trips and can be imported', async () => {

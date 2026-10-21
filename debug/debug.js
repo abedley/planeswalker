@@ -2,7 +2,7 @@ import {
   Game, BasicAIController, TURN_STRUCTURE, PHASE_NAMES, STEP_NAMES, ACTION, GAME_STATUS,
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
   DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
-  SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, isAura,
+  SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, REAL_DECKS, isAura,
 } from '../src/index.js';
 import { SearchAIController } from '../src/ai/SearchAIController.js';
 
@@ -43,6 +43,11 @@ const DECKS = {
   spells: SAMPLE_SPELLS_DECK,
   effects: SAMPLE_EFFECTS_DECK,
   triggers: SAMPLE_TRIGGERS_DECK,
+  white: REAL_DECKS.whiteWeenie,
+  blue: REAL_DECKS.blueSkies,
+  black: REAL_DECKS.blackRemoval,
+  red: REAL_DECKS.redBurn,
+  green: REAL_DECKS.greenStompy,
 };
 
 const CONTROLLER_KINDS = {

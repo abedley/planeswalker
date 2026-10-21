@@ -80,6 +80,23 @@ const cardsOf = (content) => ({ ...CARDS, ...content.cards });
 const emblemsOf = (content) => ({ ...EMBLEMS, ...content.emblems });
 const newSeed = (random) => Math.floor(random() * 2 ** 32);
 
+/** A card's colors as letters, from its `colors` or its mana cost. */
+const COLOR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
+const colorsOfCard = (card) => (card?.colors ?? Object.keys(card?.manaCost ?? {}))
+  .map((c) => COLOR_LETTERS[c] ?? c).filter((c) => 'WUBRG'.includes(c));
+
+/**
+ * The cards of a pool a planeswalker can be offered: those within its `colors`
+ * (colorless cards always fit). Without `colors`, the whole pool.
+ */
+export function poolFor(content, planeswalkerId, poolId) {
+  const pool = content.cardPools?.[poolId] ?? [];
+  const colors = content.planeswalkers[planeswalkerId]?.colors;
+  if (!colors) return pool;
+  const cards = cardsOf(content);
+  return pool.filter((id) => colorsOfCard(cards[id]).every((c) => colors.includes(c)));
+}
+
 /** How many abilities a list of emblems gives, all together. */
 export function abilityCount(content, emblemIds = []) {
   const emblems = emblemsOf(content);
@@ -246,7 +263,7 @@ function powerAvailable(run, content, powerId) {
 function rewardOffers(draft, content, random) {
   const tier = currentTier(draft, content);
   const rewards = rewardsOf(content, tier);
-  const pool = content.cardPools?.[tier.cardPool] ?? [];
+  const pool = poolFor(content, draft.planeswalkerId, tier.cardPool);
   const powers = content.planeswalkers[draft.planeswalkerId].powers ?? [];
   return [
     ...pick(pool, rewards.cards, random).map((cardId) => ({ kind: REWARD.CARD, cardId })),
@@ -389,6 +406,13 @@ export function validateCampaign(content) {
     }
     for (const deckId of walker.decks ?? []) {
       if (!content.starterDecks?.[deckId]) problems.push(`planeswalker ${id}: unknown starter deck "${deckId}"`);
+    }
+    // Every tier should have card rewards in the planeswalker's colors.
+    for (const tier of content.ladder ?? []) {
+      if (!tier.cardPool || !content.cardPools?.[tier.cardPool]) continue;
+      const wanted = rewardsOf(content, tier).cards;
+      const fits = new Set(poolFor(content, id, tier.cardPool)).size;
+      if (fits < wanted) problems.push(`planeswalker ${id}: card pool ${tier.cardPool} has ${fits} cards in its colors, fewer than ${wanted}`);
     }
   }
   const decks = Object.entries(content.starterDecks ?? {});

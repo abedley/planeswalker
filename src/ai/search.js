@@ -18,10 +18,13 @@ import { GAME_STATUS } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 import { determinize } from './determinize.js';
 import { listMacros, nextAction, applyMacro } from './macroActions.js';
-import { evaluate, evaluateTiered, DEFAULT_WEIGHTS, weightsFor } from './evaluate.js';
+import { evaluate, evaluateTiered, DEFAULT_WEIGHTS, TIERS, weightsFor } from './evaluate.js';
 import { playout, actingPlayerId } from './simulate.js';
 import { simulateLookahead, quickScores } from './lookahead.js';
 import { BasicAIController, windowOf } from './BasicAIController.js';
+
+/** The tier weights for evaluateTiered: TIERS, with any overrides in `weights.tiers`. */
+const tiersOf = (weights) => (weights?.tiers ? { ...TIERS, ...weights.tiers } : TIERS);
 
 /** Basic-AI policies for both players, for rollouts. */
 function rolloutPolicies(view) {
@@ -55,7 +58,7 @@ export function simulate(snapshot, me, macro, policies, {
     },
     maxSteps,
   });
-  return evaluation === 'tiered' ? evaluateTiered(final, me) : evaluate(final, me, weights);
+  return evaluation === 'tiered' ? evaluateTiered(final, me, tiersOf(weights)) : evaluate(final, me, weights);
 }
 
 /** Every candidate simulated `determinizations` times on the same guesses; the best average wins. */
@@ -170,7 +173,7 @@ export class MacroSearch {
   }
 
   /** The evaluation used by lookahead: tiered, or the weighted sum. */
-  #evaluate = (state, me) => (this.#evaluation === 'tiered' ? evaluateTiered(state, me) : evaluate(state, me, this.#weights));
+  #evaluate = (state, me) => (this.#evaluation === 'tiered' ? evaluateTiered(state, me, tiersOf(this.#weights)) : evaluate(state, me, this.#weights));
 
   /**
    * Aggressive pruning before the search: each candidate is scored once, cheaply

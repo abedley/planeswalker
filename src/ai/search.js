@@ -18,8 +18,9 @@ import { GAME_STATUS } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 import { determinize } from './determinize.js';
 import { listMacros, nextAction, applyMacro } from './macroActions.js';
-import { evaluate, DEFAULT_WEIGHTS, weightsFor } from './evaluate.js';
+import { evaluate, evaluateTiered, DEFAULT_WEIGHTS, weightsFor } from './evaluate.js';
 import { playout, actingPlayerId } from './simulate.js';
+import { simulateLookahead, quickScores } from './lookahead.js';
 import { BasicAIController, windowOf } from './BasicAIController.js';
 
 /** Basic-AI policies for both players, for rollouts. */
@@ -35,7 +36,9 @@ function rolloutPolicies(view) {
  * the start of `me`'s next turn. Returns the evaluation, or null if the macro
  * couldn't be carried out in this guess.
  */
-export function simulate(snapshot, me, macro, policies, { weights = DEFAULT_WEIGHTS, maxSteps = 5000, horizon = DEFAULT_HORIZON } = {}) {
+export function simulate(snapshot, me, macro, policies, {
+  weights = DEFAULT_WEIGHTS, maxSteps = 5000, horizon = DEFAULT_HORIZON, evaluation = 'weighted',
+} = {}) {
   const game = Game.deserialize(snapshot, { silent: true });
   const startTurn = game.peekState().turn;
   if (!applyMacro(game, me, macro)) return null;
@@ -52,19 +55,19 @@ export function simulate(snapshot, me, macro, policies, { weights = DEFAULT_WEIG
     },
     maxSteps,
   });
-  return evaluate(final, me, weights);
+  return evaluation === 'tiered' ? evaluateTiered(final, me) : evaluate(final, me, weights);
 }
 
 /** Every candidate simulated `determinizations` times on the same guesses; the best average wins. */
 export function greedyChoice(view, me, macros, {
-  determinizations = 3, random = Math.random, weights, defaults, margin, horizon,
+  determinizations = 3, random = Math.random, weights, defaults, margin, horizon, evaluation,
 } = {}) {
   const policies = rolloutPolicies(view);
   const totals = new Map(macros.map((m) => [m.key, { macro: m, total: 0, visits: 0, failed: 0 }]));
   for (let d = 0; d < determinizations; d++) {
     const snapshot = determinize(view, random);
     for (const macro of macros) {
-      const score = simulate(snapshot, me, macro, policies, { weights, horizon });
+      const score = simulate(snapshot, me, macro, policies, { weights, horizon, evaluation });
       const entry = totals.get(macro.key);
       if (score === null) entry.failed += 1;
       else {
@@ -98,6 +101,9 @@ export class MacroSearch {
   #defaults;
   #margin;
   #horizon;
+  #evaluation;
+  #lookahead;
+  #rootBeam;
   #round = -1;
   #guess = null;
   #queue = [];
@@ -105,7 +111,8 @@ export class MacroSearch {
   iterations = 0;
 
   constructor(view, me, macros, {
-    random = Math.random, weights, defaults = [], margin = DEFAULT_MARGIN, horizon = DEFAULT_HORIZON,
+    random = Math.random, weights, defaults = [], margin = DEFAULT_MARGIN, horizon = DEFAULT_HORIZON, evaluation = 'weighted',
+    lookahead = null, rootBeam = 0,
   } = {}) {
     this.#view = view;
     this.#me = me;
@@ -118,6 +125,9 @@ export class MacroSearch {
     this.#defaults = defaults;
     this.#margin = margin;
     this.#horizon = horizon;
+    this.#evaluation = evaluation;
+    this.#lookahead = lookahead?.depth > 0 ? lookahead : null;
+    this.#rootBeam = rootBeam;
   }
 
   /** Simulates for about `ms` milliseconds (at least one simulation, unless the race is over). */
@@ -144,14 +154,38 @@ export class MacroSearch {
       }
       this.#round += 1;
       this.#guess = determinize(this.#view, this.#random);
-      this.#queue = [...alive];
+      if (this.#round === 0 && this.#rootBeam > 0) this.#pruneRoot();
+      this.#queue = this.#entries.filter((e) => !e.dropped);
     }
     const entry = this.#queue.shift();
-    entry.scores[this.#round] = simulate(this.#guess, this.#me, entry.macro, this.#policies, {
-      weights: this.#weights, horizon: this.#horizon,
-    });
+    entry.scores[this.#round] = this.#lookahead
+      ? simulateLookahead(this.#guess, this.#me, entry.macro, this.#policies, {
+        evaluate: this.#evaluate, depth: this.#lookahead.depth, beam: this.#lookahead.beam ?? 2, horizon: this.#horizon,
+      })
+      : simulate(this.#guess, this.#me, entry.macro, this.#policies, {
+        weights: this.#weights, horizon: this.#horizon, evaluation: this.#evaluation,
+      });
     this.iterations += 1;
     return true;
+  }
+
+  /** The evaluation used by lookahead: tiered, or the weighted sum. */
+  #evaluate = (state, me) => (this.#evaluation === 'tiered' ? evaluateTiered(state, me) : evaluate(state, me, this.#weights));
+
+  /**
+   * Aggressive pruning before the search: each candidate is scored once, cheaply
+   * (played on to the next key decision and evaluated), and only the best
+   * `rootBeam` stay in the race, with the defaults (the basic AI's own choice).
+   */
+  #pruneRoot() {
+    const alive = this.#entries.filter((e) => !e.dropped);
+    if (alive.length <= this.#rootBeam) return;
+    const scores = quickScores(this.#guess, this.#me, alive.map((e) => e.macro), this.#policies, {
+      evaluate: this.#evaluate, horizon: this.#horizon,
+    });
+    const ranked = alive.map((e, i) => ({ e, score: scores[i] })).sort((a, b) => b.score - a.score);
+    const keep = new Set(ranked.slice(0, this.#rootBeam).map((r) => r.e));
+    for (const e of alive) if (!keep.has(e) && !e.bonus) e.dropped = true;
   }
 
   /** Drops candidates that are clearly worse than the leader, pair by pair. */

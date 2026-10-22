@@ -80,8 +80,11 @@ export function contestant(name) {
       return (state) => ai.chooseAction(state);
     };
   }
-  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans' };
-  const options = Object.fromEntries(settings.split(',').map((pair) => {
+  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans', e: 'evaluation', rb: 'rootBeam' };
+  // la=<depth>, bw=<beam>: pruned lookahead (see lookahead.js).
+  const pairs = Object.fromEntries(settings.split(',').map((pair) => pair.split('=')));
+  const lookahead = pairs.la ? { depth: Number(pairs.la), beam: Number(pairs.bw ?? 2) } : null;
+  const options = Object.fromEntries(settings.split(',').filter((pair) => !/^(la|bw)=/.test(pair)).map((pair) => {
     const [key, value] = pair.split('=');
     // w=hand: the hand-picked evaluation weights; w=@file.json: weights from a file
     // (e.g. a candidate fit); w=<deck or archetype>: see weightsFor.
@@ -90,11 +93,12 @@ export function contestant(name) {
       if (value.startsWith('@')) return ['weights', JSON.parse(readFileSync(value.slice(1), 'utf8'))];
       return ['weights', value];
     }
-    return [keys[key] ?? key, Number(value)];
+    // e=tiered: the evaluation (see evaluateTiered); the rest are numbers.
+    return [keys[key] ?? key, key === 'e' ? value : Number(value)];
   }));
   const algorithm = { greedy: 'greedy', search: 'ismcts' }[base];
   if (!algorithm) return undefined;
-  return (playerId) => searchPolicy(playerId, { algorithm, determinizations: 8, budgetMs: 150, ...options });
+  return (playerId) => searchPolicy(playerId, { algorithm, determinizations: 8, budgetMs: 150, ...options, ...(lookahead ? { lookahead } : {}) });
 }
 
 function basicPolicy(playerId, strategy) {

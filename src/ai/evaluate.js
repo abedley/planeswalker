@@ -9,7 +9,9 @@
  */
 import { isCreature, isLand } from '../cards/cards.js';
 import { GAME_STATUS } from '../engine/Game.js';
-import { creatureValue, damageThrough } from './combat.js';
+import {
+  creatureValue, damageThrough, planAttack, planBlocks, combatValue, damageWeight, canBlock,
+} from './combat.js';
 import { TUNED_WEIGHTS, DECK_WEIGHTS } from './weights.js';
 
 /** Hand-picked starting weights (tools/tune-ai.js fits TUNED_WEIGHTS from these). */
@@ -134,4 +136,98 @@ export function evaluate(state, me, weights = DEFAULT_WEIGHTS) {
   let score = 0;
   for (const name of FEATURES) score += (weights[name] ?? 0) * values[name];
   return score;
+}
+
+/**
+ * Tier weights for evaluateTiered: each tier outweighs everything below it.
+ * - **Winning and not losing:** a won or lost game; lethal on board either way;
+ *   the race (turns for each side to kill the other) and life near zero.
+ * - **Creatures:** creature values, and who wins the next combat (the active
+ *   player's planned attack against the other's planned blocks).
+ * - **Cards in hand** (spells; lands count a little).
+ * - **Non-creature permanents** (and lands in play, a little).
+ */
+export const TIERS = Object.freeze({
+  lethalNow: 3000,
+  lethalNext: 800,
+  clock: 12,
+  life: 8,
+  creatures: 1,
+  combat: 1,
+  hand: 2.5,
+  handLands: 0.3,
+  permanents: 1.5,
+  lands: 0.5,
+  library: -25,
+});
+
+/**
+ * A state's value for `me` with priorities in strict order (see TIERS): winning,
+ * not losing, creatures (and winning the next combat), cards in hand, other
+ * permanents. In the same rough points as creatureValue.
+ */
+export function evaluateTiered(state, me, tiers = TIERS) {
+  if (state.status === GAME_STATUS.GAME_OVER) {
+    if (state.winnerId === me) return WIN;
+    return state.winnerId === null ? 0 : -WIN;
+  }
+  const player = state.players.find((p) => p.id === me);
+  const opponent = state.players.find((p) => p.id !== me);
+  const meActive = state.activePlayerId === me;
+  const creaturesOf = (id) => state.battlefield.filter((p) => p.controllerId === id && isCreature(p));
+  const mine = creaturesOf(me);
+  const theirs = creaturesOf(opponent.id);
+  const attackers = (list) => list.filter((c) => !c.keywords.includes('defender'));
+  const untapped = (list) => list.map((c) => ({ ...c, tapped: false }));
+
+  // Winning and not losing: the active player attacks first, into blockers as they are
+  // now; the other attacks next turn, into everything untapped.
+  const ourHit = damageThrough(attackers(mine), meActive ? theirs : untapped(theirs));
+  const theirHit = damageThrough(attackers(theirs), meActive ? untapped(mine) : mine);
+  let score = 0;
+  const weLethal = ourHit >= opponent.life;
+  const theyLethal = theirHit >= player.life;
+  if (weLethal) score += meActive ? tiers.lethalNow : tiers.lethalNext;
+  if (theyLethal) score -= !meActive ? tiers.lethalNow : (weLethal ? 0 : tiers.lethalNext);
+  const turns = (hit, later, life) => (hit >= life ? 1 : later <= 0 ? 10 : Math.min(10, 1 + Math.ceil((life - hit) / later)));
+  const ourClock = turns(ourHit, damageThrough(attackers(mine), untapped(theirs)), opponent.life);
+  const theirClock = turns(theirHit, damageThrough(attackers(theirs), untapped(mine)), player.life);
+  score += tiers.clock * (theirClock - ourClock);
+  score += tiers.life * (Math.log(1 + Math.max(0, player.life)) - Math.log(1 + Math.max(0, opponent.life)));
+
+  // Creatures, and the next combat: the active player's planned attack against the
+  // other's planned blocks, from the attacker's side.
+  score += tiers.creatures * (mine.reduce((s, c) => s + creatureValue(c), 0) - theirs.reduce((s, c) => s + creatureValue(c), 0));
+  score += tiers.combat * (meActive ? 1 : -1) * nextCombat(state, meActive ? me : opponent.id);
+
+  // Cards in hand, then the other permanents.
+  const handOf = (p) => (p.hand ? [p.hand.filter((c) => !isLand(c)).length, p.hand.filter(isLand).length] : [p.handSize ?? 0, 0]);
+  const [ourSpells, ourLands] = handOf(player);
+  const [theirSpells, theirLands] = handOf(opponent);
+  score += tiers.hand * (ourSpells - theirSpells) + tiers.handLands * (ourLands - theirLands);
+  const others = (id) => state.battlefield.filter((p) => p.controllerId === id && !isCreature(p) && !isLand(p)).length;
+  const lands = (id) => state.battlefield.filter((p) => p.controllerId === id && isLand(p)).length;
+  score += tiers.permanents * (others(me) - others(opponent.id)) + tiers.lands * (lands(me) - lands(opponent.id));
+  const library = (p) => Math.max(0, 5 - (p.library?.length ?? p.librarySize ?? 0));
+  score += tiers.library * (library(player) - library(opponent));
+  return score;
+}
+
+/** The value (combatValue) of `attackerId`'s planned attack against the defender's planned blocks. */
+function nextCombat(state, attackerId) {
+  const defenderId = state.players.find((p) => p.id !== attackerId).id;
+  const ready = state.battlefield.filter((p) => p.controllerId === attackerId && isCreature(p) && !p.tapped
+    && !p.keywords.includes('defender') && (!p.summoningSick || p.keywords.includes('haste') || state.activePlayerId !== attackerId));
+  if (ready.length === 0) return 0;
+  const chosen = new Set(planAttack(state, attackerId, ready));
+  const group = ready.filter((c) => chosen.has(c.id));
+  if (group.length === 0) return 0;
+  const byId = (id) => state.battlefield.find((p) => p.id === id);
+  const hypothetical = { ...state, combat: { attackers: group.map((c) => ({ cardId: c.id, blockerIds: [] })) } };
+  const blocks = planBlocks(hypothetical, defenderId, (b, a) => canBlock(byId(b), byId(a)));
+  const defender = state.players.find((p) => p.id === defenderId);
+  return combatValue(group.map((attacker) => {
+    const blockers = Object.entries(blocks).filter(([, a]) => a === attacker.id).map(([b]) => byId(b));
+    return { attacker, blockers, blocked: blockers.length > 0 };
+  }), { damageWeight: damageWeight(defender.life) });
 }

@@ -24,6 +24,18 @@ export function createOverlays(app) {
   function show(content, { onClose, kind = 'sheet', dismissable = true } = {}) {
     close();
     const el = h(`div.overlay.overlay-${kind}`, h('div.backdrop'), content);
+    // A tap that opened this overlay (on pointerup) still sends its click, which lands
+    // here, on the backdrop or on whatever option is under the finger. Only clicks whose
+    // press (or key) also started here count.
+    let pressed = false;
+    el.addEventListener('pointerdown', () => { pressed = true; });
+    el.addEventListener('keydown', () => { pressed = true; });
+    el.addEventListener('click', (event) => {
+      if (!pressed) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+    }, { capture: true });
     if (dismissable) {
       el.addEventListener('click', (event) => {
         if (event.target === el || event.target.classList.contains('backdrop')) close();
@@ -52,8 +64,12 @@ export function createOverlays(app) {
     show(view, { kind: 'inspect' });
   }
 
-  /** A list of choices. `options`: `[{ label, sub?, onPick, disabled?, primary? }]`. */
+  /**
+   * A list of choices. `options`: `[{ label, sub?, onPick, disabled?, primary? }]`.
+   * `onCancel` runs when it closes without a pick (Cancel, or tapping the backdrop).
+   */
   function sheet({ title, text, options, cancel = 'Cancel', onCancel }) {
+    let picked = false;
     show(h('div.sheet',
       h('div.sheet-grip'),
       title ? h('h3', title) : null,
@@ -61,9 +77,9 @@ export function createOverlays(app) {
       h('div.sheet-options', options.map((o) => h('button.btn.option', {
         class: o.primary ? 'primary' : '',
         disabled: o.disabled,
-        onclick: () => { close(); o.onPick(); },
+        onclick: () => { picked = true; close(); o.onPick(); },
       }, h('span.label', o.label), o.sub ? h('span.sub', o.sub) : null))),
-      cancel ? h('button.btn.ghost', { onclick: () => { close(); onCancel?.(); } }, cancel) : null), { onClose: null });
+      cancel ? h('button.btn.ghost', { onclick: close }, cancel) : null), { onClose: () => { if (!picked) onCancel?.(); } });
   }
 
   /** Yes or no. */

@@ -39,8 +39,9 @@ export const readyAttackers = (state, me) => state.battlefield.filter((p) => p.c
   && !p.tapped && !hasKeyword(p, 'defender') && (!p.summoningSick || hasKeyword(p, 'haste')));
 
 /**
- * The main button: `{ label, action?, endTurn?, waiting? }`. `action` is the valid
- * action it takes; `endTurn` means it also starts passing until the turn ends;
+ * The main button: `{ label, action?, endTurn?, waiting?, reopen? }`. `action` is the valid
+ * action it takes; `endTurn` means it also starts passing until the turn ends; `reopen`
+ * means it shows the decision's sheet again;
  * `waiting` means it's the opponent's move (the button shows a spinner).
  */
 export function primaryAction(state, me) {
@@ -60,6 +61,9 @@ export function primaryAction(state, me) {
       }
       case DECISION.DISCARD_TO_HAND_SIZE:
         return { label: `Discard ${decision.count}` };
+      case DECISION.ASSIGN_COMBAT_DAMAGE:
+        // The choice is a sheet; the button brings it back if it was dismissed.
+        return { label: 'Assign damage', reopen: true };
       default:
         return { label: 'Choose' };
     }

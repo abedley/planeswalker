@@ -135,6 +135,8 @@ test('the main button follows the game', () => {
   assert.equal(label({ pendingDecision: { type: DECISION.DECLARE_ATTACKERS, playerId: 'p1', attackers: ['x', 'y'] } }), 'Attack (2)');
   assert.equal(label({ pendingDecision: { type: DECISION.DECLARE_BLOCKERS, playerId: 'p1', blocks: {} } }), 'No blocks');
   assert.equal(label({ pendingDecision: { type: DECISION.DISCARD_TO_HAND_SIZE, playerId: 'p1', count: 2 } }), 'Discard 2');
+  const assign = primaryAction(fake({ pendingDecision: { type: DECISION.ASSIGN_COMBAT_DAMAGE, playerId: 'p1', attackerId: 'a' } }), 'p1');
+  assert.deepEqual([assign.label, assign.reopen], ['Assign damage', true], 'a dismissed damage sheet can be reopened');
 });
 
 test('presentation fields come from the definition, game values from the permanent', async () => {

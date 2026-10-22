@@ -198,7 +198,7 @@ export class Battle {
     if (!state) return;
     const me = this.#me;
     const primary = primaryAction(state, me);
-    const ctx = { prompt: promptFor(state, me), main: { ...primary, disabled: !this.#interactive || !primary.action, fullControl: this.#fullControl } };
+    const ctx = { prompt: promptFor(state, me), main: { ...primary, disabled: !this.#interactive || !(primary.action || primary.reopen), fullControl: this.#fullControl } };
     if (!this.#interactive) {
       ctx.main.waiting = actingPlayerId(state) !== me && state.status === GAME_STATUS.IN_PROGRESS;
       ctx.main.disabled = true;
@@ -634,6 +634,10 @@ export class Battle {
     }
     if (!this.#interactive) return;
     const primary = primaryAction(this.#state, this.#me);
+    if (primary.reopen) {
+      this.#assignDamage(this.#state);
+      return;
+    }
     if (!primary.action) {
       if (primary.hint) this.#view.toast(primary.hint);
       return;

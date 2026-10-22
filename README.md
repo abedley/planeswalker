@@ -707,7 +707,9 @@ emits `action` events. None of them looks at the opponent's hand or any library.
 A fast heuristic player, also used to play out the search AI's simulations (5–20 µs per decision).
 - **Combat** (`combat.js`):
   - **Attacks:** with creatures the opponent can't block profitably, and with everything when
-    that's lethal through the best possible blocks. It keeps enough blockers home to survive
+    that's lethal through the best possible blocks. Then it adds any other attacker that makes
+    the whole attack better against the defender's best blocks: each blocker stops only one
+    attacker, so more attackers than they can block well get through ("swarming"). It keeps enough blockers home to survive
     the crack-back, and goes all in when it's losing the race to deck out.
   - **Blocks:** kills attackers or trades up, double-blocks big threats, and chump-blocks only
     to survive.
@@ -746,7 +748,8 @@ It simulates each one many times (`search.js`):
    that its choices don't change when the hidden cards, the library orders or the seed change.
 2. **Play the macro**, then let the basic AI play both sides up to the AI's next turn.
 3. **Score the result** with `evaluate.js`: a weighted sum of life (concave), creature values,
-   lands, other permanents, cards in hand, each side's clock, and deck-out danger.
+   lands, other permanents, spells in hand, lands in hand (weighted apart, so the AI never
+   prefers keeping a land in hand to playing it), each side's clock, and deck-out danger.
 4. **Race the candidates:** each round deals one new guess and simulates every remaining
    candidate on it, so candidates are compared pair by pair on identical situations. After 6
    rounds, a candidate 2.5 standard errors behind the leader drops out, and the time goes to the
@@ -796,7 +799,8 @@ In the debugger, pick "AI: search" for a player to see its top candidates and si
 ### Measuring strength
 
 ```sh
-npm run arena -- basic legacy --games 50 --workers 4    # mirror matches on every sample deck
+npm run arena -- basic legacy --games 50 --workers 4    # mirror matches on every deck
+npm run arena -- basic basic-noswarm --workers 1        # vs the basic AI before it swarmed
 npm run arena -- "search:b=150" basic --decks effects,keywords
 npm run benchmark                                        # silent playouts per second
 npm run tune-ai                                          # refit the evaluation weights
@@ -842,4 +846,21 @@ Results:
 decks out, so the seat decides them. The search AI's lead comes from its simulations, which the
 time budget doesn't change much: given enough simulations, greedy and search agree, so a better
 rollout policy or evaluation, not more time, is what would make it stronger.
+
+On the real decks (mirror matches of the five colors, 200 games each, search at 150 ms):
+
+| Match | First AI's win rate (95% CI) |
+| --- | --- |
+| search vs basic (before the changes below) | 63.5% (56.6–69.9%) |
+| search vs the previous basic AI (after them) | (measuring) |
+| basic (swarming) vs the previous basic AI | 52.3% (49.6–55.0%), 1320 games, all eleven decks |
+| general weights refit on all decks vs current | 49.5% (42.6–56.4%) |
+| 3-turn vs 2-turn horizon | 50.5% (43.6–57.4%) |
+| margin 0 vs 1 | 43.0% (36.3–49.9%) |
+| margin 2 vs 1 | 50.0% (43.1–56.9%) |
+| lands in hand weighed apart vs as spells | 49.0% (42.2–55.9%) |
+
+The search still gains nothing from more time, a deeper horizon or refit weights, and does worse
+when it trusts its simulations over the basic AI's choice (margin 0). What it does gain from is
+a better basic AI, which both plays the outskirts' CPUs and plays out every simulation.
 

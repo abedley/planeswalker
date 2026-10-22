@@ -60,6 +60,8 @@ const WINDOW = Object.freeze({
  *
  * `delayMs: null` acts synchronously (the game queues the action); any number
  * schedules the action with setTimeout so a viewer can follow along.
+ * `swarm: false` attacks the way the previous version did, without swarming (see
+ * planAttack), as a baseline for the arena (`basic-noswarm`).
  */
 export class BasicAIController extends EventEmitter {
   #game;

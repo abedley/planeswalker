@@ -17,7 +17,9 @@ import { crest, preloadImages } from '../art.js';
 import { BoardView } from './BoardView.js';
 import { playOptions, variantsFor, perform } from './play.js';
 import { shouldAutoPass, primaryAction } from './autopass.js';
-import { promptFor, variantLabel, assignmentLabel, nameOf, findCard } from './describe.js';
+import { promptFor, variantLabel, nameOf, findCard } from './describe.js';
+import { damagePlans } from './damage.js';
+import { boardCard } from '../cardView.js';
 import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
 
@@ -364,12 +366,49 @@ export class Battle {
     this.#refresh();
   }
 
+  /**
+   * How the attacker deals its damage, as outcomes: which blockers die (damage.js).
+   * With one sensible outcome it's applied; otherwise each choice shows the blockers
+   * with the damage they'd take.
+   */
   #assignDamage(state) {
-    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.ASSIGN_COMBAT_DAMAGE);
-    const attacker = findCard(state, state.pendingDecision.attackerId);
+    const plans = damagePlans(state, this.#me);
+    if (!plans.length) return;
+    if (plans.length === 1) {
+      this.#dispatch(plans[0].action);
+      return;
+    }
+    const decision = state.pendingDecision;
+    const attacker = findCard(state, decision.attackerId);
+    const blockers = decision.blockerIds.map((id) => findCard(state, id)).filter(Boolean);
+    const opponent = this.#intro.oppInfo;
+    const names = (ids) => ids.map((id) => nameOf(state, id, this.#me));
+    const summary = (plan) => {
+      const dies = plan.kills.length === 0 ? 'Nothing dies'
+        : plan.kills.length === blockers.length && blockers.length > 1 ? 'Destroy all blockers'
+          : `Destroy ${names(plan.kills).join(' and ')}`;
+      return plan.toPlayer ? `${dies}, ${plan.toPlayer} to ${opponent.name}` : dies;
+    };
+    const row = (plan) => h('div.dmg-row',
+      blockers.map((b) => {
+        const n = plan.assignment[b.id] ?? 0;
+        const dies = plan.kills.includes(b.id);
+        return h('div.dmg-card', { class: dies ? 'dies' : n ? '' : 'spared' },
+          boardCard(b, this.#app.definitions),
+          dies ? h('div.dmg-skull', icon('skull')) : null,
+          n ? h('div.dmg-n', `-${n}`) : null);
+      }),
+      decision.trample ? h('div.dmg-player', { class: plan.toPlayer ? '' : 'spared' },
+        crest(opponent, { size: 'sm' }), plan.toPlayer ? h('div.dmg-n', `-${plan.toPlayer}`) : null) : null);
     this.#app.overlays.sheet({
-      title: `Assign ${attacker?.name ?? 'combat'} damage`,
-      options: mine.map((action) => ({ label: assignmentLabel(state, action.assignment, this.#me), onPick: () => this.#dispatch(action) })),
+      title: `${attacker?.name ?? 'Attacker'} deals ${decision.power}`,
+      text: 'Choose which blockers die.',
+      options: plans.map((plan, i) => ({
+        label: row(plan),
+        sub: summary(plan),
+        primary: i === 0,
+        onPick: () => this.#dispatch(plan.action),
+      })),
       cancel: null,
     });
   }

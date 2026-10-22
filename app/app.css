@@ -633,6 +633,18 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .sheet-options { display: flex; flex-direction: column; gap: 8px; }
 .btn.option { text-align: left; display: flex; flex-direction: column; }
 .btn.option .sub { font-weight: 400; font-size: 12px; opacity: .8; }
+/* Combat damage choices: the blockers, the damage each takes, and who dies */
+.dmg-row { display: flex; align-items: flex-end; gap: 10px; padding: 6px 2px 8px; }
+.dmg-card { position: relative; width: 52px; height: 70px; flex: none; transition: opacity .2s; }
+.dmg-card .stat { width: 18px; height: 18px; font-size: 10.5px; }
+.dmg-card.spared { opacity: .55; }
+.dmg-card.dies .board-face { box-shadow: 0 0 0 2px #ff5d4a, 0 0 12px 2px rgba(255, 60, 40, .6); }
+.dmg-card.dies .board-face .art { filter: grayscale(.6) brightness(.7); }
+.dmg-skull { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; pointer-events: none; }
+.dmg-skull .icon { width: 26px; height: 26px; filter: drop-shadow(0 1px 3px #000); }
+.dmg-n { position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px; display: grid; place-items: center; background: #c5303b; color: #fff; font: 800 12px var(--ui); box-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
+.dmg-player { position: relative; margin-left: auto; align-self: center; }
+.dmg-player.spared { opacity: .45; }
 .setting { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 4px 2px; }
 .seg { display: flex; gap: 4px; }
 .inspect { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(300px, 82vw); }

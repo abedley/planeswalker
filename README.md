@@ -89,6 +89,11 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
   target, or which creature to sacrifice.
 - **Combat:** tap creatures to attack; to block, tap your creature, then an attacker.
+- **Damage assignment** is a choice of which blockers die (`app/battle/damage.js`): splits
+  with the same outcome are one choice (the one trampling over the most), and outcomes that
+  kill less without dealing more are dropped. With one outcome left it just happens;
+  otherwise each choice shows the blockers, the damage each takes, and a skull on those
+  that die.
 - **The main button** says what passing does: *End turn*, *Attack*, *Resolve*, *Pass*,
   *Attack (2)*, *No blocks*, *Deal damage*.
 - **Auto-pass:** like MTG Arena's smart stops, the app passes priority for you unless you could

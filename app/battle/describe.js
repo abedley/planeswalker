@@ -44,11 +44,6 @@ export function variantLabel(state, variant, me) {
   return parts.join(' · ') || 'Play';
 }
 
-/** A combat damage split: "Bear 2 · Wolf 1". */
-export function assignmentLabel(state, assignment, me) {
-  return Object.entries(assignment).map(([id, n]) => `${nameOf(state, id, me)} ${n}`).join(' · ');
-}
-
 /** The steps shown as pips in the middle of the board. */
 export const TURN_PIPS = [
   { id: 'begin', label: 'Begin', match: (s) => s.phase === PHASE.BEGINNING },

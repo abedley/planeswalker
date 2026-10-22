@@ -1,0 +1,665 @@
+/**
+ * Optimal blocks: given the attackers, the blocks that, in this order of priority,
+ * 1. let the defending player survive the combat,
+ * 2. kill the most attackers (then the most attacker value),
+ * 3. lose the least blocker value,
+ * 4. take the least damage (net of lifelink).
+ *
+ * It's exact (up to `maxGroup` blockers on one attacker) and built for the AI's
+ * rollouts, which call it thousands of times a second:
+ * - **Each fight once.** Combat is fought attacker by attacker, so a whole block's
+ *   outcome is the sum of its fights. Each attacker's blocking groups are resolved
+ *   once, with a flat copy of resolveCombat's rules (first and double strike,
+ *   deathtouch, trample, lifelink, damage already marked).
+ * - **Only useful groups.** A group grows only while a bigger one could still beat
+ *   it (kill the attacker, save a blocker, soak trample, gain life), and is dropped
+ *   when one of its subsets is at least as good: extra blockers are never free.
+ *   When the defender survives even with no blocks, "at least as good" is the
+ *   priority order above, which leaves only the blocks that kill something or stop
+ *   damage for free; otherwise it's every count at once, which keeps chump blocks.
+ * - **Identical blockers are one class.** Ten Soldier tokens are one blocker used
+ *   up to ten times, so a group of them is fought once and the search never tries
+ *   the same block with the tokens swapped. Identical attackers share their groups.
+ * - **Memoized search.** The best blocks for the attackers still to come depend
+ *   only on how many of each class are left, so the search over attackers
+ *   memoizes them: exact however the attackers compete for blockers. If those
+ *   blocks don't survive, a depth-first search over every group finds the best
+ *   that do, bounded by the memoized bests and by the damage the unused blockers
+ *   could still stop.
+ *
+ * Boards too big for its budgets (`stateLimit`, `nodeLimit`; well past the
+ * campaign's 10 creatures a side) get its best effort, flagged `exact: false`.
+ *
+ * Like resolveCombat, it assumes the attacker divides its damage to kill the most
+ * valuable blockers it can.
+ */
+import { hasKeyword, isCreature, KEYWORD } from '../cards/cards.js';
+import { canBlock, creatureValue } from './combat.js';
+
+const EPS = 1e-9;
+/** Bitmasks are 32-bit ints, so at most this many blockers, and attackers to block, are considered. */
+const MAX_BLOCKERS = 30;
+const MAX_ATTACKERS = 30;
+
+// Keyword flags.
+const FS = 1;
+const DS = 2;
+const DT = 4;
+const TR = 8;
+const LL = 16;
+const MENACE = 32;
+
+/** A creature as the solver needs it: plain numbers and flags. */
+function record(creature, index) {
+  const has = (k) => hasKeyword(creature, k);
+  return {
+    creature,
+    index,
+    power: creature.power,
+    toughness: creature.toughness,
+    damage: creature.damage ?? 0,
+    flags: (has(KEYWORD.FIRST_STRIKE) ? FS : 0) | (has(KEYWORD.DOUBLE_STRIKE) ? DS : 0)
+      | (has(KEYWORD.DEATHTOUCH) ? DT : 0) | (has(KEYWORD.TRAMPLE) ? TR : 0)
+      | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0),
+    value: creatureValue(creature),
+  };
+}
+
+/** The damage a blocker could deal its attacker at most (Infinity: deathtouch). */
+const potential = (b) => (b.power <= 0 ? 0 : b.flags & DT ? Infinity : b.power * (b.flags & DS ? 2 : 1));
+
+/** All orderings of 0..n-1, in the order combat.js's permutations() lists them. */
+function permutations(n) {
+  const build = (items) => (items.length <= 1 ? [items]
+    : items.flatMap((item, i) => build([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest])));
+  return build([...Array(n).keys()]).map((p) => Int8Array.from(p));
+}
+const PERMUTATIONS = [[], [], permutations(2), permutations(3), permutations(4)];
+
+// Scratch space for fight(): slot 0 is the attacker, 1.. its blockers.
+const SLOTS = 8;
+const P = new Int32Array(SLOTS);
+const T = new Int32Array(SLOTS);
+const F = new Int32Array(SLOTS);
+const V = new Float64Array(SLOTS);
+const marked = new Int32Array(SLOTS);
+const added = new Int32Array(SLOTS);
+const living = new Int32Array(SLOTS);
+const order = new Int32Array(SLOTS);
+const bestOrder = new Int32Array(SLOTS);
+const lethal = new Int32Array(SLOTS);
+
+/**
+ * Sorts the `count` living slots into the order to assign lethal damage in, into
+ * `bestOrder`, as resolveCombat's bestKillOrder: cheapest first, or for 2-4
+ * blockers the first order (in permutation order) that kills the most value.
+ */
+function killOrder(count, power) {
+  for (let i = 0; i < count; i++) {
+    const slot = living[i];
+    let j = i;
+    while (j > 0 && lethal[order[j - 1]] > lethal[slot]) {
+      order[j] = order[j - 1];
+      j--;
+    }
+    order[j] = slot;
+  }
+  for (let i = 0; i < count; i++) bestOrder[i] = order[i];
+  if (count < 2 || count > 4) return;
+  let bestValue = -1;
+  for (const perm of PERMUTATIONS[count]) {
+    let left = power;
+    let value = 0;
+    for (let i = 0; i < count; i++) {
+      const slot = order[perm[i]];
+      if (lethal[slot] > left) break;
+      left -= lethal[slot];
+      value += V[slot];
+    }
+    if (value > bestValue) {
+      bestValue = value;
+      for (let i = 0; i < count; i++) bestOrder[i] = order[perm[i]];
+    }
+  }
+}
+
+/** fight()'s result, reused between calls: read it before the next one. */
+const outcome = { attackerDies: false, deadBlockers: 0, damage1: 0, gain1: 0, damage: 0, gain: 0 };
+
+/**
+ * One attacker against its first `n` blockers in `group` (none: unblocked), by the
+ * same rules as resolveCombat. Sets `outcome`: the attacker's death, the dead
+ * blockers (bits of group positions), and the damage to the defending player and
+ * the defender's lifelink gain, in the first-strike step and over the whole combat.
+ */
+export function fight(attacker, group, n = group.length) {
+  const all = n + 1;
+  let firstStrikeStep = false;
+  for (let s = 0; s < all; s++) {
+    const c = s === 0 ? attacker : group[s - 1];
+    P[s] = c.power;
+    T[s] = c.toughness;
+    F[s] = c.flags;
+    V[s] = c.value;
+    marked[s] = c.damage;
+    if (c.flags & (FS | DS)) firstStrikeStep = true;
+  }
+  const af = F[0];
+  let deathtouched = 0;
+  let dead = 0;
+  outcome.damage1 = 0;
+  outcome.gain1 = 0;
+  outcome.damage = 0;
+  outcome.gain = 0;
+  for (let step = firstStrikeStep ? 0 : 1; step < 2; step++) {
+    // 510.4 / 702.4b: who deals damage in this step.
+    const stepFlag = step === 0 ? FS : 0;
+    let toPlayer = 0;
+    let lifelink = 0;
+    let hits = 0;
+    for (let s = 0; s < all; s++) added[s] = 0;
+    if (!(dead & 1) && P[0] > 0 && ((af & DS) || (af & FS) === stepFlag)) {
+      let remaining = P[0];
+      let count = 0;
+      for (let s = 1; s < all; s++) if (!(dead & (1 << s))) living[count++] = s;
+      if (n === 0) {
+        toPlayer += remaining;
+      } else if (count === 0) {
+        // 702.19e: a trampler whose blockers are all gone hits the player.
+        if (af & TR) toPlayer += remaining;
+      } else {
+        for (let i = 0; i < count; i++) {
+          const s = living[i];
+          const left = Math.max(0, T[s] - marked[s]);
+          lethal[s] = af & DT ? Math.min(1, left) : left;
+        }
+        killOrder(count, remaining);
+        for (let i = 0; i < count; i++) {
+          const s = bestOrder[i];
+          const amount = Math.min(remaining, lethal[s]);
+          if (amount > 0) {
+            added[s] += amount;
+            hits |= 1 << s;
+          }
+          remaining -= amount;
+        }
+        if (remaining > 0) {
+          if (af & TR) toPlayer += remaining;
+          else {
+            added[bestOrder[count - 1]] += remaining;
+            hits |= 1 << bestOrder[count - 1];
+          }
+        }
+      }
+    }
+    for (let s = 1; s < all; s++) {
+      if ((dead & (1 << s)) || P[s] <= 0 || !((F[s] & DS) || (F[s] & FS) === stepFlag)) continue;
+      added[0] += P[s];
+      if (F[s] & DT) deathtouched |= 1;
+      if (F[s] & LL) lifelink += P[s];
+    }
+    if (af & DT) deathtouched |= hits;
+    // 510.2: all of the step's damage is dealt at once.
+    for (let s = 0; s < all; s++) {
+      marked[s] += added[s];
+      if (!(dead & (1 << s)) && (marked[s] >= T[s] || ((deathtouched & (1 << s)) && marked[s] > 0) || T[s] <= 0)) dead |= 1 << s;
+    }
+    if (step === 0) {
+      outcome.damage1 = toPlayer;
+      outcome.gain1 = lifelink;
+    }
+    outcome.damage += toPlayer;
+    outcome.gain += lifelink;
+  }
+  outcome.attackerDies = (dead & 1) !== 0;
+  outcome.deadBlockers = dead >>> 1;
+  return outcome;
+}
+
+/** Lexicographic comparison of outcome keys (survive, kills, killed value, -lost, -net damage). */
+function compareKeys(a, b) {
+  for (let i = 0; i < a.length; i++) {
+    const d = a[i] - b[i];
+    if (d > EPS) return 1;
+    if (d < -EPS) return -1;
+  }
+  return 0;
+}
+/** Whether option p is at least as good as option o in priority order (survival aside). */
+const lexAtLeast = (p, o) => (p.kill !== o.kill ? p.kill > o.kill
+  : Math.abs(p.killedValue - o.killedValue) > EPS ? p.killedValue > o.killedValue
+    : Math.abs(p.lost - o.lost) > EPS ? p.lost < o.lost
+      : p.net <= o.net);
+/** Whether option p is at least as good as option o on every count. */
+const paretoAtLeast = (p, o) => p.kill >= o.kill && p.killedValue >= o.killedValue - EPS
+  && p.lost <= o.lost + EPS && p.net1 <= o.net1 && p.net <= o.net;
+
+
+// The memo table for boards whose search fits in it.
+const TABLE_SIZE = 1 << 17;
+const tableStamps = new Int32Array(TABLE_SIZE);
+const tableSlots = new Int32Array(TABLE_SIZE);
+let tableStamp = 0;
+
+// Scratch space for attackerOptions().
+const topDamage = new Float64Array((MAX_BLOCKERS + 1) * 5);
+const rescueFrom = new Uint8Array(MAX_BLOCKERS + 1);
+const gainFrom = new Uint8Array(MAX_BLOCKERS + 1);
+const top = new Float64Array(4);
+
+/** Whether the sorted class list `sub` is a sub-multiset of the sorted class list `of`. */
+function within(sub, of) {
+  let j = 0;
+  for (let i = 0; i < sub.length; i++) {
+    while (j < of.length && of[j] < sub[i]) j++;
+    if (j === of.length || of[j] !== sub[i]) return false;
+    j++;
+  }
+  return true;
+}
+
+/**
+ * The options worth considering for one attacker: unblocked, and each blocking
+ * group (legal, at most `groupMax` blockers) that no subset of it does as well as,
+ * `lex`: in priority order, and unless survival is `safe`, `pareto`: on every count.
+ * `legal` lists the blockers that may block it by class (identical blockers), and
+ * a group takes the first ones of a class, so each group of classes is fought once.
+ * An option's `classes` are its blockers' classes, and `delta` adds them to a state.
+ */
+function attackerOptions(a, legal, groupMax, safe, radix) {
+  const minSize = a.flags & MENACE ? 2 : 1;
+  const toughnessLeft = a.toughness - a.damage;
+  const options = [];
+  const members = [];
+  const add = () => {
+    const result = fight(a, members, members.length);
+    const classes = [];
+    const ks = [];
+    const ns = [];
+    let delta = 0;
+    let lost = 0;
+    for (let i = 0; i < members.length; i++) {
+      const k = members[i].cls;
+      classes.push(k);
+      delta += radix[k];
+      if (ks.length && ks[ks.length - 1] === k) ns[ns.length - 1]++;
+      else {
+        ks.push(k);
+        ns.push(1);
+      }
+      if (result.deadBlockers & (1 << i)) lost += members[i].value;
+    }
+    const option = {
+      classes,
+      ks,
+      ns,
+      delta,
+      kill: result.attackerDies ? 1 : 0,
+      killedValue: result.attackerDies ? a.value : 0,
+      lost,
+      net1: result.damage1 - result.gain1,
+      net: result.damage - result.gain,
+      through: result.damage,
+    };
+    options.push(option);
+    return option;
+  };
+  add();
+  // For each start, what blockers from legal[start..] could add to a group: the
+  // most damage k more of them could deal (topDamage[start * width + k]), and
+  // whether any is a first or double striker, or a lifelinker.
+  const count = legal.length;
+  const width = groupMax + 1;
+  topDamage.fill(0, count * width, (count + 1) * width);
+  rescueFrom[count] = 0;
+  gainFrom[count] = 0;
+  top.fill(0);
+  for (let i = count - 1; i >= 0; i--) {
+    const b = legal[i];
+    rescueFrom[i] = rescueFrom[i + 1] || (b.power > 0 && (b.flags & (FS | DS)) !== 0) ? 1 : 0;
+    gainFrom[i] = gainFrom[i + 1] || (b.power > 0 && (b.flags & LL) !== 0) ? 1 : 0;
+    let p = potential(b);
+    for (let j = 0; j < groupMax && p > 0; j++) {
+      if (p > top[j]) {
+        const swap = top[j];
+        top[j] = p;
+        p = swap;
+      }
+    }
+    for (let k = 1; k <= groupMax; k++) topDamage[i * width + k] = topDamage[i * width + k - 1] + top[k - 1];
+  }
+  // Whether a bigger group than `members` (adding from legal[start..]) could beat
+  // it on some count; if not, every bigger one is dominated by it. Each reason
+  // needs some blocker of a kind, but any blocker may come before that one.
+  const worthGrowing = (option, start, dealt) => members.length < minSize
+    || (!option.kill && dealt + topDamage[start * width + groupMax - members.length] >= toughnessLeft) // could still kill it
+    // When it's killing ours: a first striker of ours could kill it first. And if
+    // it strikes first, or twice (each strike assigned on its own), any other
+    // target could draw its damage away from a blocker that would then kill it.
+    || (option.lost > 0 && ((a.flags & (FS | DS)) !== 0 || rescueFrom[start] === 1))
+    || option.through > 0 // trample damage still getting through
+    || gainFrom[start] === 1; // a lifelinker could join
+  const grow = (start, option, dealt) => {
+    if (members.length === groupMax || !worthGrowing(option, start, dealt)) return;
+    for (let i = start; i < count; i++) {
+      // Of identical blockers, only the first ones: skip one whose twin before it is out.
+      if (i > 0 && legal[i - 1].cls === legal[i].cls && members[members.length - 1] !== legal[i - 1]) continue;
+      members.push(legal[i]);
+      grow(i + 1, members.length >= minSize ? add() : option, dealt + potential(legal[i]));
+      members.pop();
+    }
+  };
+  grow(0, options[0], 0);
+  // Best first, so a good answer is found early and bounds the rest.
+  const byPriority = (x, y) => y.kill - x.kill || y.killedValue - x.killedValue || x.lost - y.lost || x.net - y.net;
+  return { lex: undominated(options, lexAtLeast).sort(byPriority), pareto: safe ? null : undominated(options, paretoAtLeast).sort(byPriority) };
+}
+
+/** The options that no subset option (unblocked included) is at least as good as. */
+function undominated(options, atLeast) {
+  const useful = [];
+  for (const o of options) {
+    let dominated = false;
+    for (const p of options) {
+      if (p !== o && p.classes.length <= o.classes.length && atLeast(p, o) && within(p.classes, o.classes)) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) useful.push(o);
+  }
+  return useful;
+}
+
+/**
+ * The optimal blocks of `attackers` with `blockers` for a defender at `life`.
+ *
+ * @param {object[]} attackers attacking creatures (permanents from a game state)
+ * @param {object[]} blockers the defender's creatures that might block
+ * @param {number} life the defender's life total
+ * @param {object} [options]
+ * @param {(blocker: object, attacker: object) => boolean} [options.canBlockPair] which blocks are legal (default: canBlock)
+ * @param {number} [options.maxGroup] the most blockers put on one attacker (default 3, at most 4)
+ * @param {number} [options.stateLimit] a cap on the search's memo; past it, the attackers left take their best option in turn
+ * @param {number} [options.nodeLimit] a cap on the search for blocks that survive; past it, the best found so far are returned
+ * @returns {{ blocks: Object<string, string>, survives: boolean, kills: number, killedValue: number,
+ *   lostValue: number, lifeAfter: number, exact: boolean, nodes: number }} `exact` is false
+ *   when a cap was reached, and the blocks may then not be the best.
+ */
+export function optimalBlocks(attackers, blockers, life, {
+  canBlockPair = canBlock, maxGroup = 3, stateLimit = 5000, nodeLimit = 20000,
+} = {}) {
+  const atk = attackers.map(record);
+  const blk = [];
+  const blockMasks = [];
+  for (const b of blockers) {
+    if (blk.length === MAX_BLOCKERS) break;
+    let mask = 0;
+    for (let i = 0; i < Math.min(attackers.length, MAX_ATTACKERS); i++) if (canBlockPair(b, attackers[i])) mask |= 1 << i;
+    if (mask) {
+      blk.push(record(b, blk.length));
+      blockMasks.push(mask);
+    }
+  }
+  const groupMax = Math.min(maxGroup, 4);
+
+  // Identical blockers (the same in combat, and able to block the same attackers)
+  // form a class. A state of the search is how many of each class are in use,
+  // in mixed radix: `radix[k]` is the place value of class k's count.
+  const same = (x, y) => x.power === y.power && x.toughness === y.toughness && x.damage === y.damage
+    && x.flags === y.flags && x.value === y.value && blockMasks[x.index] === blockMasks[y.index];
+  const classes = [];
+  for (const b of blk) {
+    let k = classes.findIndex((members) => same(members[0], b));
+    if (k < 0) k = classes.push([]) - 1;
+    classes[k].push(b);
+    b.cls = k;
+  }
+  const sizes = classes.map((members) => members.length);
+  const radix = [];
+  let stateCount = 1;
+  for (const size of sizes) {
+    radix.push(stateCount);
+    stateCount *= size + 1;
+  }
+  const usedOf = (state, k) => Math.floor(state / radix[k]) % (sizes[k] + 1);
+  const fits = (o, state) => {
+    for (let j = 0; j < o.ks.length; j++) if (usedOf(state, o.ks[j]) + o.ns[j] > sizes[o.ks[j]]) return false;
+    return true;
+  };
+
+  // Blocks never let more damage through, so if no blocks survive, any blocks do.
+  let unblocked1 = 0;
+  let unblocked = 0;
+  for (const a of atk) {
+    if (a.power <= 0) continue;
+    if (a.flags & (FS | DS)) unblocked1 += a.power;
+    unblocked += a.power * (a.flags & DS ? 2 : 1);
+  }
+  const safe = life - unblocked1 > 0 && life - unblocked > 0;
+  // Each attacker's options, shared by identical attackers.
+  const byClass = [...blk].sort((x, y) => x.cls - y.cls || x.index - y.index);
+  const shared = new Map();
+  const optionsOf = atk.map((a, i) => {
+    let legalMask = 0;
+    for (const b of blk) if (blockMasks[b.index] & (1 << i)) legalMask |= 1 << b.index;
+    const key = `${a.power},${a.toughness},${a.damage},${a.flags},${a.value},${legalMask}`;
+    if (!shared.has(key)) shared.set(key, attackerOptions(a, byClass.filter((b) => legalMask & (1 << b.index)), groupMax, safe, radix));
+    return shared.get(key);
+  });
+
+  // Search the attackers with the most at stake first.
+  const most = (options, f) => options.reduce((m, o) => Math.max(m, f(o)), -Infinity);
+  const sequence = atk.map((a, i) => i).sort((i, j) => most(optionsOf[j].lex, (o) => o.killedValue) - most(optionsOf[i].lex, (o) => o.killedValue)
+    || atk[j].power - atk[i].power);
+  const levels = sequence.map((i) => optionsOf[i].lex);
+  const depth = levels.length;
+
+  // The best the attackers from depth d on can do from `state`, survival aside,
+  // memoized: exact however they compete for blockers. Each result is a slot in
+  // these arrays (slot 0: past the last attacker, all zeros). A flat table holds
+  // the memo when it fits; stamps spare clearing it.
+  const flat = depth * stateCount <= TABLE_SIZE;
+  const memo = flat ? null : new Map();
+  if (tableStamp === 0x7fffffff) {
+    tableStamps.fill(0);
+    tableStamp = 0;
+  }
+  const stamp = ++tableStamp;
+  const sKills = [0];
+  const sKilled = [0];
+  const sLost = [0];
+  const sNet = [0];
+  const sNet1 = [0];
+  const sChoice = [null];
+  const sNext = [0];
+  const store = (kills, killed, lost, net, net1, choice, next) => {
+    sKills.push(kills);
+    sKilled.push(killed);
+    sLost.push(lost);
+    sNet.push(net);
+    sNet1.push(net1);
+    sChoice.push(choice);
+    sNext.push(next);
+    return sKills.length - 1;
+  };
+  // Past the state budget: each attacker from depth d on takes its best option
+  // that still fits, in turn.
+  let exact = true;
+  const greedyTail = (d, state) => {
+    exact = false;
+    const picks = [];
+    for (let e = d; e < depth; e++) {
+      const o = levels[e].find((option) => fits(option, state));
+      picks.push(o);
+      state += o.delta;
+    }
+    let slot = 0;
+    for (let e = picks.length - 1; e >= 0; e--) {
+      const o = picks[e];
+      slot = store(o.kill + sKills[slot], o.killedValue + sKilled[slot], o.lost + sLost[slot],
+        o.net + sNet[slot], o.net1 + sNet1[slot], o, slot);
+    }
+    return slot;
+  };
+  const suffixBest = (d, state) => {
+    if (d === depth) return 0;
+    const key = d * stateCount + state;
+    if (flat) {
+      if (tableStamps[key] === stamp) return tableSlots[key];
+    } else {
+      const known = memo.get(key);
+      if (known !== undefined) return known;
+    }
+    if (sKills.length > stateLimit) {
+      const slot = greedyTail(d, state);
+      if (flat) {
+        tableStamps[key] = stamp;
+        tableSlots[key] = slot;
+      } else memo.set(key, slot);
+      return slot;
+    }
+    let kills = -1;
+    let killed = 0;
+    let lost = 0;
+    let net = 0;
+    let net1 = 0;
+    let choice = null;
+    let next = 0;
+    for (const o of levels[d]) {
+      if (!fits(o, state)) continue;
+      const child = suffixBest(d + 1, state + o.delta);
+      const k = o.kill + sKills[child];
+      const kv = o.killedValue + sKilled[child];
+      const l = o.lost + sLost[child];
+      const n = o.net + sNet[child];
+      const better = k !== kills ? k > kills
+        : Math.abs(kv - killed) > EPS ? kv > killed
+          : Math.abs(l - lost) > EPS ? l < lost
+            : n < net;
+      if (better) {
+        kills = k;
+        killed = kv;
+        lost = l;
+        net = n;
+        net1 = o.net1 + sNet1[child];
+        choice = o;
+        next = child;
+      }
+    }
+    const slot = store(kills, killed, lost, net, net1, choice, next);
+    if (flat) {
+      tableStamps[key] = stamp;
+      tableSlots[key] = slot;
+    } else memo.set(key, slot);
+    return slot;
+  };
+  const survives = (net1, net) => life - net1 > 0 && life - net > 0;
+
+  // The best blocks survival aside: the answer if they survive (always, when
+  // survival is `safe`), or if nothing does.
+  const root = suffixBest(0, 0);
+  let bestChoice = [];
+  for (let slot = root; slot !== 0; slot = sNext[slot]) bestChoice.push(sChoice[slot]);
+  let bestKey = [survives(sNet1[root], sNet[root]) ? 1 : 0, sKills[root], sKilled[root], -sLost[root], -sNet[root]];
+  let searched = 0;
+
+  if (!bestKey[0]) {
+    // Otherwise, the best blocks that survive: a depth-first search over every
+    // option worth a thought for survival, pruned by the memoized bests and by a
+    // bound on the damage the rest could still stop: each unused blocker stops at
+    // most one attacker, and gains at most its own lifelink.
+    const pareto = sequence.map((i) => optionsOf[i].pareto);
+    const hit = sequence.map((i) => (atk[i].power > 0 ? atk[i].power * (atk[i].flags & DS ? 2 : 1) : 0));
+    const hit1 = sequence.map((i) => (atk[i].power > 0 && atk[i].flags & (FS | DS) ? atk[i].power : 0));
+    // For each depth, the hits from there on, biggest first, as running sums.
+    const topHits = (hits) => hits.map((h, d) => {
+      const sorted = hits.slice(d).sort((x, y) => y - x);
+      const sums = [0];
+      for (const x of sorted) sums.push(sums[sums.length - 1] + x);
+      return sums;
+    });
+    const tops = topHits(hit);
+    const tops1 = topHits(hit1);
+    const gainOf = classes.map(([b]) => (b.power > 0 && b.flags & LL ? b.power * (b.flags & DS ? 2 : 1) : 0));
+    const gain1Of = classes.map(([b]) => (b.power > 0 && b.flags & LL && b.flags & (FS | DS) ? b.power : 0));
+    const canSurvive = (d, state, net1, net) => {
+      if (d === depth) return survives(net1, net);
+      let free = 0;
+      let gain = 0;
+      let gain1 = 0;
+      for (let k = 0; k < classes.length; k++) {
+        const left = sizes[k] - usedOf(state, k);
+        free += left;
+        gain += left * gainOf[k];
+        gain1 += left * gain1Of[k];
+      }
+      const sums = tops[d];
+      const sums1 = tops1[d];
+      const stopped = sums[Math.min(free, sums.length - 1)];
+      const stopped1 = sums1[Math.min(free, sums1.length - 1)];
+      return survives(net1 + sums1[sums1.length - 1] - stopped1 - gain1, net + sums[sums.length - 1] - stopped - gain);
+    };
+    if (canSurvive(0, 0, 0, 0)) {
+      const chosen = new Array(depth);
+      let found = false;
+      const visit = (d, state, kills, killedValue, lost, net1, net) => {
+        if (++searched > nodeLimit) {
+          exact = false;
+          return;
+        }
+        if (d === depth) {
+          const key = [1, kills, killedValue, -lost, -net];
+          if (!found || compareKeys(key, bestKey) > 0) {
+            found = true;
+            bestKey = key;
+            bestChoice = chosen.slice();
+          }
+          return;
+        }
+        for (const o of pareto[d]) {
+          if (!fits(o, state)) continue;
+          const after = state + o.delta;
+          const n1 = net1 + o.net1;
+          const n = net + o.net;
+          if (!canSurvive(d + 1, after, n1, n)) continue;
+          const k = kills + o.kill;
+          const kv = killedValue + o.killedValue;
+          const l = lost + o.lost;
+          if (found) {
+            const child = suffixBest(d + 1, after);
+            if (compareKeys([1, k + sKills[child], kv + sKilled[child], -(l + sLost[child]), -(n + sNet[child])], bestKey) <= 0) continue;
+          }
+          chosen[d] = o;
+          visit(d + 1, after, k, kv, l, n1, n);
+        }
+      };
+      visit(0, 0, 0, 0, 0, 0, 0);
+    }
+  }
+
+  // Hand out each class's blockers to the groups that use it.
+  const blocks = {};
+  const next = sizes.map(() => 0);
+  for (let d = 0; d < depth; d++) {
+    const attacker = atk[sequence[d]].creature;
+    for (const k of bestChoice[d].classes) blocks[classes[k][next[k]++].creature.id] = attacker.id;
+  }
+  const [survive, kills, killedValue, negLost, negNet] = bestKey;
+  return { blocks, survives: survive === 1, kills, killedValue, lostValue: -negLost, lifeAfter: life + negNet, exact, nodes: sKills.length - 1 + searched };
+}
+
+/**
+ * optimalBlocks for the defending player `me` in a game state, with planBlocks'
+ * signature: `{ blockerId: attackerId }`. `canBlockPair(blockerId, attackerId)`
+ * says which blocks the engine allows.
+ */
+export function planOptimalBlocks(state, me, canBlockPair, options = {}) {
+  const byId = (id) => state.battlefield.find((p) => p.id === id);
+  const attackers = state.combat.attackers.map((a) => byId(a.cardId)).filter(Boolean);
+  const blockers = state.battlefield.filter((p) => p.controllerId === me && !p.tapped && isCreature(p));
+  const life = state.players.find((p) => p.id === me).life;
+  return optimalBlocks(attackers, blockers, life, {
+    ...options, canBlockPair: (b, a) => canBlockPair(b.id, a.id),
+  }).blocks;
+}

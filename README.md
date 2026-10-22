@@ -731,6 +731,26 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
 `LegacyAIController` is the first version, kept unchanged as a baseline. `strategy: 'passive'`
 only passes and makes empty declarations.
 
+### Optimal blocks (`blocking.js`)
+
+The first piece of a new AI. `optimalBlocks(attackers, blockers, life)` finds the blocks that,
+in this order:
+1. survive the combat (first-strike damage counts before lifelink gains it back)
+2. kill the most attackers, then the most attacker value
+3. lose the least blocker value
+4. take the least damage
+
+It's exact, with up to 3 blockers on an attacker (`maxGroup`). It fights each attacker against
+each useful group of blockers once, using a flat copy of `resolveCombat`'s rules. Then it searches
+the attackers, memoizing on how many of each class of identical blockers are left.
+
+- **Speed:** on 1,478 blocking decisions from basic-AI games on the real and sample decks, it's
+  faster than `planBlocks` up to 6 creatures a side, with medians of 5–18 µs.
+- **Bigger boards:** with 7–10 creatures a side the median is 28–83 µs.
+- **Budgets:** boards beyond `stateLimit` or `nodeLimit` get a best effort flagged
+  `exact: false`. That only happens well past the campaign's 10 creatures a side.
+- **Tests:** `test/blocking.test.js` checks it against brute force on random boards.
+
 ### Search AI (`SearchAIController`)
 
 At each real decision, the search AI chooses among *macro actions* (`macroActions.js`), whole

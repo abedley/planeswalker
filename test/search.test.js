@@ -6,7 +6,7 @@ import {
 } from '../src/index.js';
 import { playout, actingPlayerId } from '../src/ai/simulate.js';
 import { listMacros, nextAction } from '../src/ai/macroActions.js';
-import { evaluate } from '../src/ai/evaluate.js';
+import { evaluate, features, DEFAULT_WEIGHTS } from '../src/ai/evaluate.js';
 import { searchPolicy, worthSearching } from '../src/ai/search.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
@@ -50,7 +50,9 @@ test('evaluate prefers more life, more creatures, and winning', () => {
   game.start();
   const state = game.getState();
   const base = evaluate(state, 'p1');
-  assert.ok(Math.abs(base) < 5, 'an even start is about even');
+  // Apart from what's in the opening hands (spells count for more than lands), an even start is about even.
+  const { hand, handLands } = features(state, 'p1');
+  assert.ok(Math.abs(base - DEFAULT_WEIGHTS.hand * hand - (DEFAULT_WEIGHTS.handLands ?? 0) * handLands) < 5, 'an even start is about even');
   const lowLife = structuredClone(state);
   lowLife.players[0].life = 5;
   assert.ok(evaluate(lowLife, 'p1') < base);

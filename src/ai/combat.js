@@ -200,7 +200,7 @@ export function damageThrough(attackers, blockers) {
  * - everything when the attack is lethal through the best possible blocks,
  * - keeping enough creatures home to survive the opponent's next attack.
  */
-export function planAttack(state, me, candidates) {
+export function planAttack(state, me, candidates, { swarm = true } = {}) {
   const opponent = state.players.find((p) => p.id !== me);
   const mine = state.battlefield.filter((p) => p.controllerId === me && isCreature(p));
   const theirs = state.battlefield.filter((p) => p.controllerId === opponent.id && isCreature(p));
@@ -230,6 +230,20 @@ export function planAttack(state, me, candidates) {
     return worst <= 0;
   });
 
+  // More attackers than they can block well: each blocker stops only one, so add an
+  // attacker whenever it makes the whole attack better against their best blocks.
+  if (swarm) {
+    const extra = attackers.filter((c) => !chosen.includes(c)).sort((a, b) => b.power - a.power || (a.id < b.id ? -1 : 1));
+    let best = attackOutcome(state, opponent, chosen);
+    for (const attacker of extra) {
+      const outcome = attackOutcome(state, opponent, [...chosen, attacker]);
+      if (outcome > best + 0.25) {
+        chosen.push(attacker);
+        best = outcome;
+      }
+    }
+  }
+
   // Hold back blockers if attacking would let the crack-back kill us (and staying home wouldn't).
   const crackBack = (attacking) => {
     const home = mine.filter((c) => !attacking.includes(c) || has(c, KEYWORD.VIGILANCE));
@@ -244,6 +258,21 @@ export function planAttack(state, me, candidates) {
     return byBlocking.map((c) => c.id);
   }
   return chosen.map((c) => c.id);
+}
+
+/**
+ * How good attacking with `group` is (combatValue, from the attacker's side) if
+ * `opponent` blocks as planBlocks would.
+ */
+function attackOutcome(state, opponent, group) {
+  if (group.length === 0) return 0;
+  const hypothetical = { ...state, combat: { attackers: group.map((c) => ({ cardId: c.id, blockerIds: [] })) } };
+  const byId = (id) => state.battlefield.find((p) => p.id === id);
+  const blocks = planBlocks(hypothetical, opponent.id, (b, a) => canBlock(byId(b), byId(a)));
+  return combatValue(group.map((attacker) => {
+    const blockers = Object.entries(blocks).filter(([, a]) => a === attacker.id).map(([b]) => byId(b));
+    return { attacker, blockers, blocked: blockers.length > 0 };
+  }), { damageWeight: damageWeight(opponent.life) });
 }
 
 /**

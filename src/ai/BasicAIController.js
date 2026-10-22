@@ -66,13 +66,15 @@ export class BasicAIController extends EventEmitter {
   #playerId;
   #delayMs;
   #strategy;
+  #swarm;
   #timer = null;
   #unsubscribers;
   /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
   #declaration = { key: null, steps: 0 };
 
-  constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC }) {
+  constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true }) {
     super();
+    this.#swarm = swarm;
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;
@@ -116,7 +118,7 @@ export class BasicAIController extends EventEmitter {
       case DECISION.DECLARE_ATTACKERS: {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
-        const wanted = passive ? [] : planAttack(state, me, candidates);
+        const wanted = passive ? [] : planAttack(state, me, candidates, { swarm: this.#swarm });
         return moveTowards(decision.attackers, wanted, find);
       }
       case DECISION.DECLARE_BLOCKERS: {

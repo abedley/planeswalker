@@ -50,6 +50,10 @@ export const CONTESTANTS = {
     return (state) => ai.chooseAction(state);
   },
   passive: (playerId) => basicPolicy(playerId, AI_STRATEGY.PASSIVE),
+  'basic-noswarm': (playerId) => {
+    const ai = new BasicAIController({ game: null, playerId, swarm: false });
+    return (state) => ai.chooseAction(state);
+  },
   greedy: (playerId) => searchPolicy(playerId, { algorithm: 'greedy', determinizations: 8 }),
   search: (playerId) => searchPolicy(playerId, { algorithm: 'ismcts', budgetMs: 150 }),
 };

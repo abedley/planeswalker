@@ -21,7 +21,10 @@ export const HAND_WEIGHTS = Object.freeze({
   lands: 1.5,
   /** Other permanents (artifacts, enchantments, tokens like Treasure). */
   permanents: 2.5,
+  /** Spells in hand (every card, when the hand isn't known). */
   hand: 2.5,
+  /** Lands in hand: worth far less than spells, and less than lands in play. */
+  handLands: 0.5,
   /** Turns their clock on us is slower than ours on them. */
   clock: 1.5,
   /** Cards short of 5 in the library (deck-out danger). */
@@ -78,7 +81,8 @@ function sideFeatures(state, player) {
     creatures: creatures.reduce((sum, c) => sum + creatureValue(c), 0),
     lands: permanents.filter(isLand).length,
     permanents: permanents.filter((p) => !isLand(p) && !isCreature(p)).length,
-    hand: player.hand?.length ?? player.handSize ?? 0,
+    hand: player.hand ? player.hand.filter((c) => !isLand(c)).length : player.handSize ?? 0,
+    handLands: player.hand ? player.hand.filter(isLand).length : 0,
     library: Math.max(0, 5 - library),
   };
 }
@@ -101,6 +105,7 @@ export function features(state, me) {
     lands: ours.lands - theirs.lands,
     permanents: ours.permanents - theirs.permanents,
     hand: ours.hand - theirs.hand,
+    handLands: ours.handLands - theirs.handLands,
     clock: theirClock - ourClock,
     library: ours.library - theirs.library,
   };

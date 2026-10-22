@@ -10,6 +10,7 @@ export const TUNED_WEIGHTS = Object.freeze({
   lands: 0.161,
   permanents: 0.556,
   hand: 1.914,
+  handLands: 0,
   clock: 0.73,
   library: -19.648
 });

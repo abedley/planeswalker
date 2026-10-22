@@ -852,7 +852,7 @@ On the real decks (mirror matches of the five colors, 200 games each, search at 
 | Match | First AI's win rate (95% CI) |
 | --- | --- |
 | search vs basic (before the changes below) | 63.5% (56.6–69.9%) |
-| search vs the previous basic AI (after them) | (measuring) |
+| search vs the previous basic AI (after them) | 66.0% (59.2–72.2%) |
 | basic (swarming) vs the previous basic AI | 52.3% (49.6–55.0%), 1320 games, all eleven decks |
 | general weights refit on all decks vs current | 49.5% (42.6–56.4%) |
 | 3-turn vs 2-turn horizon | 50.5% (43.6–57.4%) |

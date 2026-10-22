@@ -162,6 +162,9 @@ export function combatValue(pairs, { damageWeight = 0.5 } = {}) {
   return value;
 }
 
+/** H3: the life total below which blocking turns desperate (Forge's "life in danger"). */
+const DANGER = 4;
+
 /** How much a point of damage to a player matters, by their life total. */
 export const damageWeight = (life) => (life <= 5 ? 2 : life <= 10 ? 1 : life <= 15 ? 0.6 : 0.4);
 
@@ -200,7 +203,7 @@ export function damageThrough(attackers, blockers) {
  * - everything when the attack is lethal through the best possible blocks,
  * - keeping enough creatures home to survive the opponent's next attack.
  */
-export function planAttack(state, me, candidates, { swarm = true } = {}) {
+export function planAttack(state, me, candidates, { swarm = true, heuristics = {} } = {}) {
   const opponent = state.players.find((p) => p.id !== me);
   const mine = state.battlefield.filter((p) => p.controllerId === me && isCreature(p));
   const theirs = state.battlefield.filter((p) => p.controllerId === opponent.id && isCreature(p));
@@ -216,6 +219,35 @@ export function planAttack(state, me, candidates, { swarm = true } = {}) {
   const me_ = state.players.find((p) => p.id === me);
   if (me_.library.length < opponent.library.length && me_.library.length <= 6) return attackers.map((c) => c.id);
 
+  const myLife = me_.life;
+  const theirAttackers = theirs.filter((c) => !has(c, KEYWORD.DEFENDER));
+  // Turns for a side to kill the other at this rate (blockers untapped), Infinity if never.
+  const clock = (attacking, defending, life) => {
+    const perTurn = damageThrough(attacking, defending.map((c) => ({ ...c, tapped: false })));
+    return perTurn <= 0 ? Infinity : Math.ceil(life / perTurn);
+  };
+
+  // H1 (Forge's attritional attack): all in, if attacking every turn kills them even
+  // when each of their blockers stops (and kills) one of our biggest attackers each
+  // turn, before their crack-back at our tapped-out board kills us.
+  if (heuristics.attrition && attackers.length > blockers.length) {
+    let life = opponent.life;
+    let remaining = [...attackers].sort((a, b) => unblockedDamage(b) - unblockedDamage(a));
+    let rounds = 0;
+    while (life > 0 && remaining.length && rounds < 10) {
+      remaining = remaining.slice(theirs.length);
+      life -= remaining.reduce((sum, c) => sum + unblockedDamage(c), 0);
+      rounds += 1;
+    }
+    const theirAllOut = theirAttackers.reduce((sum, c) => sum + unblockedDamage(c), 0);
+    const survive = theirAllOut <= 0 ? Infinity : Math.ceil(myLife / theirAllOut);
+    if (life <= 0 && rounds < survive) return attackers.map((c) => c.id);
+  }
+
+  // H2 ("Who's the beatdown?"): when we'd win the race, even trades are fine.
+  const beatdown = heuristics.beatdown && clock(attackers, theirs, opponent.life) < clock(theirAttackers, mine, myLife);
+  const tolerance = beatdown ? (typeof heuristics.beatdown === 'number' ? heuristics.beatdown : 1) : 0;
+
   const chosen = attackers.filter((attacker) => {
     const able = blockers.filter((b) => canBlock(b, attacker));
     const blocks = has(attacker, KEYWORD.MENACE)
@@ -227,7 +259,7 @@ export function planAttack(state, me, candidates, { swarm = true } = {}) {
       return (result.attackerDies ? creatureValue(attacker) : 0)
         - result.deadBlockers.reduce((sum, id) => sum + creatureValue(group.find((b) => b.id === id)), 0);
     }));
-    return worst <= 0;
+    return worst <= tolerance;
   });
 
   // More attackers than they can block well: each blocker stops only one, so add an
@@ -251,6 +283,17 @@ export function planAttack(state, me, candidates, { swarm = true } = {}) {
     const untapped = home.map((c) => ({ ...c, tapped: false }));
     return damageThrough(theirs.filter((c) => !has(c, KEYWORD.DEFENDER)), untapped);
   };
+  // H4 (Forge's blockers kept home): a creature stays home if attacking with it
+  // would cost more life on their crack-back than the damage it can expect to deal.
+  if (heuristics.home && !beatdown) {
+    for (const attacker of [...chosen].sort((a, b) => b.power - a.power || (a.id < b.id ? -1 : 1))) {
+      const others = chosen.filter((c) => c !== attacker);
+      const lost = crackBack(chosen) - crackBack(others);
+      const blockable = blockers.some((b) => canBlock(b, attacker));
+      const dealt = unblockedDamage(attacker) * (blockable ? 0.5 : 1);
+      if (lost > dealt) chosen.splice(chosen.indexOf(attacker), 1);
+    }
+  }
   if (crackBack(chosen) >= me_.life && crackBack([]) < me_.life) {
     // Keep the best blockers home first.
     const byBlocking = [...chosen].sort((a, b) => b.toughness - a.toughness || (a.id < b.id ? -1 : 1));
@@ -281,7 +324,7 @@ function attackOutcome(state, opponent, group) {
  * attacker, then chump blocks only if the damage would otherwise be lethal.
  * `canBlockPair(blockerId, attackerId)` says which blocks the engine allows.
  */
-export function planBlocks(state, me, canBlockPair) {
+export function planBlocks(state, me, canBlockPair, { heuristics = {} } = {}) {
   const life = state.players.find((p) => p.id === me).life;
   const weight = damageWeight(life);
   const byId = (id) => state.battlefield.find((p) => p.id === id);
@@ -334,13 +377,40 @@ export function planBlocks(state, me, canBlockPair) {
     }
     if (best) assign(best, attacker);
   }
-  // Chump blocks while the unblocked damage would kill us.
   const incoming = () => attackers.reduce((sum, a) => {
     const group = blockersOf.get(a.id);
     return sum + (group.length ? resolveCombat(a, group).playerDamage : unblockedDamage(a));
   }, 0);
+  // H5 (Forge's reinforcing): add a free blocker to a block that doesn't kill its
+  // attacker, if together they kill it and the block gets better.
+  if (heuristics.reinforce) {
+    for (const attacker of sorted) {
+      const group = blockersOf.get(attacker.id);
+      if (!group.length || resolveCombat(attacker, group).attackerDies) continue;
+      for (const extra of options(attacker)) {
+        const bigger = [...group, extra];
+        if (resolveCombat(attacker, bigger).attackerDies && blockScore(attacker, bigger) > blockScore(attacker, group)) {
+          assign([extra], attacker);
+          break;
+        }
+      }
+    }
+  }
+  // H3 (Forge's "life in danger"): when the damage getting through would leave us
+  // below DANGER life, trade with attackers (blocks that kill them), cheapest blockers first.
+  const danger = heuristics.danger ? (typeof heuristics.danger === 'number' ? heuristics.danger : DANGER) : 0;
+  if (danger) {
+    for (const attacker of sorted) {
+      if (life - incoming() >= danger) break;
+      if (blockersOf.get(attacker.id).length || has(attacker, KEYWORD.MENACE)) continue;
+      const trade = options(attacker).filter((b) => resolveCombat(attacker, [b]).attackerDies)
+        .sort((x, y) => creatureValue(x) - creatureValue(y))[0];
+      if (trade) assign([trade], attacker);
+    }
+  }
+  // Chump blocks while the unblocked damage would kill us (or, with H3, leave us in danger).
   for (const attacker of sorted) {
-    if (incoming() < life) break;
+    if (life - incoming() >= Math.max(1, danger)) break;
     if (blockersOf.get(attacker.id).length) continue;
     const needed = has(attacker, KEYWORD.MENACE) ? 2 : 1;
     const cheapest = options(attacker).sort((x, y) => creatureValue(x) - creatureValue(y)).slice(0, needed);

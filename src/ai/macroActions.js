@@ -40,23 +40,37 @@ export function macroKey(macro) {
   }
 }
 
-/** The macro actions `me` can choose from now (empty if it isn't their decision). */
-export function listMacros(state, me) {
+/**
+ * The heuristics whose plans are offered to the search as extra candidates
+ * (`heuristicPlans`): attacks and blocks from well-known rules of thumb (see
+ * planAttack, planBlocks). The simulations decide when each is right.
+ */
+export const HEURISTIC_PLANS = Object.freeze({
+  attack: [{ attrition: true }, { beatdown: 2 }, { home: true }],
+  block: [{ danger: 7 }, { reinforce: true }],
+});
+
+/**
+ * The macro actions `me` can choose from now (empty if it isn't their decision).
+ * `heuristicPlans`: also offer the attacks and blocks of HEURISTIC_PLANS.
+ */
+export function listMacros(state, me, { heuristicPlans = false } = {}) {
   const mine = state.validActions.filter((a) => a.playerId === me);
   if (mine.length === 0) return [];
   const decision = state.pendingDecision;
-  if (decision?.type === DECISION.DECLARE_ATTACKERS) return attackMacros(state, me, mine);
-  if (decision?.type === DECISION.DECLARE_BLOCKERS) return blockMacros(state, me, mine);
+  if (decision?.type === DECISION.DECLARE_ATTACKERS) return attackMacros(state, me, mine, heuristicPlans);
+  if (decision?.type === DECISION.DECLARE_BLOCKERS) return blockMacros(state, me, mine, heuristicPlans);
   if (decision) return mine.map((action) => keyed({ kind: 'raw', action }));
   return priorityMacros(state, me, mine);
 }
 
-function attackMacros(state, me, mine) {
+function attackMacros(state, me, mine, heuristicPlans) {
   const decision = state.pendingDecision;
   const ids = [...new Set([...decision.attackers, ...mine.filter((a) => a.type === ACTION.TOGGLE_ATTACKER).map((a) => a.cardId)])].sort();
   const creatures = ids.map((id) => state.battlefield.find((p) => p.id === id));
   const plan = planAttack(state, me, creatures);
   const sets = [plan, [], ids];
+  if (heuristicPlans) for (const heuristics of HEURISTIC_PLANS.attack) sets.push(planAttack(state, me, creatures, { heuristics }));
   if (ids.length <= 4) {
     // Every subset.
     for (let mask = 1; mask < 2 ** ids.length; mask++) sets.push(ids.filter((_, i) => mask & (2 ** i)));
@@ -66,12 +80,13 @@ function attackMacros(state, me, mine) {
   return dedupe(sets.map((attackers) => keyed({ kind: 'attack', attackers })));
 }
 
-function blockMacros(state, me, mine) {
+function blockMacros(state, me, mine, heuristicPlans) {
   const decision = state.pendingDecision;
   const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
     || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
   const plan = planBlocks(state, me, canBlockPair);
   const options = [plan, {}];
+  if (heuristicPlans) for (const heuristics of HEURISTIC_PLANS.block) options.push(planBlocks(state, me, canBlockPair, { heuristics }));
   // The plan without each blocker in turn (menace pairs stay together).
   for (const blockerId of Object.keys(plan)) {
     const attackerId = plan[blockerId];

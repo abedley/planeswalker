@@ -276,7 +276,7 @@ export function searchPolicy(me, { weights, ...rest } = {}) {
     }
     current = null;
     if (!worthSearching(state, me)) return fallback.chooseAction(state);
-    const macros = listMacros(state, me);
+    const macros = listMacros(state, me, { heuristicPlans: options.heuristicPlans });
     if (macros.length <= 1) return fallback.chooseAction(state);
     const view = game.getPlayerView(me);
     const defaults = defaultMacros(state, me, macros, fallback);

@@ -69,14 +69,16 @@ export class BasicAIController extends EventEmitter {
   #delayMs;
   #strategy;
   #swarm;
+  #heuristics;
   #timer = null;
   #unsubscribers;
   /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
   #declaration = { key: null, steps: 0 };
 
-  constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true }) {
+  constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {} }) {
     super();
     this.#swarm = swarm;
+    this.#heuristics = heuristics;
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;
@@ -120,13 +122,13 @@ export class BasicAIController extends EventEmitter {
       case DECISION.DECLARE_ATTACKERS: {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
-        const wanted = passive ? [] : planAttack(state, me, candidates, { swarm: this.#swarm });
+        const wanted = passive ? [] : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics });
         return moveTowards(decision.attackers, wanted, find);
       }
       case DECISION.DECLARE_BLOCKERS: {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
-        return chooseBlock(decision.blocks, passive ? {} : planBlocks(state, me, canBlockPair), find);
+        return chooseBlock(decision.blocks, passive ? {} : planBlocks(state, me, canBlockPair, { heuristics: this.#heuristics }), find);
       }
       case DECISION.ASSIGN_COMBAT_DAMAGE:
         return bestBy(mine, (a) => assignmentScore(state, decision, a.assignment));
@@ -198,13 +200,14 @@ export class BasicAIController extends EventEmitter {
         && (targetId === null || a.targets?.[0] === targetId);
       if (!card.spell) {
         // A permanent spell.
-        for (const { targetId, score } of permanentSpellOptions(state, me, card, preCombat)) {
+        for (const { targetId, score } of permanentSpellOptions(state, me, card, preCombat, this.#heuristics)) {
           add({ score, manaCost: card.manaCost, cost, sourceId: card.id, now: true, matches: castMatches(targetId) });
         }
         continue;
       }
       const { effects, target } = card.spell;
       const best = bestTarget(state, me, effects, target, card.id, window, preCombat);
+      if (best && this.#savesRemoval(state, effects, best.targetId, window)) continue;
       if (best && windowAllows(window, effects, instant, best.targetId, state, me)) {
         const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id);
         add({ score, manaCost: card.manaCost, cost, sourceId: card.id, now: true, matches: castMatches(best.targetId) });
@@ -243,6 +246,20 @@ export class BasicAIController extends EventEmitter {
       }
     }
     return result;
+  }
+
+  /**
+   * H7 ("save removal for a real threat"): in the main phase, removal isn't spent
+   * on a creature worth less than `saveRemoval` (creatureValue; true means 6, about
+   * a 2/2) unless we're under pressure.
+   */
+  #savesRemoval(state, effects, targetId, window) {
+    const threshold = this.#heuristics.saveRemoval === true ? 6 : this.#heuristics.saveRemoval;
+    if (!threshold || window !== WINDOW.MAIN || !effects.some(isHarmfulEffect)) return false;
+    const target = state.battlefield.find((p) => p.id === targetId);
+    if (!target || !isCreature(target) || target.controllerId === this.#playerId) return false;
+    const me = state.players.find((p) => p.id === this.#playerId);
+    return me.life > 8 && creatureValue(target) < threshold;
   }
 
   #onState(state) {
@@ -357,11 +374,18 @@ function combatSwing(state, me, effects, targetId, sourceId) {
 }
 
 /** Casting a permanent: `[{ targetId, score }]`, one per Aura target, or one for anything else. */
-function permanentSpellOptions(state, me, card, preCombat) {
+function permanentSpellOptions(state, me, card, preCombat, heuristics = {}) {
   if (isAura(card)) {
     // The Auras here are bonuses: on our own creatures, the better the creature the better.
     return state.battlefield.filter((p) => p.controllerId === me && isCreature(p))
       .map((p) => ({ targetId: p.id, score: 3 + 0.2 * creatureValue(p) }));
+  }
+  // H6 (Limited wisdom): creatures that don't change this combat wait for the second
+  // main phase, keeping mana up through combat and the hand hidden.
+  const entersWithEffect = (card.triggeredAbilities ?? []).some((t) => t.trigger === 'entersBattlefield');
+  if (heuristics.postCombat && preCombat && isCreature(card) && !hasKeyword(card, KEYWORD.HASTE) && !entersWithEffect
+    && state.battlefield.some((p) => p.controllerId === me && isCreature(p) && !p.summoningSick)) {
+    return [];
   }
   let score = isCreature(card) ? permanentValue(card) + (hasKeyword(card, KEYWORD.HASTE) && preCombat ? 1 : 0) : 4;
   for (const trigger of card.triggeredAbilities ?? []) {

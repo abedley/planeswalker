@@ -67,7 +67,20 @@ export const CONTESTANTS = {
 export function contestant(name) {
   const [base, settings = ''] = name.split(':');
   if (!settings) return CONTESTANTS[base];
-  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin' };
+  // basic:h=attrition+danger: the basic AI with those heuristics on (see planAttack, planBlocks).
+  if (base === 'basic') {
+    const names = settings.replace(/^h=/, '').split('+').filter(Boolean);
+    // name@value sets a heuristic's strength, e.g. danger@6.
+    const heuristics = Object.fromEntries(names.map((h) => {
+      const [key, value] = h.split('@');
+      return [key, value === undefined ? true : Number(value)];
+    }));
+    return (playerId) => {
+      const ai = new BasicAIController({ game: null, playerId, heuristics });
+      return (state) => ai.chooseAction(state);
+    };
+  }
+  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans' };
   const options = Object.fromEntries(settings.split(',').map((pair) => {
     const [key, value] = pair.split('=');
     // w=hand: the hand-picked evaluation weights; w=@file.json: weights from a file

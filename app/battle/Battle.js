@@ -383,6 +383,7 @@ export class Battle {
     const blockers = decision.blockerIds.map((id) => findCard(state, id)).filter(Boolean);
     const opponent = this.#intro.oppInfo;
     const names = (ids) => ids.map((id) => nameOf(state, id, this.#me));
+    const tramples = plans.some((plan) => plan.toPlayer > 0);
     const summary = (plan) => {
       const dies = plan.kills.length === 0 ? 'Nothing dies'
         : plan.kills.length === blockers.length && blockers.length > 1 ? 'Destroy all blockers'
@@ -398,7 +399,7 @@ export class Battle {
           dies ? h('div.dmg-skull', icon('skull')) : null,
           n ? h('div.dmg-n', `-${n}`) : null);
       }),
-      decision.trample ? h('div.dmg-player', { class: plan.toPlayer ? '' : 'spared' },
+      tramples ? h('div.dmg-player', { class: plan.toPlayer ? '' : 'spared' },
         crest(opponent, { size: 'sm' }), plan.toPlayer ? h('div.dmg-n', `-${plan.toPlayer}`) : null) : null);
     this.#app.overlays.sheet({
       title: `${attacker?.name ?? 'Attacker'} deals ${decision.power}`,

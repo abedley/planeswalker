@@ -32,6 +32,7 @@ test('damage plans are the choices of who dies', () => {
   assert.deepEqual(summary(damagePlans(state, 'p1')), ['a/0', 'b/0'], 'only enough to kill one');
   const bigger = combat(creature('atk', 3, 3), [creature('a', 1, 1), creature('b', 2, 3)]);
   assert.deepEqual(summary(damagePlans(bigger, 'p1')), ['b/0', 'a/0'], 'the bigger kill first');
+  assert.deepEqual(damagePlans(bigger, 'p1').map((p) => p.assignment), [{ a: 0, b: 3 }, { a: 1, b: 2 }], 'spare damage on the survivor');
 });
 
 test('a plan that kills everything leaves nothing to choose', () => {

@@ -19,7 +19,8 @@ export function lethalDamage(blocker, attacker) {
 /**
  * The distinct outcomes of `me`'s pending damage assignment, best first:
  * `[{ action, kills: [blockerId], toPlayer, assignment }]`. Splits with the same
- * kills keep the one that tramples over the most; an outcome is dropped when
+ * kills keep the one that tramples over the most, then the one that leaves spare
+ * damage on the survivors; an outcome is dropped when
  * another kills the same creatures and more, and tramples over at least as much.
  */
 export function damagePlans(state, me) {
@@ -34,9 +35,14 @@ export function damagePlans(state, me) {
     const { assignment } = action;
     const kills = blockers.filter((b) => lethal.get(b.id) > 0 && (assignment[b.id] ?? 0) >= lethal.get(b.id)).map((b) => b.id);
     const toPlayer = Object.entries(assignment).filter(([id]) => !lethal.has(id)).reduce((sum, [, n]) => sum + n, 0);
+    // Damage beyond lethal on a creature that dies anyway is wasted; on a survivor it stays
+    // marked for the rest of the turn.
+    const overkill = kills.reduce((sum, id) => sum + assignment[id] - lethal.get(id), 0);
     const key = kills.join();
     const known = byKills.get(key);
-    if (!known || toPlayer > known.toPlayer) byKills.set(key, { action, kills, toPlayer, assignment });
+    if (!known || toPlayer > known.toPlayer || (toPlayer === known.toPlayer && overkill < known.overkill)) {
+      byKills.set(key, { action, kills, toPlayer, assignment, overkill });
+    }
   }
   const plans = [...byKills.values()];
   const covers = (a, b) => b.kills.every((id) => a.kills.includes(id)) && a.toPlayer >= b.toPlayer;

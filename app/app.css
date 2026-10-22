@@ -634,7 +634,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .btn.option { text-align: left; display: flex; flex-direction: column; }
 .btn.option .sub { font-weight: 400; font-size: 12px; opacity: .8; }
 /* Combat damage choices: the blockers, the damage each takes, and who dies */
-.dmg-row { display: flex; align-items: flex-end; gap: 10px; padding: 6px 2px 8px; }
+.dmg-row { display: flex; align-items: flex-end; gap: 14px; padding: 6px 2px 8px; }
 .dmg-card { position: relative; width: 52px; height: 70px; flex: none; transition: opacity .2s; }
 .dmg-card .stat { width: 18px; height: 18px; font-size: 10.5px; }
 .dmg-card.spared { opacity: .55; }

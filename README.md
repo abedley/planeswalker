@@ -731,25 +731,38 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
 `LegacyAIController` is the first version, kept unchanged as a baseline. `strategy: 'passive'`
 only passes and makes empty declarations.
 
-### Optimal blocks (`blocking.js`)
+### Blocking plans (`blocking.js`)
 
-The first piece of a new AI. `optimalBlocks(attackers, blockers, life)` finds the blocks that,
-in this order:
-1. survive the combat (first-strike damage counts before lifelink gains it back)
-2. kill the most attackers, then the most attacker value
-3. lose the least blocker value
-4. take the least damage
+The first piece of a new AI. `blockingPlans(attackers, blockers, life)` makes four plans for
+blocking an attack, each a different idea of the best blocks (`BLOCK_PLAN`):
 
-It's exact, with up to 3 blockers on an attacker (`maxGroup`). It fights each attacker against
-each useful group of blockers once, using a flat copy of `resolveCombat`'s rules. Then it searches
-the attackers, memoizing on how many of each class of identical blockers are left.
+| Plan | Puts first | Then |
+| --- | --- | --- |
+| `life` | the most life left | kills, then creatures kept |
+| `creatures` | the least creature value lost | kills, then life |
+| `kills` | the most attackers killed, then their value | life, then creatures kept |
+| `optimal` | the most attackers killed, then their value | creatures kept, then life |
 
-- **Speed:** on 1,478 blocking decisions from basic-AI games on the real and sample decks, it's
-  faster than `planBlocks` up to 6 creatures a side, with medians of 5–18 µs.
-- **Bigger boards:** with 7–10 creatures a side the median is 28–83 µs.
+Every plan survives the combat first, if any blocks can. First-strike damage counts before
+lifelink gains it back. Each plan gives its blocks, whether the defender survives, the life left,
+and the attackers and blockers that die, so the plans can be compared or played out. On real
+boards, the four plans usually come to two different sets of blocks. `blockingPlansFor(state,
+me, canBlockPair)` reads them from a game state. `optimalBlocks` and `planOptimalBlocks` make
+just the `optimal` plan.
+
+Each plan is exact, with up to 3 blockers on an attacker (`maxGroup`). It fights each attacker
+against each useful group of blockers once, using a flat copy of `resolveCombat`'s rules, and the
+plans share those fights. Then each plan searches the attackers, memoizing on how many of each
+class of identical blockers are left.
+
+- **Speed:** measured on 1,478 blocking decisions from basic-AI games on the real and sample
+  decks.
+  - With up to 4 creatures a side, all four plans take 11–18 µs (median); `optimal` alone takes
+    5–8 µs, faster than `planBlocks`.
+  - With 7–10 creatures a side, all four take 66–231 µs (median).
 - **Budgets:** boards beyond `stateLimit` or `nodeLimit` get a best effort flagged
   `exact: false`. That only happens well past the campaign's 10 creatures a side.
-- **Tests:** `test/blocking.test.js` checks it against brute force on random boards.
+- **Tests:** `test/blocking.test.js` checks every plan against brute force on random boards.
 
 ### Search AI (`SearchAIController`)
 

@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KEYWORD, CARD_TYPE } from '../src/index.js';
 import { resolveCombat, canBlock, creatureValue } from '../src/ai/combat.js';
-import { fight, optimalBlocks, planOptimalBlocks } from '../src/ai/blocking.js';
+import {
+  fight, optimalBlocks, planOptimalBlocks, blockingPlans, blockingPlansFor, BLOCK_PLAN,
+} from '../src/ai/blocking.js';
 
 let nextId = 0;
 const creature = (power, toughness, keywords = [], extra = {}) => ({
@@ -52,52 +54,77 @@ test('fight() agrees with resolveCombat on random combats', () => {
 });
 
 /**
- * Every legal block (at most 3 blockers on an attacker), scored by the same rules:
- * the reference the search must match. Like the solver, a group lists identical
- * blockers alike (the attacker's tie-breaks depend on the order).
+ * How blocks (`{ blockerId: attackerId }`) play out, by the solver's rules: whether
+ * the defender survives, its counts (kills, killed value, minus value lost, minus
+ * net damage), and what dies; null if a group breaks the rules (more than 3
+ * blockers, or 1 on menace). Like the solver, a group lists identical blockers
+ * alike (the attacker's tie-breaks depend on the order).
  */
-function bruteForce(attackers, blockers, life) {
+function score(attackers, blockers, life, blocks) {
   const signature = (b) => [b.power, b.toughness, b.damage, flagsOf(b), creatureValue(b), attackers.map((a) => canBlock(b, a))].join();
   const lead = blockers.map((b) => blockers.findIndex((c) => signature(c) === signature(b)));
   const order = blockers.map((b, i) => i).sort((x, y) => lead[x] - lead[y] || x - y);
-  let best = null;
-  const assignment = new Array(blockers.length).fill(-1);
+  let net1 = 0;
+  const counts = [0, 0, 0, 0];
+  const deadAttackers = [];
+  const deadBlockers = [];
+  for (const attacker of attackers) {
+    const group = order.map((i) => blockers[i]).filter((b) => blocks[b.id] === attacker.id);
+    if (group.length > 3 || (group.length === 1 && attacker.keywords.includes(MENACE))) return null;
+    const result = fight(rec(attacker), group.map(rec));
+    net1 += result.damage1 - result.gain1;
+    counts[3] -= result.damage - result.gain;
+    if (result.attackerDies) {
+      counts[0] += 1;
+      counts[1] += creatureValue(attacker);
+      deadAttackers.push(attacker.id);
+    }
+    group.forEach((b, i) => {
+      if (!(result.deadBlockers & (1 << i))) return;
+      counts[2] -= creatureValue(b);
+      deadBlockers.push(b.id);
+    });
+  }
+  return { survives: life - net1 > 0 && life + counts[3] > 0, counts, deadAttackers, deadBlockers };
+}
+
+/** The plans' priority orders over the counts, after survival: the behaviour under test. */
+const ORDERS = {
+  [BLOCK_PLAN.LIFE]: [3, 0, 1, 2],
+  [BLOCK_PLAN.CREATURES]: [2, 0, 1, 3],
+  [BLOCK_PLAN.KILLS]: [0, 1, 3, 2],
+  [BLOCK_PLAN.OPTIMAL]: [0, 1, 2, 3],
+};
+const keyIn = (order, { survives, counts }) => [survives ? 1 : 0, ...order.map((i) => counts[i])];
+const compare = (a, b) => a.map((v, i) => v - b[i]).find((d) => Math.abs(d) > 1e-9) ?? 0;
+
+/** Every legal block, scored in each plan's order: the reference the search must match. */
+function bruteForce(attackers, blockers, life) {
+  const best = {};
+  const assignment = {};
   const visit = (j) => {
     if (j === blockers.length) {
-      let net1 = 0;
-      let net = 0;
-      let kills = 0;
-      let killedValue = 0;
-      let lost = 0;
-      for (let a = 0; a < attackers.length; a++) {
-        const group = order.filter((i) => assignment[i] === a).map((i) => blockers[i]);
-        if (group.length > 3 || (group.length === 1 && attackers[a].keywords.includes(MENACE))) return;
-        const result = fight(rec(attackers[a]), group.map(rec));
-        net1 += result.damage1 - result.gain1;
-        net += result.damage - result.gain;
-        if (result.attackerDies) {
-          kills += 1;
-          killedValue += creatureValue(attackers[a]);
-        }
-        group.forEach((b, i) => { if (result.deadBlockers & (1 << i)) lost += creatureValue(b); });
+      const scored = score(attackers, blockers, life, assignment);
+      if (!scored) return;
+      for (const [plan, order] of Object.entries(ORDERS)) {
+        const key = keyIn(order, scored);
+        if (!best[plan] || compare(key, best[plan]) > 0) best[plan] = key;
       }
-      const key = [life - net1 > 0 && life - net > 0 ? 1 : 0, kills, killedValue, -lost, -net];
-      const better = !best || (key.map((v, i) => v - best[i]).find((d) => Math.abs(d) > 1e-9) ?? 0) > 0;
-      if (better) best = key;
       return;
     }
-    for (let a = -1; a < attackers.length; a++) {
-      if (a >= 0 && !canBlock(blockers[j], attackers[a])) continue;
-      assignment[j] = a;
+    visit(j + 1);
+    for (const attacker of attackers) {
+      if (!canBlock(blockers[j], attacker)) continue;
+      assignment[blockers[j].id] = attacker.id;
       visit(j + 1);
+      delete assignment[blockers[j].id];
     }
-    assignment[j] = -1;
   };
   visit(0);
   return best;
 }
 
-test('optimalBlocks finds the best blocks on random boards', () => {
+test('each plan finds its best blocks on random boards', () => {
   for (const [seed, rate] of [[2, 0.12], [3, 0.3], [4, 0.04]]) {
     const random = rng(seed);
     for (let i = 0; i < 1000; i++) {
@@ -107,13 +134,20 @@ test('optimalBlocks finds the best blocks on random boards', () => {
       if (blockers.length > 2 && random() < 0.4) blockers[2] = { ...blockers[0], id: `c${nextId++}` };
       const life = 1 + Math.floor(random() * 14);
       const expected = bruteForce(attackers, blockers, life);
-      const got = optimalBlocks(attackers, blockers, life);
-      const key = keyOf(got, life);
+      const plans = blockingPlans(attackers, blockers, life);
       const board = JSON.stringify({ attackers, blockers, life });
-      assert.ok(got.exact);
-      expected.forEach((v, k) => assert.ok(Math.abs(v - key[k]) < 1e-6, `board ${seed}/${i}: expected ${expected}, got ${key}\n${board}`));
-      for (const [b, a] of Object.entries(got.blocks)) {
-        assert.ok(canBlock(blockers.find((c) => c.id === b), attackers.find((c) => c.id === a)), board);
+      for (const [plan, order] of Object.entries(ORDERS)) {
+        const got = plans[plan];
+        assert.ok(got.exact);
+        for (const [b, a] of Object.entries(got.blocks)) {
+          assert.ok(canBlock(blockers.find((c) => c.id === b), attackers.find((c) => c.id === a)), board);
+        }
+        // What it reports is what its blocks do, and nothing scores better in its order.
+        const scored = score(attackers, blockers, life, got.blocks);
+        assert.equal(compare(keyOf(got, life), [scored.survives ? 1 : 0, ...scored.counts]), 0, `board ${seed}/${i} ${plan}\n${board}`);
+        assert.deepEqual([got.deadAttackers, got.deadBlockers], [scored.deadAttackers, blockers.filter((b) => scored.deadBlockers.includes(b.id)).map((b) => b.id)]);
+        const key = keyIn(order, scored);
+        assert.equal(compare(key, expected[plan]), 0, `board ${seed}/${i} ${plan}: expected ${expected[plan]}, got ${key}\n${board}`);
       }
     }
   }
@@ -205,4 +239,55 @@ test('planOptimalBlocks reads a game state', () => {
     combat: { attackers: [{ cardId: attacker.id, blockerIds: [] }] },
   };
   assert.deepEqual(planOptimalBlocks(state, 'p2', () => true), { [blocker.id]: attacker.id });
+});
+
+test('plans differ on what they give up', () => {
+  // One ogre against a dragon and a bear: chump the dragon to save the most life,
+  // or kill the bear, which the ogre survives.
+  const dragon = creature(5, 5);
+  const bear = creature(2, 2);
+  const ogre = creature(3, 3);
+  const plans = blockingPlans([dragon, bear], [ogre], 20);
+  assert.deepEqual(plans.life.blocks, { [ogre.id]: dragon.id });
+  assert.equal(plans.life.lifeAfter, 18);
+  assert.deepEqual(plans.life.deadBlockers, [ogre.id]);
+  for (const plan of [BLOCK_PLAN.KILLS, BLOCK_PLAN.CREATURES, BLOCK_PLAN.OPTIMAL]) {
+    assert.deepEqual(plans[plan].blocks, { [ogre.id]: bear.id }, plan);
+    assert.deepEqual(plans[plan].deadAttackers, [bear.id], plan);
+    assert.equal(plans[plan].lifeAfter, 15, plan);
+  }
+  // A trade kills an attacker at the cost of a creature: every plan but `creatures` takes it.
+  const theirs = creature(2, 2);
+  const mine = creature(2, 2);
+  const trade = blockingPlans([theirs], [mine], 20);
+  assert.deepEqual(trade.creatures.blocks, {});
+  for (const plan of [BLOCK_PLAN.LIFE, BLOCK_PLAN.KILLS, BLOCK_PLAN.OPTIMAL]) {
+    assert.deepEqual(trade[plan].deadAttackers, [theirs.id], plan);
+    assert.deepEqual(trade[plan].deadBlockers, [mine.id], plan);
+  }
+});
+
+test('every plan survives when it can', () => {
+  // At 5 life the dragon must be chumped, even by the plan that would rather keep its creatures.
+  const dragon = creature(5, 5);
+  const token = creature(1, 1);
+  const plans = blockingPlans([dragon], [token], 5);
+  for (const plan of Object.values(BLOCK_PLAN)) {
+    assert.equal(plans[plan].survives, true, plan);
+    assert.deepEqual(plans[plan].blocks, { [token.id]: dragon.id }, plan);
+  }
+});
+
+test('blockingPlansFor reads a game state, and makes only the plans asked for', () => {
+  const attacker = creature(2, 2, [], { controllerId: 'p1' });
+  const blocker = creature(2, 2, [], { controllerId: 'p2' });
+  const state = {
+    battlefield: [attacker, blocker],
+    players: [{ id: 'p1', life: 20 }, { id: 'p2', life: 20 }],
+    combat: { attackers: [{ cardId: attacker.id, blockerIds: [] }] },
+  };
+  const plans = blockingPlansFor(state, 'p2', () => true, { plans: [BLOCK_PLAN.CREATURES, BLOCK_PLAN.KILLS] });
+  assert.deepEqual(Object.keys(plans), [BLOCK_PLAN.CREATURES, BLOCK_PLAN.KILLS]);
+  assert.deepEqual(plans.creatures.blocks, {});
+  assert.deepEqual(plans.kills.blocks, { [blocker.id]: attacker.id });
 });

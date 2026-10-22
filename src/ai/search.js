@@ -164,6 +164,7 @@ export class MacroSearch {
     entry.scores[this.#round] = this.#lookahead
       ? simulateLookahead(this.#guess, this.#me, entry.macro, this.#policies, {
         evaluate: this.#evaluate, depth: this.#lookahead.depth, beam: this.#lookahead.beam ?? 2, horizon: this.#horizon,
+        branchOpponent: this.#lookahead.branchOpponent ?? true,
       })
       : simulate(this.#guess, this.#me, entry.macro, this.#policies, {
         weights: this.#weights, horizon: this.#horizon, evaluation: this.#evaluation,

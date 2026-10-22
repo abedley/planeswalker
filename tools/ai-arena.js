@@ -83,8 +83,9 @@ export function contestant(name) {
   const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans', e: 'evaluation', rb: 'rootBeam' };
   // la=<depth>, bw=<beam>: pruned lookahead (see lookahead.js).
   const pairs = Object.fromEntries(settings.split(',').map((pair) => pair.split('=')));
-  const lookahead = pairs.la ? { depth: Number(pairs.la), beam: Number(pairs.bw ?? 2) } : null;
-  const options = Object.fromEntries(settings.split(',').filter((pair) => !/^(la|bw)=/.test(pair)).map((pair) => {
+  // bo=0: the opponent doesn't branch (the basic AI's choice stands for theirs).
+  const lookahead = pairs.la ? { depth: Number(pairs.la), beam: Number(pairs.bw ?? 2), branchOpponent: pairs.bo !== '0' } : null;
+  const options = Object.fromEntries(settings.split(',').filter((pair) => !/^(la|bw|bo)=/.test(pair)).map((pair) => {
     const [key, value] = pair.split('=');
     // w=hand: the hand-picked evaluation weights; w=@file.json: weights from a file
     // (e.g. a candidate fit); w=<deck or archetype>: see weightsFor.

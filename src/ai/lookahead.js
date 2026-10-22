@@ -27,10 +27,16 @@ export function basicPolicies(players) {
   }));
 }
 
-/** Whether `state` is a key decision for its acting player (see above). */
-function keyDecision(state, me) {
+/**
+ * Whether `state` is a key decision for its acting player (see above). With
+ * `branchOpponent` false, the opponent never branches: the basic AI's choice
+ * stands for theirs (in a guessed game they'd otherwise see our hand, and always
+ * play around it).
+ */
+function keyDecision(state, me, branchOpponent = true) {
   const actor = actingPlayerId(state);
   const type = state.pendingDecision?.type;
+  if (actor !== me && !branchOpponent) return false;
   if (type === DECISION.DECLARE_ATTACKERS || type === DECISION.DECLARE_BLOCKERS) return true;
   if (actor !== me || state.pendingDecision) return false;
   return state.activePlayerId === me && state.stack.length === 0
@@ -41,11 +47,11 @@ function keyDecision(state, me) {
  * Plays `game` on with the basic AI until a key decision with a real choice, the
  * horizon (`until(state)`), or the end. Returns the state reached and its macros.
  */
-function advance(game, me, policies, until, maxSteps = 3000) {
+function advance(game, me, policies, until, maxSteps = 3000, branchOpponent = true) {
   for (let step = 0; step < maxSteps; step++) {
     const state = game.peekState();
     if (state.status !== GAME_STATUS.IN_PROGRESS || until(state)) return { state, macros: [] };
-    if (keyDecision(state, me)) {
+    if (keyDecision(state, me, branchOpponent)) {
       const macros = listMacros(state, actingPlayerId(state));
       if (macros.length > 1) return { state, macros };
     }
@@ -73,8 +79,10 @@ const copy = (game) => game.clone();
  * lookahead. `evaluate(state, me)`; `depth`: key decisions to branch at; `beam`:
  * children kept per node; `until`: the horizon.
  */
-export function lookahead(game, me, { evaluate, policies, until, depth = 2, beam = 2, counter = { nodes: 0 } }) {
-  const { state, macros } = advance(game, me, policies, until);
+export function lookahead(game, me, {
+  evaluate, policies, until, depth = 2, beam = 2, counter = { nodes: 0 }, branchOpponent = true,
+}) {
+  const { state, macros } = advance(game, me, policies, until, 3000, branchOpponent);
   if (macros.length === 0 || depth <= 0) {
     // Out of decisions or depth: the basic AI plays on to the horizon.
     return playOutAndEvaluate(game, me, policies, until, evaluate);
@@ -87,14 +95,16 @@ export function lookahead(game, me, { evaluate, policies, until, depth = 2, beam
     const child = copy(game);
     if (!applyMacro(child, actor, macro)) continue;
     counter.nodes += 1;
-    const next = advance(child, me, policies, until);
+    const next = advance(child, me, policies, until, 3000, branchOpponent);
     children.push({ child, score: evaluate(next.state, me) });
   }
   if (children.length === 0) return playOutAndEvaluate(game, me, policies, until, evaluate);
   // Aggressive pruning: only the most promising (for whoever is choosing) go deeper.
   children.sort((a, b) => (ours ? b.score - a.score : a.score - b.score));
   const kept = children.slice(0, beam);
-  const values = kept.map(({ child }) => lookahead(child, me, { evaluate, policies, until, depth: depth - 1, beam, counter }));
+  const values = kept.map(({ child }) => lookahead(child, me, {
+    evaluate, policies, until, depth: depth - 1, beam, counter, branchOpponent,
+  }));
   return ours ? Math.max(...values) : Math.min(...values);
 }
 
@@ -113,11 +123,13 @@ function playOutAndEvaluate(game, me, policies, until, evaluate) {
  * One simulation with lookahead: a determinization `snapshot`, `macro` applied by
  * `me`, then pruned lookahead to the horizon. Null if the macro can't be carried out.
  */
-export function simulateLookahead(snapshot, me, macro, policies, { evaluate, depth, beam, horizon = 2, counter }) {
+export function simulateLookahead(snapshot, me, macro, policies, {
+  evaluate, depth, beam, horizon = 2, counter, branchOpponent = true,
+}) {
   const game = Game.deserialize(snapshot, { silent: true });
   const until = horizonOf(game, me, horizon);
   if (!applyMacro(game, me, macro)) return null;
-  return lookahead(game, me, { evaluate, policies, until, depth, beam, counter });
+  return lookahead(game, me, { evaluate, policies, until, depth, beam, counter, branchOpponent });
 }
 
 /**

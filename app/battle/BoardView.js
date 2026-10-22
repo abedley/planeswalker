@@ -10,6 +10,7 @@
 import { h, setText, toggle, reconcile } from '../dom.js';
 import { icon } from '../icons.js';
 import { crest } from '../art.js';
+import { symbolText, inlineSymbols } from '../symbols.js';
 import { fullCard, boardCard, chipFace, boardSignature, manaPips, cardBack } from '../cardView.js';
 import { isCreature, isLand } from '../../src/cards/cards.js';
 import { DECISION } from '../../src/engine/Game.js';
@@ -29,6 +30,8 @@ export class BoardView {
   /** `${playerId}:${cardId}` → element, for grouped lands. */
   #landGroups = new Map();
   #abilityButtons = new Map();
+  /** Each player's `{ name, color?, art? }`, for their crest. */
+  #info = {};
   /** Stack object id → its element (spells are keyed by card id). */
   #stackObjects = new Map();
   #parts = {};
@@ -43,6 +46,7 @@ export class BoardView {
     this.#app = app;
     this.#me = me;
     this.#opp = opp;
+    this.#info = { [me]: meInfo, [opp]: oppInfo };
     this.el = this.#build(meInfo, oppInfo);
   }
 
@@ -102,7 +106,30 @@ export class BoardView {
   elementFor(id) {
     if (id === this.#me) return this.#parts.me.avatar;
     if (id === this.#opp) return this.#parts.opp.avatar;
-    return this.#cards.get(id)?.el ?? this.#stackObjects.get(id) ?? null;
+    return this.#cards.get(id)?.el ?? this.#stackObjects.get(id) ?? this.#emblemElement(id);
+  }
+
+  /** An emblem (a planeswalker's abilities): its first ability button, or its owner's portrait. */
+  #emblemElement(id) {
+    for (const side of ['me', 'opp']) {
+      const button = [...this.#parts[side].abilities.children].find((b) => b.dataset.emblem === id);
+      if (button) return button;
+    }
+    const owner = this.#state?.players.find((p) => p.emblems.some((e) => e.id === id));
+    return owner ? this.elementFor(owner.id) : null;
+  }
+
+  /**
+   * Where a stack object's targeting arrow starts: an ability's source (the
+   * permanent, or the planeswalker ability button), a spell's own card.
+   */
+  #arrowSource(object) {
+    if (object.kind === 'spell') return this.#cards.get(object.card.id)?.el ?? null;
+    const button = this.#abilityButtons.get(`${object.sourceId}/${object.abilityId}`);
+    if (button?.isConnected) return button;
+    const source = this.#cards.get(object.sourceId);
+    if (source && source.zone !== 'stack') return source.el;
+    return this.#emblemElement(object.sourceId) ?? this.#cards.get(object.id)?.el ?? null;
   }
 
   // ---------------------------------------------------------------------------
@@ -139,15 +166,29 @@ export class BoardView {
     if (zone === 'hand') return fullCard(entry.card, defs);
     if (zone === 'stack') {
       if (entry.card) return fullCard(entry.card, defs);
-      const source = state.battlefield.find((p) => p.id === entry.object.sourceId) ?? { name: entry.object.sourceName, types: [] };
-      return h('div.card-face.ability-face', h('div.cf-top', h('span.cf-name', entry.object.sourceName)), h('div.cf-text', entry.object.text),
-        h('div.ability-src', fullCard({ ...source, id: entry.object.sourceId }, defs)));
+      return this.#abilityFace(entry.object, state);
     }
     if (zone.startsWith('creatures')) {
       const attachments = state.battlefield.filter((p) => p.attachedTo === entry.card.id);
       return boardCard(entry.card, defs, { attachments });
     }
     return chipFace(entry.card, defs);
+  }
+
+  /**
+   * An ability on the stack: its source (the planeswalker's crest, or the
+   * permanent's art) and name, the cost it was activated for, and its effect.
+   */
+  #abilityFace(object, state) {
+    const defs = this.#app.definitions;
+    const [, cost, effect] = object.text?.match(/^([^:]+):\s*(.*)$/s) ?? [null, null, object.text ?? ''];
+    const owner = state.players.find((p) => p.emblems.some((e) => e.id === object.sourceId));
+    const permanent = state.battlefield.find((p) => p.id === object.sourceId);
+    const thumb = owner && this.#info[owner.id] ? crest(this.#info[owner.id], { size: 'sm' })
+      : permanent ? chipFace(permanent, defs) : null;
+    return h('div.card-face.ability-face',
+      h('div.af-head', thumb ? h('div.af-src', thumb) : null, h('span.af-name', object.sourceName)),
+      h('div.af-text', withCost(symbolText(effect), cost)));
   }
 
   #signature(zone, entry, state) {
@@ -454,7 +495,7 @@ export class BoardView {
         h('span.ab-cost', cost.mana ? manaPips(cost.mana) : cost.life ? `−${cost.life}♥` : '0'),
         side === 'me' ? h('span.ab-text', label) : null,
         left !== null ? h('span.ab-uses', '•'.repeat(Math.max(0, left))) : null);
-      if (side === 'me') this.#abilityButtons.set(`${emblem.id}/${ability.id}`, button);
+      this.#abilityButtons.set(`${emblem.id}/${ability.id}`, button);
       return button;
     });
     parts.abilities.replaceChildren(...buttons);
@@ -505,9 +546,17 @@ export class BoardView {
       }
     }
     const top = state.stack.at(-1);
+    // Something still flying in would give the arrow a wrong end: draw it once it lands.
+    // (Only animations that end: a glow loops forever.)
+    const flights = (el) => el.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity);
     for (const targetId of top?.targets ?? []) {
-      const source = this.#cards.get(top.kind === 'spell' ? top.card.id : top.id)?.el;
+      const source = this.#arrowSource(top);
       const target = this.elementFor(targetId);
+      const pending = source && target ? [...flights(source), ...flights(target)] : [];
+      if (pending.length) {
+        Promise.all(pending.map((a) => a.finished.catch(() => {}))).then(() => this.#drawLines(this.#state));
+        continue;
+      }
       if (source && target) {
         const [x1, y1] = center(source);
         const [x2, y2] = center(target);
@@ -634,6 +683,8 @@ export class BoardView {
         continue;
       }
       toggle(button, 'ready', ctx.abilities?.has(key));
+      // The ability whose target is being chosen.
+      toggle(button, 'selected', Boolean(ctx.selected) && button.dataset.emblem === ctx.selected);
     }
     const main = this.#parts.me.main;
     setText(main.querySelector('.main-label'), ctx.main?.label ?? '');
@@ -734,4 +785,13 @@ export class BoardView {
   cardBack() {
     return cardBack();
   }
+}
+
+/** Rules-text paragraphs with an ability's cost as a badge at the start of the first. */
+function withCost(paragraphs, cost) {
+  if (!cost) return paragraphs;
+  const badge = h('span.af-cost', inlineSymbols(cost));
+  if (paragraphs.length) paragraphs[0].prepend(badge);
+  else paragraphs.push(h('p', badge));
+  return paragraphs;
 }

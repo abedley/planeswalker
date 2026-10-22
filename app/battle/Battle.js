@@ -314,12 +314,12 @@ export class Battle {
   #begin(option) {
     this.#view.showPreview(null);
     if (option.targets.length) {
-      const source = findCard(this.#state, option.sourceId);
       this.#mode = {
         kind: 'targeting',
         targets: new Set(option.targets),
         sourceId: option.sourceId,
-        prompt: `Choose a target for ${source?.name ?? 'it'}`,
+        // The source shows itself (the lifted card, the lit ability button); the lane is narrow.
+        prompt: 'Choose a target',
         pick: (targetId) => this.#commit(option, targetId),
       };
       this.#app.sound('select');

@@ -9,7 +9,7 @@
  * rather than run through a game copy because the AI's rollouts call them
  * thousands of times a second.
  */
-import { isCreature, hasKeyword, KEYWORD } from '../cards/cards.js';
+import { isCreature, isLand, hasKeyword, manaValue, KEYWORD } from '../cards/cards.js';
 
 const has = hasKeyword;
 
@@ -205,7 +205,10 @@ export function damageThrough(attackers, blockers) {
  */
 export function planAttack(state, me, candidates, { swarm = true, heuristics = {} } = {}) {
   const opponent = state.players.find((p) => p.id !== me);
-  const mine = state.battlefield.filter((p) => p.controllerId === me && isCreature(p));
+  // Our creatures by the opponent's turn: those in play, and those we can still cast
+  // this turn (after combat), which block just as well.
+  const planned = heuristics.plannedBlockers === false || heuristics.plannedBlockers === 0 ? [] : plannedCreatures(state, me);
+  const mine = [...state.battlefield.filter((p) => p.controllerId === me && isCreature(p)), ...planned];
   const theirs = state.battlefield.filter((p) => p.controllerId === opponent.id && isCreature(p));
   const blockers = theirs.filter((p) => !p.tapped);
   // Sorted by id so the plan doesn't depend on the order candidates come in (it's
@@ -301,6 +304,28 @@ export function planAttack(state, me, candidates, { swarm = true, heuristics = {
     return byBlocking.map((c) => c.id);
   }
   return chosen.map((c) => c.id);
+}
+
+/**
+ * The creature cards `me` can still cast this turn: from their hand, the most
+ * valuable that fit the mana left (untapped lands and floating mana, plus a land
+ * drop if one is left; colors aside). As creatures that could block next turn.
+ */
+export function plannedCreatures(state, me) {
+  const player = state.players.find((p) => p.id === me);
+  if (!player.hand) return [];
+  const pool = Object.values(player.manaPool ?? {}).reduce((sum, n) => sum + n, 0);
+  const lands = state.battlefield.filter((p) => p.controllerId === me && isLand(p) && !p.tapped).length;
+  const landDrop = (player.landsPlayedThisTurn ?? 0) === 0 && player.hand.some(isLand) ? 1 : 0;
+  let mana = pool + lands + landDrop;
+  const result = [];
+  for (const card of player.hand.filter(isCreature).sort((a, b) => creatureValue(b) - creatureValue(a))) {
+    const cost = manaValue(card.manaCost ?? {});
+    if (cost > mana) continue;
+    mana -= cost;
+    result.push({ ...card, controllerId: me, tapped: false, summoningSick: true, damage: 0 });
+  }
+  return result;
 }
 
 /**

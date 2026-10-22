@@ -383,7 +383,10 @@ function permanentSpellOptions(state, me, card, preCombat, heuristics = {}) {
   // H6 (Limited wisdom): creatures that don't change this combat wait for the second
   // main phase, keeping mana up through combat and the hand hidden.
   const entersWithEffect = (card.triggeredAbilities ?? []).some((t) => t.trigger === 'entersBattlefield');
+  // Only when lands alone can pay for it: mana creatures may attack (and be tapped) meanwhile.
+  const untappedLands = state.battlefield.filter((p) => p.controllerId === me && isLand(p) && !p.tapped).length;
   if (heuristics.postCombat && preCombat && isCreature(card) && !hasKeyword(card, KEYWORD.HASTE) && !entersWithEffect
+    && manaValue(card.manaCost ?? {}) <= untappedLands
     && state.battlefield.some((p) => p.controllerId === me && isCreature(p) && !p.summoningSick)) {
     return [];
   }

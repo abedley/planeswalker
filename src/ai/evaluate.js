@@ -65,10 +65,15 @@ export function weightsFor(profile) {
 
 const WIN = 10000;
 
-/** Turns for `attackers` to kill a player at `life` through `blockers` (capped). */
-function turnsToKill(attackers, blockers, life) {
-  const perTurn = damageThrough(attackers, blockers);
-  return perTurn <= 0 ? 10 : Math.min(10, Math.ceil(life / perTurn));
+/**
+ * Turns for `attackers` to kill a player at `life` (capped): through `first` on
+ * their next attack, then through `later` (everything untapped) each turn after.
+ */
+function turnsToKill(attackers, first, later, life) {
+  const now = damageThrough(attackers, first);
+  if (now >= life) return 1;
+  const perTurn = damageThrough(attackers, later);
+  return perTurn <= 0 ? 10 : Math.min(10, 1 + Math.ceil((life - now) / perTurn));
 }
 
 /** Each feature for one side. */
@@ -87,18 +92,26 @@ function sideFeatures(state, player) {
   };
 }
 
-/** The features of a (not finished) state from `me`'s side, each ours minus theirs. */
-export function features(state, me) {
+/**
+ * The features of a (not finished) state from `me`'s side, each ours minus theirs.
+ * `tappedBlockers`: in the clocks, creatures tapped now (e.g. after attacking on
+ * their own turn) can't block the active player's next attack; false treats every
+ * creature as untapped.
+ */
+export function features(state, me, { tappedBlockers = true } = {}) {
   const player = state.players.find((p) => p.id === me);
   const opponent = state.players.find((p) => p.id !== me);
   const ours = sideFeatures(state, player);
   const theirs = sideFeatures(state, opponent);
   const creaturesOf = (id) => state.battlefield.filter((p) => p.controllerId === id && isCreature(p));
   const attackers = (id) => creaturesOf(id).filter((c) => !c.keywords.includes('defender'));
-  // Next turn everything untaps.
+  // From their own next turn on, everything has untapped.
   const blockers = (id) => creaturesOf(id).map((c) => ({ ...c, tapped: false }));
-  const ourClock = turnsToKill(attackers(me), blockers(opponent.id), opponent.life);
-  const theirClock = turnsToKill(attackers(opponent.id), blockers(me), player.life);
+  // The active player attacks first, into blockers as they are now: a creature that
+  // attacked on its own turn stays tapped through the other player's.
+  const firstBlockers = (id, attackerId) => (tappedBlockers && state.activePlayerId === attackerId ? creaturesOf(id) : blockers(id));
+  const ourClock = turnsToKill(attackers(me), firstBlockers(opponent.id, me), blockers(opponent.id), opponent.life);
+  const theirClock = turnsToKill(attackers(opponent.id), firstBlockers(me, opponent.id), blockers(me), player.life);
   return {
     life: ours.life - theirs.life,
     creatures: ours.creatures - theirs.creatures,
@@ -116,7 +129,8 @@ export function evaluate(state, me, weights = DEFAULT_WEIGHTS) {
     if (state.winnerId === me) return WIN;
     return state.winnerId === null ? 0 : -WIN;
   }
-  const values = features(state, me);
+  // weights.tappedBlockers === 0 restores the old clock (for comparisons in the arena).
+  const values = features(state, me, { tappedBlockers: weights.tappedBlockers !== 0 });
   let score = 0;
   for (const name of FEATURES) score += (weights[name] ?? 0) * values[name];
   return score;

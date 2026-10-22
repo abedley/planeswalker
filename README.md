@@ -878,7 +878,7 @@ measured as `basic:h=<name>[@value]` against the basic AI in mirror matches on e
 | `danger` | Forge's "life in danger": trade-block, then chump-block, while the damage getting through would leave us below 4 life (`@7`, `@10`) | 49.9% (49.2–49.5%) |
 | `home` | Forge's blockers kept home: don't attack with a creature whose absence costs more on the crack-back than it deals | 48.6% |
 | `reinforce` | Add a blocker to a block that doesn't kill its attacker | 50.9% |
-| `postCombat` | Cast creatures after combat unless they matter in it | 47.4% |
+| `postCombat` | Cast creatures after combat unless they matter in it (haste, an enters-the-battlefield effect), when lands alone pay for them | 49.5% (on by default) |
 | `saveRemoval` | Removal in the main phase only on creatures worth 6+ unless at 8 life or less (`@4.5`, `@8`) | 50.0% (49.7–50.7%) |
 | all of attrition, beatdown@2, danger@7, reinforce | | 50.2% |
 
@@ -889,8 +889,25 @@ None of them helps, and the reason shows when counting how often each changes a 
 Over 80,000 decisions in basic-AI games, `attrition`, `beatdown`, `danger` and `reinforce`
 changed between 13 and 53. The basic AI already follows the rules they encode: it attacks
 where no block is profitable, swarms, trades up, double-blocks, and chump-blocks when the
-attack is lethal. `postCombat` and `home` change many decisions and do worse. Casting a creature
-*before* combat keeps a blocker home, which lets the rest attack safely.
+attack is lethal.
+
+`postCombat` first scored 47.4%, almost all of it in green (79–121). The cause was mana, not
+blockers. Waiting until after combat left Llanowar Elves free to attack, so they were tapped
+when the creature came to be cast, which then slipped a turn. With the rule limited to
+creatures that lands alone pay for, it's neutral against the AI. It's on by default because it
+plays better against a person: the hand stays hidden and mana stays up through combat. `home`
+still scores 48.6%.
+
+Measuring these also turned up two mistakes in how positions were judged, both fixed:
+- **Creatures still to be cast.** Deciding whether attacking leaves it dead to the crack-back,
+  the AI counted only the creatures in play. Those it would cast after combat block just as
+  well on the opponent's turn. They now count (`plannedCreatures`; 50.0% against leaving them
+  out).
+- **Tapped blockers in the clock.** The evaluation's race clock treated every creature as able
+  to block the next attack. A creature that attacked on its own turn stays tapped through the
+  opponent's, so the active player's next attack now meets blockers as they are (50.5%).
+
+Both were neutral in the arena, where the opponent is the same AI, but they're right.
 
 A rule from the same sources that would matter, but needs the rules engine first, is the
 mulligan: the engine keeps every opening hand, so hands with too few or too many lands are

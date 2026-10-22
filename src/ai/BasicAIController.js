@@ -78,7 +78,8 @@ export class BasicAIController extends EventEmitter {
   constructor({ game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {} }) {
     super();
     this.#swarm = swarm;
-    this.#heuristics = heuristics;
+    // Creatures after combat (see permanentSpellOptions) is on unless turned off (`postCombat: false`).
+    this.#heuristics = { postCombat: true, ...heuristics };
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;

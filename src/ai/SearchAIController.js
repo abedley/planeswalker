@@ -36,7 +36,7 @@ import { ponderTargets } from './ponder.js';
  * - **Visible thinking only at public moments:** its own main phase and its own
  *   attack and block declarations, which come every turn whatever its hand. Then
  *   it searches for up to `budgetMs`, showing `thinking` events
- *   (`{ active, candidates? }`) for at least `minThinkMs`.
+ *   (`{ active, candidates? }`) for at least `minThinkMs` (or the budget, if less).
  * - It only ever sends the search game.getPlayerView(playerId).
  *
  * Options: `weights` (the deck's evaluation weights: a deck or archetype name, or
@@ -151,7 +151,7 @@ export class SearchAIController extends EventEmitter {
     const thinking = this.#isThinkingMoment(state);
     // The delay, and whether we're seen thinking, are decided from public information
     // only, before looking at anything private.
-    const delay = thinking ? this.#minThinkMs : this.#responseMs + this.#jitter() * this.#jitterMs;
+    const delay = thinking ? Math.min(this.#minThinkMs, this.#budgetMs) : this.#responseMs + this.#jitter() * this.#jitterMs;
     if (thinking) this.emit('thinking', { active: true });
     const action = await this.#decide(state, context, thinking ? this.#budgetMs : this.#responseMs * 0.8, thinking);
     if (turn !== this.#turnOf || !action) return;

@@ -787,7 +787,7 @@ It gives little away:
   an instant; a test checks the delays are identical with and without one.
 - **Visible thinking only at public moments:** it shows "Thinking…" only at its own main phases
   and declarations, which happen every turn whatever its hand. It thinks for at least
-  `minThinkMs` (600 ms) and at most its budget. It can answer sooner than the budget when the
+  `minThinkMs` (600 ms, or its budget if that's less) and at most its budget. It can answer sooner than the budget when the
   choice is clear, or was pondered, so how long it thinks can hint at how hard the choice was.
   That trade buys a lot of speed.
 

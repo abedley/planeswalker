@@ -909,6 +909,39 @@ Measuring these also turned up two mistakes in how positions were judged, both f
 
 Both were neutral in the arena, where the opponent is the same AI, but they're right.
 
+#### Tiered evaluation and pruned lookahead
+
+Two search options, both off by default, measured against the default search on the real
+decks (200 games each):
+- **`evaluation: 'tiered'`** (`evaluateTiered`, arena `e=tiered`). It ranks winning, then not
+  losing (lethal on board either way, the race, life), then creatures and who wins the next
+  combat (the active player's planned attack against the planned blocks), then cards in hand,
+  then other permanents. `TIERS` sets the gaps; `weights.tiers` overrides them.
+- **`lookahead: { depth, beam, branchOpponent }`** with **`rootBeam`** (`lookahead.js`, arena
+  `la=`, `bw=`, `bo=`, `rb=`). Instead of one basic-AI playout per candidate, it branches at key
+  decisions: our main-phase plays and both sides' attacks and blocks. Every option is scored
+  where it leads and only the best `beam` go deeper. `rootBeam` keeps only the best few
+  candidates before the search starts.
+
+| Setting | Budget | Win rate vs default search |
+| --- | --- | --- |
+| tiered, wide gaps (lethal 3000, clock 12/turn) | 150 ms | 43.5% (36.8–50.4%) |
+| tiered, moderate gaps (lethal 150/60, clock 3) | 150 ms | 48.0% (41.2–54.9%) |
+| lookahead depth 2, beam 2, 4 candidates | 150 ms | 52.0% (45.1–58.8%) |
+| lookahead depth 3 + tiered (moderate), opponent branching | 300 ms | 38.5% (32.0–45.4%) |
+| lookahead depth 3, opponent not branching | 150 ms | 46.0% (39.2–52.9%) |
+
+What the results say:
+- **Gap sizes:** with wide gaps, rare lethal swings in a few noisy simulations swamp the
+  average, and the search can't tell its options apart. Moderate gaps keep the order without
+  that.
+- **Opponent branching:** in a guessed game the opponent sees the AI's hand. Branching on its
+  worst-for-us replies makes it dodge every trick, so every plan looks bad, and more so the
+  deeper the search goes.
+- **Depth:** a deeper lookahead costs two to four times as much per simulation. Within the same
+  time it gets fewer guesses of the hidden cards, and so far that has cost as much as the depth
+  gained.
+
 A rule from the same sources that would matter, but needs the rules engine first, is the
 mulligan: the engine keeps every opening hand, so hands with too few or too many lands are
 played out.

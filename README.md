@@ -864,3 +864,35 @@ The search still gains nothing from more time, a deeper horizon or refit weights
 when it trusts its simulations over the basic AI's choice (margin 0). What it does gain from is
 a better basic AI, which both plays the outskirts' CPUs and plays out every simulation.
 
+#### Heuristics from Magic strategy
+
+Well-known rules of thumb, from Forge's AI (`AiAttackController`, `AiBlockController`,
+`ComputerUtilCombat`) and from Limited strategy, are in the code as opt-in options. They're
+measured as `basic:h=<name>[@value]` against the basic AI in mirror matches on every deck
+(1320 games each).
+
+| Heuristic | Rule | Win rate vs current basic |
+| --- | --- | --- |
+| `attrition` | Forge's attritional attack: all in if attacking every turn kills them even when each blocker stops one of our biggest attackers | 50.1% |
+| `beatdown` | "Who's the beatdown?": when we'd win the race, accept even trades (`@2`, `@4`: worse trades) | 49.7% (48.7–49.6% stronger) |
+| `danger` | Forge's "life in danger": trade-block, then chump-block, while the damage getting through would leave us below 4 life (`@7`, `@10`) | 49.9% (49.2–49.5%) |
+| `home` | Forge's blockers kept home: don't attack with a creature whose absence costs more on the crack-back than it deals | 48.6% |
+| `reinforce` | Add a blocker to a block that doesn't kill its attacker | 50.9% |
+| `postCombat` | Cast creatures after combat unless they matter in it | 47.4% |
+| `saveRemoval` | Removal in the main phase only on creatures worth 6+ unless at 8 life or less (`@4.5`, `@8`) | 50.0% (49.7–50.7%) |
+| all of attrition, beatdown@2, danger@7, reinforce | | 50.2% |
+
+Offering their attack and block plans to the search as extra candidates (`search:hp=1`,
+`HEURISTIC_PLANS`) scored 50.0% (43.1–56.9%) against the search without them.
+
+None of them helps, and the reason shows when counting how often each changes a decision.
+Over 80,000 decisions in basic-AI games, `attrition`, `beatdown`, `danger` and `reinforce`
+changed between 13 and 53. The basic AI already follows the rules they encode: it attacks
+where no block is profitable, swarms, trades up, double-blocks, and chump-blocks when the
+attack is lethal. `postCombat` and `home` change many decisions and do worse. Casting a creature
+*before* combat keeps a blocker home, which lets the rest attack safely.
+
+A rule from the same sources that would matter, but needs the rules engine first, is the
+mulligan: the engine keeps every opening hand, so hands with too few or too many lands are
+played out.
+

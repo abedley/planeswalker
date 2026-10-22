@@ -1,14 +1,14 @@
 /**
  * Web Worker entry for the search AI (see searchRunner.js). Receives
- * `{ id, request }`, replies `{ id, result }`. A newer request makes the worker
- * drop the one it's working on (replying null for it).
+ * `{ type: 'search', id, request }`, replying `{ id, result }` (null when a newer
+ * search replaced it), and `{ type: 'ponder', targets }`, positions to search
+ * ahead in the meantime. Searches are kept by position (searchPool.js).
  */
-import { searchInSlices } from './searchRunner.js';
+import { SearchScheduler } from './searchPool.js';
 
-let latest = 0;
+const scheduler = new SearchScheduler({ onResult: (id, result) => self.postMessage({ id, result }) });
 
-self.onmessage = async ({ data }) => {
-  latest = data.id;
-  const result = await searchInSlices(data.request, { isCurrent: () => latest === data.id });
-  self.postMessage({ id: data.id, result });
+self.onmessage = ({ data }) => {
+  if (data.type === 'ponder') scheduler.ponder(data.targets);
+  else scheduler.search(data.id, data.request);
 };

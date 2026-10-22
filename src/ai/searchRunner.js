@@ -1,49 +1,51 @@
 /**
- * Runs MacroSearch for a time budget without blocking: in slices on the current
- * thread, or in a Web Worker (src/ai/aiWorker.js) when one is available. A new
- * request replaces any request still running, whose promise then resolves to null.
+ * Runs searches without blocking: in a Web Worker (src/ai/aiWorker.js) when one is
+ * available, otherwise in slices on the current thread. Both keep their searches
+ * by position (searchPool.js), so pondered work carries on into real decisions.
  *
- * A request is `{ view, me, macros, budgetMs, seed, defaults?, weights? }`: only what the
- * player is allowed to know (Game#getPlayerView), so nothing hidden ever reaches
- * the search.
+ * - `search(request)`: a promise of the result, or null if a newer request replaced it.
+ * - `ponder(targets)`: requests to search ahead while nothing else is asked.
+ *
+ * Requests hold only what the player is allowed to know (Game#getPlayerView), so
+ * nothing hidden ever reaches the search.
  */
-import { MacroSearch } from './search.js';
-import { seededRandom } from '../engine/random.js';
+import { SearchScheduler } from './searchPool.js';
 
-/** The part of a search result worth sending around: the best macro and the top candidates. */
-export function summarize(result) {
-  return {
-    best: result.best,
-    iterations: result.iterations,
-    ranked: result.ranked.slice(0, 6).map(({ macro, average, visits }) => ({ macro, average, visits })),
-  };
-}
-
-/** Searches in slices of `sliceMs`, yielding between them. */
-export async function searchInSlices(request, { isCurrent = () => true, sliceMs = 20, now = () => performance.now() } = {}) {
-  const search = new MacroSearch(request.view, request.me, request.macros, {
-    random: seededRandom(request.seed ?? 1), weights: request.weights, defaults: request.defaults, horizon: request.horizon,
-  });
-  const deadline = now() + request.budgetMs;
-  while (now() < deadline) {
-    if (!search.step()) break; // the race is decided
-    search.runFor(Math.min(sliceMs, Math.max(1, deadline - now())), now);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    if (!isCurrent()) return null;
-  }
-  return summarize(search.result());
-}
+export { summarize } from './searchPool.js';
 
 /** Runs searches on the current thread, in slices. */
 export class InlineSearchRunner {
+  #scheduler;
   #latest = 0;
+  #pending = new Map();
+
+  constructor(options = {}) {
+    this.#scheduler = new SearchScheduler({
+      ...options,
+      onResult: (id, result) => {
+        this.#pending.get(id)?.(result);
+        this.#pending.delete(id);
+      },
+    });
+  }
 
   search(request) {
     const id = ++this.#latest;
-    return searchInSlices(request, { isCurrent: () => this.#latest === id });
+    return new Promise((resolve) => {
+      this.#pending.set(id, resolve);
+      this.#scheduler.search(id, request);
+    });
   }
 
-  dispose() {}
+  ponder(targets) {
+    this.#scheduler.ponder(targets);
+  }
+
+  dispose() {
+    this.#scheduler.dispose();
+    for (const resolve of this.#pending.values()) resolve(null);
+    this.#pending.clear();
+  }
 }
 
 /** Runs searches in a module Web Worker. */
@@ -55,27 +57,27 @@ export class WorkerSearchRunner {
   constructor(url = new URL('./aiWorker.js', import.meta.url)) {
     this.#worker = new Worker(url, { type: 'module' });
     this.#worker.onmessage = ({ data }) => {
-      const resolve = this.#pending.get(data.id);
+      this.#pending.get(data.id)?.(data.result);
       this.#pending.delete(data.id);
-      resolve?.(data.result);
     };
   }
 
   search(request) {
     const id = ++this.#latest;
-    // Older requests are superseded.
-    for (const [oldId, resolve] of this.#pending) {
-      resolve(null);
-      this.#pending.delete(oldId);
-    }
     return new Promise((resolve) => {
       this.#pending.set(id, resolve);
-      this.#worker.postMessage({ id, request });
+      this.#worker.postMessage({ type: 'search', id, request });
     });
+  }
+
+  ponder(targets) {
+    this.#worker.postMessage({ type: 'ponder', targets });
   }
 
   dispose() {
     this.#worker.terminate();
+    for (const resolve of this.#pending.values()) resolve(null);
+    this.#pending.clear();
   }
 }
 

@@ -129,6 +129,9 @@ export class MacroSearch {
     return this;
   }
 
+  /** Whether the race is over: one candidate left (or the round limit reached). */
+  get finished() { return this.#finished; }
+
   /** One simulation. Returns false once there's nothing left to decide. */
   step() {
     if (this.#finished) return false;

@@ -72,7 +72,7 @@ export class Battle {
     this.#game = new Game(setup.game);
     this.#view = new BoardView(app, { me: this.#me, opp: this.#opp, meInfo, oppInfo });
     this.el = this.#view.el;
-    this.#cpu = createCpuController(this.#game, setup.cpu, { delayMs: Math.round(650 * app.settings.speed), responseMs: 500 });
+    this.#cpu = createCpuController(this.#game, setup.cpu, { delayMs: Math.round(650 * app.settings.speed) });
     if (this.#cpu.on) this.#unsubscribe.push(this.#cpu.on('thinking', ({ active }) => this.#view.setThinking(active)));
     this.#unsubscribe.push(this.#game.onAny((name, payload) => this.#onEvent(name, payload)));
     this.#bindInput();

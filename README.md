@@ -756,14 +756,40 @@ It simulates each one many times (`search.js`):
 It runs in a module Web Worker (`aiWorker.js`, with an inline time-sliced fallback), so the page
 stays responsive.
 
-It gives nothing away:
-- **Uniform timing:** every time it gets priority it answers after the same delay, plus random
-  jitter. That holds whether it passes or acts, and whether or not it holds an instant; a test
-  checks the delays are identical with and without one.
-- **Visible thinking only at public moments:** it shows "Thinking…" and takes about 2 s only at
-  its own main phases and declarations, which happen every turn whatever its hand.
-- **Pondering:** while the opponent decides, it already searches the position it would face if
-  they passed.
+It never wastes the player's time, or its own work:
+- **Quick passes where it never acts.** It only ever acts in its windows (`windowOf`): its own
+  main phases, after blocks, when attacked, at the opponent's end step, and in response to an
+  opponent's spell. Elsewhere (upkeep, draw, beginning of combat, ...) it always passes, so it
+  passes at once (`passMs`, 60 ms). The windows depend only on public information, so this gives
+  nothing away.
+- **Searches are kept by position** (`searchPool.js`). The worker keeps recent searches by a hash
+  of the AI's view. When a position comes up that it already searched, or pondered, it carries
+  on from where it got to instead of starting over. A search stops as soon as its race is
+  decided (one candidate left), or once it has had its budget, pondering included.
+- **Pondering** (`ponder.js`). Whenever it isn't deciding, it plays a private copy of the game
+  forward along the likeliest line, and searches the next three decisions it meets there.
+  - **The line:**
+    - The opponent passes, and confirms the attackers or blocks they've picked so far.
+    - The AI carries on with the play it's making, and otherwise does what the basic AI would.
+  - **So while you take your turn**, it's already thinking about its next main phase. While you
+    choose attackers, it's thinking about its blocks against exactly those attackers. If you
+    then do what it predicted, its answer is ready.
+  - **What the search sees:** it only ever gets the AI's view of each position. The result is
+    only used once the AI really reaches that position.
+
+Measured over whole games (a basic AI standing in for the player and answering at once), this
+took the Pyromancer's games from 223 s to 81 s, and the Dragonlord's from 203 s to 56 s. Its
+average think at its own main phase fell from 1.6 s to 0.6 s.
+
+It gives little away:
+- **Uniform timing in its windows:** there it answers after the same delay (`responseMs`,
+  400 ms), plus random jitter. That holds whether it passes or acts, and whether or not it holds
+  an instant; a test checks the delays are identical with and without one.
+- **Visible thinking only at public moments:** it shows "Thinking…" only at its own main phases
+  and declarations, which happen every turn whatever its hand. It thinks for at least
+  `minThinkMs` (600 ms) and at most its budget. It can answer sooner than the budget when the
+  choice is clear, or was pondered, so how long it thinks can hint at how hard the choice was.
+  That trade buys a lot of speed.
 
 In the debugger, pick "AI: search" for a player to see its top candidates and simulation count.
 

@@ -90,5 +90,8 @@ test('the search AI\'s response times don\'t reveal whether it holds an instant'
   assert.deepEqual(withShock.thinking, without.thinking);
   assert.ok(withShock.thinking.length > 0);
   assert.ok(withShock.delays.length > 10);
-  assert.ok(withShock.delays.every((ms) => ms >= 300));
+  // Outside its acting windows it always passes, so it does so at once (passMs);
+  // in its windows it takes at least responseMs.
+  assert.ok(withShock.delays.some((ms) => ms === 60));
+  assert.ok(withShock.delays.every((ms) => ms === 60 || ms >= 300), withShock.delays.join());
 });

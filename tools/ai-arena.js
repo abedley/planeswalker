@@ -71,7 +71,7 @@ export function contestant(name) {
   // basic:blocks=greedy,predict=greedy: how it blocks, and how it expects blocks when
   // it attacks (see chooseBlocks: greedy, or a plan of blockingPlans).
   // basic:attack=lookahead,think=50: it attacks by planLookaheadAttack (thinking up to 50 ms);
-  // look=2: looking 2 of its turns ahead.
+  // look=2: looking 2 of its turns ahead; quick=0: with exact blocks in its playouts.
   if (base === 'basic') {
     const options = { heuristics: {} };
     for (const part of settings.split(',')) {
@@ -81,6 +81,7 @@ export function contestant(name) {
       else if (key === 'attack') options.attacking = value;
       else if (key === 'think') options.attackBudgetMs = Number(value);
       else if (key === 'look') options.attackTurns = Number(value);
+      else if (key === 'quick') options.attackQuick = value !== '0';
       else if (key === 'h') {
         // name@value sets a heuristic's strength, e.g. danger@6.
         for (const h of value.split('+').filter(Boolean)) {

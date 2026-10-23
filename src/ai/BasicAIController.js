@@ -84,6 +84,7 @@ export class BasicAIController extends EventEmitter {
   #attacking;
   #attackBudgetMs;
   #attackTurns;
+  #attackQuick;
   #timer = null;
   #unsubscribers;
   /**
@@ -94,7 +95,7 @@ export class BasicAIController extends EventEmitter {
 
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
-    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3,
+    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3, attackQuick = true,
   }) {
     super();
     if (blocking !== BLOCKING.GREEDY && !Object.values(BLOCK_PLAN).includes(blocking)) throw new Error(`Unknown block plan: ${blocking}`);
@@ -102,6 +103,7 @@ export class BasicAIController extends EventEmitter {
     this.#attacking = attacking;
     this.#attackBudgetMs = attackBudgetMs;
     this.#attackTurns = attackTurns;
+    this.#attackQuick = attackQuick;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -152,7 +154,7 @@ export class BasicAIController extends EventEmitter {
           .map((id) => state.battlefield.find((p) => p.id === id));
         // Planned once per declaration: it takes an action per attacker to carry out.
         this.#declaration.plan ??= passive ? []
-          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns }).attackers
+          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns, quick: this.#attackQuick }).attackers
             : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
         return moveTowards(decision.attackers, this.#declaration.plan, find);
       }

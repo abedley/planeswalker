@@ -706,12 +706,18 @@ emits `action` events. None of them looks at the opponent's hand or any library.
 
 A fast heuristic player, also used to play out the search AI's simulations (5–20 µs per decision).
 - **Combat** (`combat.js`):
-  - **Attacks:** with creatures the opponent can't block profitably, and with everything when
-    that's lethal through the best possible blocks. Then it adds any other attacker that makes
-    the whole attack better against the defender's best blocks: each blocker stops only one
-    attacker, so more attackers than they can block well get through ("swarming"). It keeps enough blockers home to survive
-    the crack-back, and goes all in when it's losing the race to deck out. It expects the
-    defender to block as it does itself (`predictBlocking`).
+  - **Attacks:** by *Lookahead attacks* below: it plays out racing, attacking for value and
+    holding back for a few turns, and picks the strategy whose worst case is best. It plans each
+    declaration once, at its first step.
+  - **The previous attacks** (`attacking: 'basic'`, `planAttack`):
+    - It attacks with creatures the opponent can't block profitably, and with everything when
+      that's lethal through the best possible blocks.
+    - Then it adds any other attacker that makes the whole attack better against the
+      defender's best blocks: each blocker stops only one attacker, so more attackers than
+      they can block well get through ("swarming").
+    - It keeps enough blockers home to survive the crack-back, and goes all in when it's
+      losing the race to deck out.
+    - It expects the defender to block as it does itself (`predictBlocking`).
   - **Blocks:** the `value` plan of *Blocking plans* below: the blocks worth the most, counting
     attacker value killed, blocker value lost, and life kept (worth more when life is low),
     solved exactly. It survives first, and chump-blocks only when the life is worth the creature.
@@ -821,9 +827,22 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
   up, and so does a race we'd win.
 - **Choice:** it takes the strategy whose worst case is best. A win scores more the sooner it
   comes; otherwise the score is board value plus life, which counts for more when it's low.
-- **Trying it:** it's opt-in, `BasicAIController({ attacking: 'lookahead' })` (arena:
-  `basic:attack=lookahead`).
-- **Speed:** within a decision, it caches the combats it predicts.
+- **Default:** it's how the basic AI attacks (`attacking: 'basic'` for `planAttack`; arena:
+  `basic:attack=basic`).
+- **Speed:**
+  - It copies only what combat needs of each creature, with its value and keyword flags
+    worked out once.
+  - It caches the combats it predicts and each strategy's attacks, under small integer keys.
+  - The later turns of its playouts use a quick guess at the blocks (`quickBlocks`; `quick:
+    false` blocks exactly; arena `quick=0`). Each attacker, the biggest threat first, meets the
+    free blocker that gains the defender most; then chump blocks follow while the damage would
+    be lethal.
+  - Its exact block predictions get smaller budgets, and at most two blockers on an attacker.
+  - Its `value` attacks only try attackers that gain alone.
+
+  On 1217 attack decisions from basic-AI games it takes 1.8 ms on average (it took 11 ms
+  before these), and 0.3 ms on boards of up to 8 creatures. `planAttack` takes 1.0–1.3 ms and
+  0.09 ms there.
 - **In the search AI:** `attacking: 'lookahead'` (`searchPolicy`, `SearchAIController`; arena:
   `search:at=lookahead`) makes the lookahead's attack the search's default, and offers each
   strategy's attack as a candidate. Its simulations keep the basic AI's attacks.
@@ -838,12 +857,15 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
 | Match | Games | First AI's win rate (95% CI) |
 | --- | --- | --- |
 | basic with lookahead attacks vs basic | 2640 | 52.1% (50.2–54.0%) |
+| the same, with the speed-ups above | 2640 | 51.2% (49.3–53.1%) |
+| quick blocks in playouts vs exact blocks | 2640 | 49.3% (47.4–51.2%) |
 | lookahead attacks thinking up to 50 ms vs without a budget | 1320 | 50.7% (48.0–53.4%) |
 | search with lookahead attacks vs search, 150 ms, real decks | 400 | 51.2% (46.4–56.1%) |
 
 It wins or ties on 9 of the 11 decks. Its games run longer, as it holds back more: green's go from
-22 to 31 turns. Its decisions take about 1 ms on average on the biggest boards (the keyword
-sampler's).
+22 to 31 turns. In the arena, the basic AI's decisions now take 1.2–1.5 times as long on average
+as with `planAttack`. But longer games build bigger boards, so whole games between basic AIs run
+several times slower on the white and green decks.
 
 The chip damage rule and the cache changed none of those 2640 games.
 

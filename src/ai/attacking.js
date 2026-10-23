@@ -303,7 +303,7 @@ const worth = (side) => side.creatures.reduce((sum, c) => sum + c.cachedValue, 0
 function playOut(first, ours, theirs, halfTurns, cache) {
   let [us, them] = first;
   // The later turns are a guess anyway: quick blocks (see blocksAgainst).
-  cache.quick = true;
+  cache.quick = cache.allowQuick;
   try {
     for (let turn = 1; ; turn++) {
       if (them.life <= 0) return WIN - turn;
@@ -342,6 +342,7 @@ const SUBSETS_UP_TO = 6;
  *   hold now and race later), then other first attacks (every subset of the
  *   attackers on small boards, or a strategy's attack with one more or one fewer).
  *   It answers from the deepest look whose strategies all finished.
+ * - `quick: false` blocks exactly in the later turns of its playouts too (see blocksAgainst).
  *
  * @returns {{ attackers: string[], strategy: string, later: string, turns: number,
  *   plans: number, scores: Object<string, number>, strategies: Object<string, string[]> }}
@@ -349,7 +350,7 @@ const SUBSETS_UP_TO = 6;
  *   the strategy after), how many turns it looked ahead, how many plans it scored at
  *   that depth, each strategy's worst-case score there, and each strategy's attack.
  */
-export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs = null } = {}) {
+export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs = null, quick = true } = {}) {
   const able = new Set(candidates.filter((c) => c.power > 0).map((c) => c.id));
   const side = (id) => ({
     life: state.players.find((p) => p.id === id).life,
@@ -363,6 +364,7 @@ export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs
   const them = side(state.players.find((p) => p.id !== me).id);
   const attackers = us.creatures.filter((c) => able.has(c.id));
   const cache = new Map();
+  cache.allowQuick = quick;
   // Each creature gets a bit within its side, for cheap cache keys, if they fit.
   cache.bits = us.creatures.length <= 31 && them.creatures.length <= 31;
   [us, them].forEach(({ creatures }, index) => creatures.forEach((c, i) => {

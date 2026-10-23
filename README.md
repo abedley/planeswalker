@@ -798,6 +798,7 @@ as candidates.
 | --- | --- | --- |
 | basic (now) vs basic as it was (greedy blocks, greedy predictions) | 2640 | 53.0% (51.1–54.9%) |
 | basic (now) vs the same with greedy predictions | 2640 | 50.9% (49.0–52.8%) |
+| search (now) vs search as it was, 150 ms, real decks | 200 | 56.0% (49.1–62.7%) |
 
 Predicting `value` blocks is neutral in the arena, where both sides block the same way, but it's
 right, as each side expects the blocks it will actually meet. Playouts are up to 9% slower (the

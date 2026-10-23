@@ -50,6 +50,7 @@ test('fight() agrees with resolveCombat on random combats', () => {
     assert.deepEqual(dead, expected.deadBlockers, `combat ${i}`);
     assert.equal(got.damage, expected.playerDamage, `combat ${i}`);
     assert.equal(got.gain, expected.blockerLifelink, `combat ${i}`);
+    if (attacker.keywords.includes(LIFELINK)) assert.equal(got.dealt, expected.attackerLifelink, `combat ${i}`);
   }
 });
 

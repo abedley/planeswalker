@@ -53,8 +53,8 @@ const TR = 8;
 const LL = 16;
 const MENACE = 32;
 
-/** A creature as the solver needs it: plain numbers and flags. */
-function record(creature, index) {
+/** A creature as the solver (and fight()) needs it: plain numbers and flags. */
+export function record(creature, index) {
   const has = (k) => hasKeyword(creature, k);
   return {
     creature,
@@ -128,13 +128,14 @@ function killOrder(count, power) {
 }
 
 /** fight()'s result, reused between calls: read it before the next one. */
-const outcome = { attackerDies: false, deadBlockers: 0, damage1: 0, gain1: 0, damage: 0, gain: 0 };
+const outcome = { attackerDies: false, deadBlockers: 0, damage1: 0, gain1: 0, damage: 0, gain: 0, dealt: 0 };
 
 /**
  * One attacker against its first `n` blockers in `group` (none: unblocked), by the
  * same rules as resolveCombat. Sets `outcome`: the attacker's death, the dead
  * blockers (bits of group positions), and the damage to the defending player and
- * the defender's lifelink gain, in the first-strike step and over the whole combat.
+ * the defender's lifelink gain, in the first-strike step and over the whole combat;
+ * and `dealt`, all the damage the attacker deals (its lifelink, if it has it).
  */
 export function fight(attacker, group, n = group.length) {
   const all = n + 1;
@@ -155,6 +156,7 @@ export function fight(attacker, group, n = group.length) {
   outcome.gain1 = 0;
   outcome.damage = 0;
   outcome.gain = 0;
+  outcome.dealt = 0;
   for (let step = firstStrikeStep ? 0 : 1; step < 2; step++) {
     // 510.4 / 702.4b: who deals damage in this step.
     const stepFlag = step === 0 ? FS : 0;
@@ -166,6 +168,8 @@ export function fight(attacker, group, n = group.length) {
       let remaining = P[0];
       let count = 0;
       for (let s = 1; s < all; s++) if (!(dead & (1 << s))) living[count++] = s;
+      // It deals all its damage, unless its blockers are all gone and it lacks trample.
+      if (n === 0 || count > 0 || af & TR) outcome.dealt += P[0];
       if (n === 0) {
         toPlayer += remaining;
       } else if (count === 0) {

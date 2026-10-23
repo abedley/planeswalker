@@ -15,6 +15,7 @@ import {
 import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
 } from './scoring.js';
+import { planLookaheadAttack } from './attacking.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -66,6 +67,7 @@ const WINDOW = Object.freeze({
  * default, BLOCKING.GREEDY for planBlocks, or another plan (BLOCK_PLAN).
  * `predictBlocking` is how it expects the defender to block when it plans attacks.
  * Both default to BLOCKING.VALUE.
+ * `attacking: 'lookahead'` attacks by planLookaheadAttack instead of planAttack.
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -76,6 +78,7 @@ export class BasicAIController extends EventEmitter {
   #heuristics;
   #blocking;
   #predictBlocking;
+  #attacking;
   #timer = null;
   #unsubscribers;
   /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
@@ -83,9 +86,10 @@ export class BasicAIController extends EventEmitter {
 
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
-    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE,
+    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'basic',
   }) {
     super();
+    this.#attacking = attacking;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -134,9 +138,9 @@ export class BasicAIController extends EventEmitter {
       case DECISION.DECLARE_ATTACKERS: {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
-        const wanted = passive ? [] : planAttack(state, me, candidates, {
-          swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking,
-        });
+        const wanted = passive ? []
+          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates).attackers
+            : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
         return moveTowards(decision.attackers, wanted, find);
       }
       case DECISION.DECLARE_BLOCKERS: {

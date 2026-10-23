@@ -804,6 +804,33 @@ Predicting `value` blocks is neutral in the arena, where both sides block the sa
 right, as each side expects the blocks it will actually meet. Playouts are up to 9% slower (the
 benchmark's standard deck: 52 to 48 games/s).
 
+### Lookahead attacks (`attacking.js`)
+
+The second piece of the new AI. `planLookaheadAttack(state, me, candidates)` picks one of three
+strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
+
+| Strategy | Attacks with |
+| --- | --- |
+| `aggressive` | everything that can attack, to race |
+| `value` | attackers added one at a time while the trade improves against the defender's blocks: creature value killed minus value lost, plus a little for chip damage (more when the defender is low) |
+| `hold` | the `value` attack, minus the creatures it will want as blockers when the opponent attacks with everything next turn |
+
+- **Lookahead:** each of our strategies plays out for 3 of our turns, and theirs after each,
+  against each of the opponent's strategies. It uses only the creatures in play (nobody casts
+  another), and defenders block with the `value` plan. So a crack-back that would kill us shows
+  up, and so does a race we'd win.
+- **Choice:** it takes the strategy whose worst case is best. A win scores more the sooner it
+  comes; otherwise the score is board value plus life, which counts for more when it's low.
+- **Trying it:** it's opt-in, `BasicAIController({ attacking: 'lookahead' })` (arena:
+  `basic:attack=lookahead`).
+
+| Match | Games | First AI's win rate (95% CI) |
+| --- | --- | --- |
+| basic with lookahead attacks vs basic | 2640 | 52.1% (50.2–54.0%) |
+
+It wins or ties on 9 of the 11 decks. Its games run longer, as it holds back more: green's go from
+22 to 31 turns. Its attack decisions take up to a few milliseconds on big boards.
+
 ### Search AI (`SearchAIController`)
 
 At each real decision, the search AI chooses among *macro actions* (`macroActions.js`), whole

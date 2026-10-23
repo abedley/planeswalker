@@ -8,12 +8,12 @@
 const deck = (counts) => Object.freeze(Object.entries(counts).flatMap(([id, n]) => Array(n).fill(id)));
 
 export const REAL_DECKS = Object.freeze({
-  /** Green Stompy: big creatures, pump spells, Overrun. */
+  /** Green Stompy: big creatures, pump spells, Overrun and Overcome. */
   greenStompy: deck({
     forest: 17,
-    llanowarElves: 3, greenwoodSentinel: 2, druidOfTheCowl: 2, centaurCourser: 3, giantSpider: 1,
+    llanowarElves: 3, greenwoodSentinel: 2, druidOfTheCowl: 2, centaurCourser: 3,
     thornhideWolves: 2, vigilantBaloth: 2, thrashingBrontodon: 1, colossalDreadmaw: 2,
-    giantGrowth: 2, titanicGrowth: 2, overrun: 1,
+    giantGrowth: 1, titanicGrowth: 2, overrun: 2, overcome: 1,
   }),
   /** Blue Skies: walls hold the ground while flyers attack; counters and card draw. */
   blueSkies: deck({
@@ -24,9 +24,9 @@ export const REAL_DECKS = Object.freeze({
   /** White Weenie: cheap creatures, tokens and team pumps. */
   whiteWeenie: deck({
     plains: 17,
-    savannahLions: 3, healersHawk: 2, daybreakChaplain: 2, griffinSentinel: 2, inspiringCaptain: 2,
+    savannahLions: 3, dawnwingMarshal: 2, daybreakChaplain: 2, griffinSentinel: 2, inspiringCaptain: 2,
     gallantCavalry: 2, cavalryDrillmaster: 2, serraAngel: 2, angelOfTheDawn: 1, concordiaPegasus: 1,
-    raiseTheAlarm: 2, momentOfHeroism: 1, revitalize: 1,
+    raiseTheAlarm: 2, momentOfHeroism: 1, inspiredCharge: 1,
   }),
   /** White Recruits: the lighter white build. */
   whiteRecruits: deck({
@@ -37,7 +37,7 @@ export const REAL_DECKS = Object.freeze({
   /** Black Removal: deathtouch, lifelink and kill spells. */
   blackRemoval: deck({
     swamp: 17,
-    childOfNight: 3, vampireOfTheDireMoon: 2, walkingCorpse: 2, fetidImp: 2, doomedDissenter: 1,
+    childOfNight: 3, vampireOfTheDireMoon: 2, walkingCorpse: 2, fetidImp: 2, tatteredMummy: 1,
     vampireNighthawk: 2, skeletonArcher: 2, twoHeadedZombie: 2,
     stab: 1, boneSplinters: 1, villageRites: 1, murder: 2, herosDownfall: 1, bloodDivination: 1,
   }),
@@ -51,8 +51,8 @@ export const REAL_DECKS = Object.freeze({
   redBurn: deck({
     mountain: 17,
     fanaticalFirebrand: 3, viashinoPyromancer: 2, boggartBrute: 2, emberHauler: 2, hostileMinotaur: 2,
-    pitchburnDevils: 1, fireElemental: 1, havocDevils: 1, shivanDragon: 1,
-    shock: 3, lightningStrike: 2, electrify: 1, lavaAxe: 1, thrillOfPossibility: 1,
+    pitchburnDevils: 1, fireElemental: 1, shivanDragon: 1,
+    shock: 3, lightningStrike: 2, electrify: 1, lavaAxe: 1, boltwave: 1, burnBright: 1,
   }),
   /** Red Raiders: the lighter red build. */
   redRaiders: deck({
@@ -74,4 +74,5 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   'gigantosaurus', 'pelakkaWurm', 'rhoxOracle', 'mammothSpider',
   'mysticArchaeologist', 'cancel', 'negate', 'moatPiranhas', 'keenGlidemaster', 'wishcoinCrab',
   'maraudersAxe', 'shortSword', 'stoneGolem', 'palladiumMyr', 'manalith',
+  'dayOfJudgment', 'preposterousProportions', 'stormCaller', 'chandrasMagmutt', 'pyroclasticElemental',
 ]);

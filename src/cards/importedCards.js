@@ -241,6 +241,41 @@ export const IMPORTED_CARDS = {
     "scryfallId": "32b7438d-e905-4627-9299-e2224377c8e7",
     "scryfallUri": "https://scryfall.com/card/m19/131/boggart-brute?utm_source=api"
   },
+  "boltwave": {
+    "id": "boltwave",
+    "name": "Boltwave",
+    "manaCost": {
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "dealDamage",
+        "amount": 3,
+        "affected": "eachOpponent"
+      }
+    ],
+    "text": "Boltwave deals 3 damage to each opponent.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/d/8d1ec351-5e70-4eb2-b590-6bff94ef8178.jpg?1783909105",
+      "card": "https://cards.scryfall.io/normal/front/8/d/8d1ec351-5e70-4eb2-b590-6bff94ef8178.jpg?1783909105"
+    },
+    "artist": "Caio Monteiro",
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "79",
+    "typeLine": "Sorcery",
+    "oracleText": "Boltwave deals 3 damage to each opponent.",
+    "scryfallId": "8d1ec351-5e70-4eb2-b590-6bff94ef8178",
+    "scryfallUri": "https://scryfall.com/card/fdn/79/boltwave?utm_source=api"
+  },
   "boneSplinters": {
     "id": "boneSplinters",
     "name": "Bone Splinters",
@@ -277,6 +312,43 @@ export const IMPORTED_CARDS = {
     "oracleText": "As an additional cost to cast this spell, sacrifice a creature.\nDestroy target creature.",
     "scryfallId": "7e75a7e9-902a-4733-8cd4-767247174a4c",
     "scryfallUri": "https://scryfall.com/card/m20/92/bone-splinters?utm_source=api"
+  },
+  "burnBright": {
+    "id": "burnBright",
+    "name": "Burn Bright",
+    "manaCost": {
+      "generic": 2,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "pump",
+        "power": 2,
+        "toughness": 0,
+        "affected": "eachCreatureYouControl"
+      }
+    ],
+    "text": "Creatures you control get +2/+0 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/1/f19b4a80-41e1-4c5f-869a-682f08543f12.jpg?1783930694",
+      "card": "https://cards.scryfall.io/normal/front/f/1/f19b4a80-41e1-4c5f-869a-682f08543f12.jpg?1783930694"
+    },
+    "artist": "Scott Murphy",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m21",
+    "collectorNumber": "134",
+    "typeLine": "Instant",
+    "oracleText": "Creatures you control get +2/+0 until end of turn.",
+    "scryfallId": "f19b4a80-41e1-4c5f-869a-682f08543f12",
+    "scryfallUri": "https://scryfall.com/card/m21/134/burn-bright?utm_source=api"
   },
   "cancel": {
     "id": "cancel",
@@ -396,6 +468,54 @@ export const IMPORTED_CARDS = {
     "oracleText": "",
     "scryfallId": "bae6eb55-4bf9-4418-b667-a9a761f91ef9",
     "scryfallUri": "https://scryfall.com/card/m19/171/centaur-courser?utm_source=api"
+  },
+  "chandrasMagmutt": {
+    "id": "chandrasMagmutt",
+    "name": "Chandra's Magmutt",
+    "manaCost": {
+      "generic": 1,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elemental",
+      "Dog"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: This creature deals 1 damage to target player or planeswalker.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 1
+        },
+        "target": "player"
+      }
+    ],
+    "text": "{T}: This creature deals 1 damage to target player or planeswalker.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/1/91d3e366-4da5-42c8-bbd5-a0c178c0da28.jpg?1783930694",
+      "card": "https://cards.scryfall.io/normal/front/9/1/91d3e366-4da5-42c8-bbd5-a0c178c0da28.jpg?1783930694"
+    },
+    "artist": "Kimonas Theodossiou",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m21",
+    "collectorNumber": "137",
+    "typeLine": "Creature — Elemental Dog",
+    "oracleText": "{T}: This creature deals 1 damage to target player or planeswalker.",
+    "scryfallId": "91d3e366-4da5-42c8-bbd5-a0c178c0da28",
+    "scryfallUri": "https://scryfall.com/card/m21/137/chandras-magmutt?utm_source=api"
   },
   "childOfNight": {
     "id": "childOfNight",
@@ -553,6 +673,61 @@ export const IMPORTED_CARDS = {
     "scryfallId": "600d3517-e370-47ae-ac4f-c7ef8995a89c",
     "scryfallUri": "https://scryfall.com/card/m21/12/concordia-pegasus?utm_source=api"
   },
+  "dawnwingMarshal": {
+    "id": "dawnwingMarshal",
+    "name": "Dawnwing Marshal",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Cat",
+      "Soldier"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "keywords": [
+      "flying"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{4}{W}: Creatures you control get +1/+1 until end of turn.",
+        "cost": {
+          "mana": {
+            "generic": 4,
+            "W": 1
+          }
+        },
+        "effect": {
+          "type": "pump",
+          "power": 1,
+          "toughness": 1,
+          "affected": "eachCreatureYouControl"
+        }
+      }
+    ],
+    "text": "Flying\n{4}{W}: Creatures you control get +1/+1 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/0/807db84f-addb-4ef0-b9ba-32b3e1bced3d.jpg?1783908942",
+      "card": "https://cards.scryfall.io/normal/front/8/0/807db84f-addb-4ef0-b9ba-32b3e1bced3d.jpg?1783908942"
+    },
+    "artist": "Aldo Domínguez",
+    "colors": [
+      "W"
+    ],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "570",
+    "typeLine": "Creature — Cat Soldier",
+    "oracleText": "Flying\n{4}{W}: Creatures you control get +1/+1 until end of turn.",
+    "scryfallId": "807db84f-addb-4ef0-b9ba-32b3e1bced3d",
+    "scryfallUri": "https://scryfall.com/card/fdn/570/dawnwing-marshal?utm_source=api"
+  },
   "daybreakChaplain": {
     "id": "daybreakChaplain",
     "name": "Daybreak Chaplain",
@@ -589,6 +764,41 @@ export const IMPORTED_CARDS = {
     "oracleText": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)",
     "scryfallId": "c2f461b1-c801-4f0c-8fd7-fe68b6078ac6",
     "scryfallUri": "https://scryfall.com/card/m19/10/daybreak-chaplain?utm_source=api"
+  },
+  "dayOfJudgment": {
+    "id": "dayOfJudgment",
+    "name": "Day of Judgment",
+    "manaCost": {
+      "generic": 2,
+      "W": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "destroy",
+        "affected": "eachCreature"
+      }
+    ],
+    "text": "Destroy all creatures.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/6/96e84bdc-8a9a-4c58-ba8b-9f052fd60069.jpg?1783909086",
+      "card": "https://cards.scryfall.io/normal/front/9/6/96e84bdc-8a9a-4c58-ba8b-9f052fd60069.jpg?1783909086"
+    },
+    "artist": "Vincent Proce",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "fdn",
+    "collectorNumber": "140",
+    "typeLine": "Sorcery",
+    "oracleText": "Destroy all creatures.",
+    "scryfallId": "96e84bdc-8a9a-4c58-ba8b-9f052fd60069",
+    "scryfallUri": "https://scryfall.com/card/fdn/140/day-of-judgment?utm_source=api"
   },
   "divination": {
     "id": "divination",
@@ -1368,6 +1578,43 @@ export const IMPORTED_CARDS = {
     "scryfallId": "ad6d0a11-3a9c-4de0-9a46-06d2b9356eb7",
     "scryfallUri": "https://scryfall.com/card/m19/147/hostile-minotaur?utm_source=api"
   },
+  "inspiredCharge": {
+    "id": "inspiredCharge",
+    "name": "Inspired Charge",
+    "manaCost": {
+      "generic": 2,
+      "W": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "pump",
+        "power": 2,
+        "toughness": 1,
+        "affected": "eachCreatureYouControl"
+      }
+    ],
+    "text": "Creatures you control get +2/+1 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/1/812cf63f-aa3d-405b-92e1-7ffa31352481.jpg?1783934605",
+      "card": "https://cards.scryfall.io/normal/front/8/1/812cf63f-aa3d-405b-92e1-7ffa31352481.jpg?1783934605"
+    },
+    "artist": "Wayne Reynolds",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "15",
+    "typeLine": "Instant",
+    "oracleText": "Creatures you control get +2/+1 until end of turn.",
+    "scryfallId": "812cf63f-aa3d-405b-92e1-7ffa31352481",
+    "scryfallUri": "https://scryfall.com/card/m19/15/inspired-charge?utm_source=api"
+  },
   "inspiringCaptain": {
     "id": "inspiringCaptain",
     "name": "Inspiring Captain",
@@ -1945,6 +2192,46 @@ export const IMPORTED_CARDS = {
     "scryfallId": "33b83158-78b4-425e-8379-be3ef038295c",
     "scryfallUri": "https://scryfall.com/card/m20/69/negate?utm_source=api"
   },
+  "overcome": {
+    "id": "overcome",
+    "name": "Overcome",
+    "manaCost": {
+      "generic": 3,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "pump",
+        "power": 2,
+        "toughness": 2,
+        "keywords": [
+          "trample"
+        ],
+        "affected": "eachCreatureYouControl"
+      }
+    ],
+    "text": "Creatures you control get +2/+2 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/1/718352b9-1a68-44a1-947b-34f525f21223.jpg?1783932960",
+      "card": "https://cards.scryfall.io/normal/front/7/1/718352b9-1a68-44a1-947b-34f525f21223.jpg?1783932960"
+    },
+    "artist": "Craig J Spearing",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "m20",
+    "collectorNumber": "186",
+    "typeLine": "Sorcery",
+    "oracleText": "Creatures you control get +2/+2 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "scryfallId": "718352b9-1a68-44a1-947b-34f525f21223",
+    "scryfallUri": "https://scryfall.com/card/m20/186/overcome?utm_source=api"
+  },
   "overrun": {
     "id": "overrun",
     "name": "Overrun",
@@ -2173,6 +2460,96 @@ export const IMPORTED_CARDS = {
     "oracleText": "({T}: Add {W}.)",
     "scryfallId": "0b1b55c1-d74b-4688-a3b8-8480d99524c7",
     "scryfallUri": "https://scryfall.com/card/m19/261/plains?utm_source=api"
+  },
+  "preposterousProportions": {
+    "id": "preposterousProportions",
+    "name": "Preposterous Proportions",
+    "manaCost": {
+      "generic": 5,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "pump",
+        "power": 10,
+        "toughness": 10,
+        "keywords": [
+          "vigilance"
+        ],
+        "affected": "eachCreatureYouControl"
+      }
+    ],
+    "text": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/c/acb65189-60e4-42e0-9fb1-da6b716b91d7.jpg?1783909096",
+      "card": "https://cards.scryfall.io/normal/front/a/c/acb65189-60e4-42e0-9fb1-da6b716b91d7.jpg?1783909096"
+    },
+    "artist": "Ben Wootten",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "fdn",
+    "collectorNumber": "109",
+    "typeLine": "Sorcery",
+    "oracleText": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
+    "scryfallId": "acb65189-60e4-42e0-9fb1-da6b716b91d7",
+    "scryfallUri": "https://scryfall.com/card/fdn/109/preposterous-proportions?utm_source=api"
+  },
+  "pyroclasticElemental": {
+    "id": "pyroclasticElemental",
+    "name": "Pyroclastic Elemental",
+    "manaCost": {
+      "generic": 3,
+      "R": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elemental"
+    ],
+    "power": 5,
+    "toughness": 4,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{1}{R}{R}: This creature deals 1 damage to target player.",
+        "cost": {
+          "mana": {
+            "generic": 1,
+            "R": 2
+          }
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 1
+        },
+        "target": "player"
+      }
+    ],
+    "text": "{1}{R}{R}: This creature deals 1 damage to target player.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/d/2d57f8b5-fde9-498d-82bf-34bfb2370703.jpg?1783932918",
+      "card": "https://cards.scryfall.io/normal/front/2/d/2d57f8b5-fde9-498d-82bf-34bfb2370703.jpg?1783932918"
+    },
+    "artist": "Svetlin Velinov",
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "set": "m20",
+    "collectorNumber": "296",
+    "typeLine": "Creature — Elemental",
+    "oracleText": "{1}{R}{R}: This creature deals 1 damage to target player.",
+    "scryfallId": "2d57f8b5-fde9-498d-82bf-34bfb2370703",
+    "scryfallUri": "https://scryfall.com/card/m20/296/pyroclastic-elemental?utm_source=api"
   },
   "raiseTheAlarm": {
     "id": "raiseTheAlarm",
@@ -2753,6 +3130,52 @@ export const IMPORTED_CARDS = {
     "scryfallId": "1b4de70a-729b-4566-b6f3-c76f551405a5",
     "scryfallUri": "https://scryfall.com/card/m20/240/stone-golem?utm_source=api"
   },
+  "stormCaller": {
+    "id": "stormCaller",
+    "name": "Storm Caller",
+    "manaCost": {
+      "generic": 2,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Ogre",
+      "Shaman"
+    ],
+    "power": 3,
+    "toughness": 2,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, it deals 2 damage to each opponent.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "dealDamage",
+          "amount": 2,
+          "affected": "eachOpponent"
+        }
+      }
+    ],
+    "text": "When this creature enters, it deals 2 damage to each opponent.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/1/b/1b6d123c-c16d-43fa-b183-8a59c7e1a11e.jpg?1783930617",
+      "card": "https://cards.scryfall.io/normal/front/1/b/1b6d123c-c16d-43fa-b183-8a59c7e1a11e.jpg?1783930617"
+    },
+    "artist": "Manuel Castañón",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m21",
+    "collectorNumber": "335",
+    "typeLine": "Creature — Ogre Shaman",
+    "oracleText": "When this creature enters, it deals 2 damage to each opponent.",
+    "scryfallId": "1b6d123c-c16d-43fa-b183-8a59c7e1a11e",
+    "scryfallUri": "https://scryfall.com/card/m21/335/storm-caller?utm_source=api"
+  },
   "swamp": {
     "id": "swamp",
     "name": "Swamp",
@@ -2794,6 +3217,52 @@ export const IMPORTED_CARDS = {
     "oracleText": "({T}: Add {B}.)",
     "scryfallId": "2bfe9801-b683-45d9-924c-6734110816bf",
     "scryfallUri": "https://scryfall.com/card/m19/269/swamp?utm_source=api"
+  },
+  "tatteredMummy": {
+    "id": "tatteredMummy",
+    "name": "Tattered Mummy",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Zombie",
+      "Jackal"
+    ],
+    "power": 1,
+    "toughness": 2,
+    "triggeredAbilities": [
+      {
+        "id": "dies",
+        "text": "When this creature dies, each opponent loses 2 life.",
+        "trigger": "dies",
+        "effect": {
+          "type": "loseLife",
+          "amount": 2,
+          "affected": "eachOpponent"
+        }
+      }
+    ],
+    "text": "When this creature dies, each opponent loses 2 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/a/6a27ce41-69e7-4b86-9b9c-1a724d0728e9.jpg?1783934484",
+      "card": "https://cards.scryfall.io/normal/front/6/a/6a27ce41-69e7-4b86-9b9c-1a724d0728e9.jpg?1783934484"
+    },
+    "artist": "Slawomir Maniak",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "295",
+    "typeLine": "Creature — Zombie Jackal",
+    "oracleText": "When this creature dies, each opponent loses 2 life.",
+    "scryfallId": "6a27ce41-69e7-4b86-9b9c-1a724d0728e9",
+    "scryfallUri": "https://scryfall.com/card/m19/295/tattered-mummy?utm_source=api"
   },
   "thornhideWolves": {
     "id": "thornhideWolves",

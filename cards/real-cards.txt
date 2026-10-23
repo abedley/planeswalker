@@ -85,6 +85,19 @@ Thrill of Possibility (M21)
 Fanatical Firebrand (FDN)
 Shivan Dragon (FDN)
 
+# Stall breakers: team pumps, damage straight to the opponent, a board wipe
+Inspired Charge (M19)
+Dawnwing Marshal (FDN)
+Day of Judgment (FDN)
+Overcome (M20)
+Preposterous Proportions (FDN)
+Burn Bright (M21)
+Boltwave (FDN)
+Storm Caller (M21)
+Chandra's Magmutt (M21)
+Pyroclastic Elemental (M20)
+Tattered Mummy (M19)
+
 # Rewards only
 Gigantosaurus (M19)
 Pelakka Wurm (M19)

@@ -231,7 +231,7 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 86 cards from M19, M20, M21 and
+`cards/real-cards.txt` lists the real cards the campaign uses: 97 cards from M19, M20, M21 and
 Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
 their art, in `CARD_PRESENTATION`.
 

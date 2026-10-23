@@ -71,6 +71,10 @@ const WINDOW = Object.freeze({
  * `attacking` is how it attacks: 'lookahead' (the default) by planLookaheadAttack,
  * thinking for up to `attackBudgetMs` per attack if it's given (more time, deeper
  * looks), or `attackTurns` of its turns ahead (default 3); 'basic' by planAttack.
+ * `noise: { amount, random }` makes it play less predictably, for search rollouts
+ * (see rolloutPolicies): each main-phase or instant idea's score is scaled by up to
+ * ±`amount`, and with probability `amount` an attack or block declaration follows
+ * another plan (another strategy's attack, another BLOCK_PLAN's blocks).
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -85,6 +89,7 @@ export class BasicAIController extends EventEmitter {
   #attackBudgetMs;
   #attackTurns;
   #attackQuick;
+  #noise;
   #timer = null;
   #unsubscribers;
   /**
@@ -96,6 +101,7 @@ export class BasicAIController extends EventEmitter {
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
     blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3, attackQuick = true,
+    noise = null,
   }) {
     super();
     if (blocking !== BLOCKING.GREEDY && !Object.values(BLOCK_PLAN).includes(blocking)) throw new Error(`Unknown block plan: ${blocking}`);
@@ -104,6 +110,7 @@ export class BasicAIController extends EventEmitter {
     this.#attackBudgetMs = attackBudgetMs;
     this.#attackTurns = attackTurns;
     this.#attackQuick = attackQuick;
+    this.#noise = noise?.amount > 0 ? noise : null;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -153,16 +160,17 @@ export class BasicAIController extends EventEmitter {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
         // Planned once per declaration: it takes an action per attacker to carry out.
-        this.#declaration.plan ??= passive ? []
-          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns, quick: this.#attackQuick }).attackers
-            : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
+        this.#declaration.plan ??= passive ? [] : this.#planAttack(state, me, candidates);
         return moveTowards(decision.attackers, this.#declaration.plan, find);
       }
       case DECISION.DECLARE_BLOCKERS: {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
         // Planned once per declaration, as for attacks.
-        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, { blocking: this.#blocking, heuristics: this.#heuristics });
+        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, {
+          blocking: this.#swerves() ? this.#pick(Object.values(BLOCK_PLAN).filter((p) => p !== this.#blocking)) : this.#blocking,
+          heuristics: this.#heuristics,
+        });
         return chooseBlock(decision.blocks, this.#declaration.plan, find);
       }
       case DECISION.ASSIGN_COMBAT_DAMAGE:
@@ -182,6 +190,23 @@ export class BasicAIController extends EventEmitter {
     if (passive) return find(ACTION.PASS_PRIORITY);
     return find(ACTION.PLAY_LAND) ?? this.#act(state, mine) ?? find(ACTION.PASS_PRIORITY);
   }
+
+  /** The attack: by lookahead or planAttack, or, when the noise swerves, another strategy's. */
+  #planAttack(state, me, candidates) {
+    if (this.#attacking !== 'lookahead') {
+      return planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
+    }
+    const plan = planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns, quick: this.#attackQuick });
+    if (!this.#swerves()) return plan.attackers;
+    const key = (ids) => [...ids].sort().join();
+    const others = Object.values(plan.strategies).filter((ids) => key(ids) !== key(plan.attackers));
+    return others.length ? this.#pick(others) : plan.attackers;
+  }
+
+  /** Whether the noise makes this declaration follow another plan. */
+  #swerves() { return this.#noise !== null && this.#noise.random() < this.#noise.amount; }
+
+  #pick(list) { return list[Math.floor(this.#noise.random() * list.length)]; }
 
   /** What to do with priority: cast or activate the best thing for this moment, tapping mana first if needed. */
   #act(state, mine) {
@@ -222,8 +247,12 @@ export class BasicAIController extends EventEmitter {
     const preCombat = window === WINDOW.MAIN && state.phase === PHASE.PRECOMBAT_MAIN;
     const available = manaPoolTotal(player.manaPool) + sources.length;
     const result = [];
+    const noise = this.#noise;
     const add = (candidate) => {
-      if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) result.push(candidate);
+      if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) {
+        if (noise) candidate.score *= 1 + noise.amount * (2 * noise.random() - 1);
+        result.push(candidate);
+      }
     };
 
     for (const card of player.hand) {

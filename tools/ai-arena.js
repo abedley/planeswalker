@@ -95,7 +95,11 @@ export function contestant(name) {
       return (state) => ai.chooseAction(state);
     };
   }
-  const keys = { d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans', e: 'evaluation', rb: 'rootBeam' };
+  const keys = {
+    d: 'determinizations', b: 'budgetMs', h: 'horizon', m: 'margin', hp: 'heuristicPlans', e: 'evaluation', rb: 'rootBeam',
+    // rn=0.1: noise in the rollouts (see rolloutPolicies); inf=1: guesses weighed by what the opponent did (see determinize).
+    rn: 'rolloutNoise', inf: 'inference',
+  };
   // la=<depth>, bw=<beam>: pruned lookahead (see lookahead.js).
   const pairs = Object.fromEntries(settings.split(',').map((pair) => pair.split('=')));
   // bo=0: the opponent doesn't branch (the basic AI's choice stands for theirs).

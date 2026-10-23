@@ -198,6 +198,8 @@ export class Game extends EventEmitter {
         emblems: (emblems[id] ?? DEFAULT_EMBLEMS).map((emblemId, i) => this.#createEmblem(emblemId, id, i + 1)),
         life: startingLife[id] ?? STARTING_LIFE,
         landsPlayedThisTurn: 0,
+        // What the other players have seen of the cards in this hand (see #noteHand).
+        handNotes: {},
         attemptedDrawFromEmptyLibrary: false,
         hasLost: false,
       });
@@ -442,6 +444,9 @@ export class Game extends EventEmitter {
    *   opponent's hand and library together. (Knowing an opponent's deck list, but
    *   not where each card is, is the assumption.)
    * - no random number generator state, so future shuffles are unknown too.
+   * - what's public about an opponent's hand: cards it got back from the
+   *   battlefield stay in `hand`, and `handInfo` has one `{ noLand, heldWithMana }`
+   *   per hidden card (see #noteHand), sorted. `handSize` counts both.
    * Pass it to determinize() (src/ai/determinize.js) to get playable guesses.
    */
   getPlayerView(playerId) {
@@ -455,10 +460,16 @@ export class Game extends EventEmitter {
       const unknown = [...zone.library];
       zone.librarySize = zone.library.length;
       zone.library = [];
+      const notes = zone.handNotes ?? {};
+      delete zone.handNotes;
       if (id !== playerId) {
-        unknown.push(...zone.hand);
+        const hidden = zone.hand.filter((card) => !notes[card.id]?.revealed);
+        unknown.push(...hidden);
         zone.handSize = zone.hand.length;
-        zone.hand = [];
+        zone.hand = zone.hand.filter((card) => notes[card.id]?.revealed);
+        zone.handInfo = hidden
+          .map((card) => ({ noLand: notes[card.id]?.noLand ?? false, heldWithMana: notes[card.id]?.heldWithMana ?? 0 }))
+          .sort((a, b) => a.noLand - b.noLand || a.heldWithMana - b.heldWithMana);
       }
       snapshot.unknownCards[id] = unknown.map(hide).sort(byCardId);
     }
@@ -1230,6 +1241,8 @@ export class Game extends EventEmitter {
       case EFFECT.RETURN_TO_HAND:
         for (const permanent of permanents()) {
           this.#moveFromBattlefield(permanent, 'hand');
+          // Everyone saw which card went back.
+          if (!permanent.token) this.#notesOf(permanent.ownerId)[permanent.id] = { revealed: true };
           this.#emitEvent('permanentReturnedToHand', {
             cardId: permanent.id, cardName: permanent.name, ownerId: permanent.ownerId, sourceId,
           });
@@ -1937,7 +1950,33 @@ export class Game extends EventEmitter {
     return { nextIndex: -1, skipped };
   }
 
+  /** The notes on a player's hand, kept to the cards still in it. */
+  #notesOf(playerId) {
+    const zone = this.#zones.get(playerId);
+    const inHand = new Set(zone.hand.map((c) => c.id));
+    zone.handNotes = Object.fromEntries(Object.entries(zone.handNotes ?? {}).filter(([id]) => inHand.has(id)));
+    return zone.handNotes;
+  }
+
+  /**
+   * At the end of a player's turn, what everyone could see about each card they
+   * kept in hand: `noLand` once they've ended a turn without playing a land while
+   * holding it, and `heldWithMana`, the most untapped lands they've ended a turn
+   * with while holding it. The AI may weigh its guesses by them (see determinize).
+   */
+  #noteHand(playerId) {
+    const zone = this.#zones.get(playerId);
+    const notes = this.#notesOf(playerId);
+    const untapped = this.#battlefield.filter((p) => p.controllerId === playerId && isLand(p) && !p.tapped).length;
+    for (const card of zone.hand) {
+      const note = (notes[card.id] ??= {});
+      if (zone.landsPlayedThisTurn === 0) note.noLand = true;
+      note.heldWithMana = Math.max(note.heldWithMana ?? 0, untapped);
+    }
+  }
+
   #beginTurn(activePlayerId) {
+    if (this.#activePlayerId && this.#zones.has(this.#activePlayerId)) this.#noteHand(this.#activePlayerId);
     this.#turn += 1;
     this.#activePlayerId = activePlayerId;
     this.#segmentIndex = -1;

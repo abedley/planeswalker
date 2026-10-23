@@ -6,6 +6,8 @@ import {
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
 import { determinize, determinizedGame } from '../src/ai/determinize.js';
+import { STEP } from '../src/engine/turnStructure.js';
+import { isLand } from '../src/cards/cards.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const cards = { ...SAMPLE_EFFECTS, ...SAMPLE_TRIGGERS };
@@ -142,4 +144,83 @@ test('reordering hidden cards doesn\'t change a player\'s view', () => {
   [snapshot.zones.p2.hand[0], snapshot.zones.p2.library[0]] = [snapshot.zones.p2.library[0], snapshot.zones.p2.hand[0]];
   const shuffled = Game.deserialize(snapshot);
   assert.deepEqual(shuffled.getPlayerView('p1'), game.getPlayerView('p1'));
+});
+
+/** Plays basic AIs from `game` until `found(game)`, or fails. */
+const playUntil = (game, found, steps = 6000) => {
+  const policies = basicPolicies();
+  for (let step = 0; step < steps && game.peekState().status === GAME_STATUS.IN_PROGRESS; step++) {
+    if (found(game)) return true;
+    const state = game.peekState();
+    const id = state.pendingDecision?.playerId ?? state.priorityPlayerId;
+    game.applyTrusted(policies[id](state) ?? state.validActions.find((a) => a.playerId === id));
+  }
+  return false;
+};
+
+test('a card returned to an opponent\'s hand stays known, and every guess keeps it there', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 40 && checked < 2; seed++) {
+    const game = new Game({ players, seed, cards: SAMPLE_EFFECTS, decks: { p1: SAMPLE_EFFECTS_DECK, p2: SAMPLE_EFFECTS_DECK }, silent: true });
+    game.start();
+    const bounced = () => Object.values(game.serialize().zones.p2.handNotes).some((n) => n.revealed);
+    if (!playUntil(game, bounced)) continue;
+    const real = game.serialize().zones.p2;
+    const known = real.hand.filter((c) => real.handNotes[c.id]?.revealed);
+    const view = game.getPlayerView('p1');
+    assert.deepEqual(view.zones.p2.hand, known);
+    assert.equal(view.zones.p2.handSize, real.hand.length);
+    assert.equal(view.zones.p2.handInfo.length, real.hand.length - known.length);
+    assert.equal(view.unknownCards.p2.length, real.library.length + real.hand.length - known.length);
+    const random = seededRandom(seed);
+    for (const inference of [false, true]) {
+      const guess = determinize(view, random, { inference });
+      assert.equal(guess.zones.p2.hand.length, real.hand.length);
+      for (const card of known) assert.ok(guess.zones.p2.hand.some((c) => c.id === card.id), card.name);
+    }
+    checked += 1;
+  }
+  assert.equal(checked, 2);
+});
+
+test('hands are noted at the end of each turn, before the next draw', () => {
+  const game = newGame(9, { silent: true });
+  game.start();
+  let turns = 0;
+  let before = new Set();
+  playUntil(game, (g) => {
+    const state = g.peekState();
+    if (state.step !== STEP.DRAW || state.activePlayerId !== 'p2' || state.playersPassed.length > 0) return false;
+    const zone = g.serialize().zones.p2;
+    // Just drawn: the newest card in hand has no notes; those in hand at its last
+    // draw were held through its turn.
+    const drawn = zone.hand.at(-1);
+    assert.equal(zone.handNotes[drawn.id], undefined);
+    for (const card of zone.hand.filter((c) => before.has(c.id))) assert.equal(typeof zone.handNotes[card.id]?.heldWithMana, 'number', card.name);
+    before = new Set(zone.hand.map((c) => c.id));
+    return ++turns >= 6;
+  });
+  assert.equal(turns, 6);
+});
+
+test('with inference, slots held through a turn without a land drop get no lands', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const game = newGame(seed, { silent: true });
+    game.start();
+    const view = () => game.getPlayerView('p1');
+    if (!playUntil(game, () => view().zones.p2.handInfo.some((slot) => slot.noLand))) continue;
+    // The basic AI always plays a land when it can, so those cards really are spells.
+    const real = game.serialize().zones.p2;
+    for (const card of real.hand) if (real.handNotes[card.id]?.noLand) assert.ok(!isLand(card), card.name);
+    const v = view();
+    const flagged = v.zones.p2.handInfo.filter((slot) => slot.noLand).length;
+    const random = seededRandom(seed);
+    for (let i = 0; i < 20; i++) {
+      const hand = determinize(v, random, { inference: { noLand: 0 } }).zones.p2.hand;
+      assert.ok(hand.filter((c) => !isLand(c)).length >= flagged);
+    }
+    checked += 1;
+  }
+  assert.ok(checked >= 3, `${checked} games with a missed land drop`);
 });

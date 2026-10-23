@@ -824,6 +824,9 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
 - **Trying it:** it's opt-in, `BasicAIController({ attacking: 'lookahead' })` (arena:
   `basic:attack=lookahead`).
 - **Speed:** within a decision, it caches the combats it predicts.
+- **In the search AI:** `attacking: 'lookahead'` (`searchPolicy`, `SearchAIController`; arena:
+  `search:at=lookahead`) makes the lookahead's attack the search's default, and offers each
+  strategy's attack as a candidate. Its simulations keep the basic AI's attacks.
 - **Thinking time:** with `budgetMs` (`attackBudgetMs`; arena: `think=<ms>`), it thinks for
   about that long. It looks 1, 2, 3, ... turns ahead (up to 8), each time trying more plans:
   - the strategies
@@ -836,6 +839,7 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
 | --- | --- | --- |
 | basic with lookahead attacks vs basic | 2640 | 52.1% (50.2–54.0%) |
 | lookahead attacks thinking up to 50 ms vs without a budget | 1320 | 50.7% (48.0–53.4%) |
+| search with lookahead attacks vs search, 150 ms, real decks | 400 | 51.2% (46.4–56.1%) |
 
 It wins or ties on 9 of the 11 decks. Its games run longer, as it holds back more: green's go from
 22 to 31 turns. Its decisions take about 1 ms on average on the biggest boards (the keyword

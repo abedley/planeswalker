@@ -22,7 +22,7 @@ function rng(seed) {
     return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
   };
 }
-const KEYWORDS = [FIRST_STRIKE, DOUBLE_STRIKE, DEATHTOUCH, TRAMPLE, LIFELINK, FLYING, REACH, MENACE];
+const KEYWORDS = [FIRST_STRIKE, DOUBLE_STRIKE, DEATHTOUCH, TRAMPLE, LIFELINK, FLYING, REACH, MENACE, KEYWORD.CANT_BLOCK, KEYWORD.CANT_BE_BLOCKED];
 function randomCreature(random, rate = 0.12) {
   const toughness = 1 + Math.floor(random() * 6);
   const keywords = KEYWORDS.filter(() => random() < rate);

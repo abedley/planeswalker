@@ -1192,6 +1192,8 @@ export class Game extends EventEmitter {
       case AFFECTED.EACH_CREATURE: return creatures.map((p) => p.id);
       case AFFECTED.EACH_CREATURE_YOU_CONTROL:
         return creatures.filter((p) => p.controllerId === controllerId).map((p) => p.id);
+      case AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL:
+        return creatures.filter((p) => p.controllerId !== controllerId).map((p) => p.id);
       // 113.7a: if the source has left the battlefield, an effect on "this permanent" does nothing.
       case AFFECTED.SOURCE: return this.#permanent(sourceId) ? [sourceId] : [];
       default: throw new Error(`Unknown affected: ${effect.affected}`);
@@ -1600,6 +1602,8 @@ export class Game extends EventEmitter {
   }
 
   #canBlock(blocker, attacker) {
+    // 509.1b: restrictions on blocking ("can't block", "can't be blocked").
+    if (hasKeyword(blocker, KEYWORD.CANT_BLOCK) || hasKeyword(attacker, KEYWORD.CANT_BE_BLOCKED)) return false;
     // 702.9b: a creature with flying can't be blocked except by creatures with flying or reach (702.17b).
     if (hasKeyword(attacker, KEYWORD.FLYING)) {
       return hasKeyword(blocker, KEYWORD.FLYING) || hasKeyword(blocker, KEYWORD.REACH);

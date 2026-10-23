@@ -38,6 +38,7 @@ export function creatureValue(creature) {
 /** Whether `blocker` may block `attacker` (702.9b, 702.17b); menace is a rule about the whole block. */
 export function canBlock(blocker, attacker) {
   if (!isCreature(blocker) || blocker.tapped) return false;
+  if (has(blocker, KEYWORD.CANT_BLOCK) || has(attacker, KEYWORD.CANT_BE_BLOCKED)) return false;
   if (has(attacker, KEYWORD.FLYING)) return has(blocker, KEYWORD.FLYING) || has(blocker, KEYWORD.REACH);
   return true;
 }

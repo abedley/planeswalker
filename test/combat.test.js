@@ -4,12 +4,14 @@ import {
   Game, ACTION, DECISION, PHASE, SAMPLE_CARDS, KEYWORD, CARD_TYPE,
   passPriority, castSpell, toggleAttacker, confirmAttackers, setBlocker, confirmBlockers,
 } from '../src/index.js';
-import { resolveCombat, planAttack, planBlocks, creatureValue } from '../src/ai/combat.js';
+import { resolveCombat, planAttack, planBlocks, creatureValue, canBlock } from '../src/ai/combat.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 // The keyword sampler's creatures, made free so any of them can be cast on turn 1.
 const FREE = Object.fromEntries(Object.entries(SAMPLE_CARDS).map(([id, card]) => [id, { ...card, manaCost: {} }]));
 FREE.ogre = { id: 'ogre', name: 'Ogre', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 3, toughness: 3, keywords: [] };
+FREE.sneak = { ...FREE.ogre, id: 'sneak', name: 'Sneak', keywords: [KEYWORD.CANT_BE_BLOCKED] };
+FREE.coward = { ...FREE.ogre, id: 'coward', name: 'Coward', keywords: [KEYWORD.CANT_BLOCK] };
 
 const state = (game) => game.getState();
 const passRound = (game) => {
@@ -154,4 +156,14 @@ test('blocks: kills attackers, trades up, and chumps only to survive', () => {
   const plan = planBlocks(board([ogre, ...bears], { attackers: attack(['ogre']) }), 'p2', always);
   assert.deepEqual(plan, { b1: 'ogre', b2: 'ogre' });
   assert.ok(creatureValue(ogre) > creatureValue(bear));
+});
+
+test("creatures that can't block, and attackers that can't be blocked, aren't blocked", () => {
+  assert.notEqual(engineCombat('ogre', ['ogre']), null);
+  assert.equal(engineCombat('sneak', ['ogre']), null);
+  assert.equal(engineCombat('ogre', ['coward']), null);
+  const permanent = (id) => ({ ...FREE[id], tapped: false, damage: 0 });
+  assert.equal(canBlock(permanent('ogre'), permanent('sneak')), false);
+  assert.equal(canBlock(permanent('coward'), permanent('ogre')), false);
+  assert.equal(canBlock(permanent('ogre'), permanent('ogre')), true);
 });

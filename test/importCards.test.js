@@ -103,14 +103,14 @@ test('reports variable power/toughness, unsupported keywords and mana symbols', 
 test('importCards merges supported cards and reports the rest', () => {
   const existing = { grizzlyBears: { id: 'grizzlyBears', name: 'Old Bears' } };
   const { cards, imported, updated, skipped } = importCards(
-    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.signInBlood, FIXTURES.llanowarElves],
+    [FIXTURES.serraAngel, FIXTURES.grizzlyBears, FIXTURES.royalAssassin, FIXTURES.llanowarElves],
     existing,
   );
   assert.deepEqual(imported, ['Serra Angel']);
   assert.deepEqual(updated, ['Grizzly Bears']);
   assert.deepEqual(Object.keys(cards).sort(), ['grizzlyBears', 'serraAngel']);
   assert.equal(cards.grizzlyBears.name, 'Grizzly Bears');
-  assert.deepEqual(skipped.map((s) => s.name), ['Sign in Blood', 'Llanowar Elves']);
+  assert.deepEqual(skipped.map((s) => s.name), ['Royal Assassin', 'Llanowar Elves']);
   assert.match(skipped[1].problems[0], /defined by hand/);
   assert.equal(existing.grizzlyBears.name, 'Old Bears'); // not mutated
 });
@@ -282,7 +282,6 @@ test('converts activated abilities with common costs and effects', () => {
 
 test('reports costs and effects the engine can\'t do', () => {
   assert.deepEqual(problems('royalAssassin'), ['Unsupported rules text: "{T}: Destroy target tapped creature."']);
-  assert.deepEqual(problems('signInBlood'), ['Unsupported rules text: "Target player draws two cards and loses 2 life."']);
   // Made up, for the two-target check.
   const twoTargets = {
     ...FIXTURES.naturalize, name: 'Double Shatter', oracle_text: 'Destroy target artifact. Destroy target enchantment.',
@@ -293,6 +292,38 @@ test('reports costs and effects the engine can\'t do', () => {
   const exileCost = { ...FIXTURES.greed, name: 'Grim Ledger', oracle_text: 'Exile a card from your graveyard: Draw a card.' };
   assert.deepEqual(convertScryfallCard(exileCost).problems, [
     'Unsupported cost: "Exile a card from your graveyard".',
+  ]);
+});
+
+test('reads blocking restrictions', () => {
+  const card = (base, name, text) => convertScryfallCard({ ...FIXTURES[base], name, oracle_text: text }).definition;
+  assert.deepEqual(card('grizzlyBears', 'Craven Bears', "This creature can't block.").keywords, ["can't block"]);
+  assert.deepEqual(card('grizzlyBears', 'Sneaky Bears', "Sneaky Bears can't be blocked.").keywords, ["can't be blocked"]);
+  const panic = card('naturalize', 'Panic', "Target creature can't block this turn.");
+  assert.deepEqual(panic.effects, [{ type: 'pump', keywords: ["can't block"] }]);
+  assert.equal(panic.target, TARGET.CREATURE);
+  assert.deepEqual(card('naturalize', 'Rout', "Creatures your opponents control can't block this turn.").effects, [
+    { type: 'pump', keywords: ["can't block"], affected: AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL },
+  ]);
+  assert.deepEqual(card('naturalize', 'Slip Through', "Target creature gets +2/+0 and can't be blocked this turn.").effects, [
+    { type: 'pump', power: 2, toughness: 0, keywords: ["can't be blocked"] },
+  ]);
+});
+
+test('reads sentences of two effects joined by "and"', () => {
+  // Sign in Blood: the second effect takes the first's subject, the same target.
+  const signInBlood = convert('signInBlood').definition;
+  assert.deepEqual(signInBlood.effects.map((e) => [e.type, e.affected]), [['drawCards', AFFECTED.TARGET], ['loseLife', AFFECTED.TARGET]]);
+  assert.equal(signInBlood.target, TARGET.PLAYER);
+  const card = (base, name, text) => convertScryfallCard({ ...FIXTURES[base], name, oracle_text: text });
+  const drain = card('grizzlyBears', 'Drain Bears', 'When this creature enters, target opponent loses 2 life and you gain 2 life.').definition;
+  assert.deepEqual(drain.triggeredAbilities[0].effects.map((e) => [e.type, e.amount]), [['loseLife', 2], ['gainLife', 2]]);
+  assert.equal(drain.triggeredAbilities[0].target, TARGET.OPPONENT);
+  const ledger = card('naturalize', 'Dark Ledger', 'You draw two cards and lose 2 life.').definition;
+  assert.deepEqual(ledger.effects.map((e) => [e.type, e.affected ?? null]), [['drawCards', null], ['loseLife', null]]);
+  // Two different targets are still one too many.
+  assert.deepEqual(card('naturalize', 'Wreck', 'Destroy target artifact and target player loses 2 life.').problems, [
+    'More than one target isn\'t supported: "Destroy target artifact and target player loses 2 life."',
   ]);
 });
 

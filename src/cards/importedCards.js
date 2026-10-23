@@ -33,6 +33,46 @@ export const IMPORTED_CARDS = {
     "scryfallId": "c7f2014a-fbc9-447c-a440-e06d01066bb9",
     "scryfallUri": "https://scryfall.com/card/fdn/150/aegis-turtle?utm_source=api"
   },
+  "agonizingSyphon": {
+    "id": "agonizingSyphon",
+    "name": "Agonizing Syphon",
+    "manaCost": {
+      "generic": 3,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "dealDamage",
+        "amount": 3
+      },
+      {
+        "type": "gainLife",
+        "amount": 3
+      }
+    ],
+    "target": "any",
+    "text": "Agonizing Syphon deals 3 damage to any target and you gain 3 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/d/0d8efd95-1c2f-4dd1-b70b-3cfb10ff3a28.jpg?1783933001",
+      "card": "https://cards.scryfall.io/normal/front/0/d/0d8efd95-1c2f-4dd1-b70b-3cfb10ff3a28.jpg?1783933001"
+    },
+    "artist": "Seb McKinnon",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "83",
+    "typeLine": "Sorcery",
+    "oracleText": "Agonizing Syphon deals 3 damage to any target and you gain 3 life.",
+    "scryfallId": "0d8efd95-1c2f-4dd1-b70b-3cfb10ff3a28",
+    "scryfallUri": "https://scryfall.com/card/m20/83/agonizing-syphon?utm_source=api"
+  },
   "airElemental": {
     "id": "airElemental",
     "name": "Air Elemental",
@@ -1196,6 +1236,58 @@ export const IMPORTED_CARDS = {
     "scryfallId": "fcca2f76-3db9-472b-b78e-a87b81e31d0a",
     "scryfallUri": "https://scryfall.com/card/m19/141/fire-elemental?utm_source=api"
   },
+  "frilledSeaSerpent": {
+    "id": "frilledSeaSerpent",
+    "name": "Frilled Sea Serpent",
+    "manaCost": {
+      "generic": 4,
+      "U": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Serpent"
+    ],
+    "power": 4,
+    "toughness": 6,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{5}{U}{U}: This creature can't be blocked this turn.",
+        "cost": {
+          "mana": {
+            "generic": 5,
+            "U": 2
+          }
+        },
+        "effect": {
+          "type": "pump",
+          "keywords": [
+            "can't be blocked"
+          ],
+          "affected": "source"
+        }
+      }
+    ],
+    "text": "{5}{U}{U}: This creature can't be blocked this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/0/e0aa62c0-d24b-4bce-9f2b-d42402b0830c.jpg?1783934589",
+      "card": "https://cards.scryfall.io/normal/front/e/0/e0aa62c0-d24b-4bce-9f2b-d42402b0830c.jpg?1783934589"
+    },
+    "artist": "Steven Belledin",
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "56",
+    "typeLine": "Creature — Serpent",
+    "oracleText": "{5}{U}{U}: This creature can't be blocked this turn.",
+    "scryfallId": "e0aa62c0-d24b-4bce-9f2b-d42402b0830c",
+    "scryfallUri": "https://scryfall.com/card/m19/56/frilled-sea-serpent?utm_source=api"
+  },
   "gallantCavalry": {
     "id": "gallantCavalry",
     "name": "Gallant Cavalry",
@@ -1954,6 +2046,42 @@ export const IMPORTED_CARDS = {
     "scryfallId": "a2ca16ee-e415-4270-a453-47111d07a07f",
     "scryfallUri": "https://scryfall.com/card/m19/240/marauders-axe?utm_source=api"
   },
+  "mistCloakedHerald": {
+    "id": "mistCloakedHerald",
+    "name": "Mist-Cloaked Herald",
+    "manaCost": {
+      "U": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Merfolk",
+      "Warrior"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "keywords": [
+      "can't be blocked"
+    ],
+    "text": "This creature can't be blocked.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/7/574f73a7-9ff7-4ce3-9f56-002af968d35a.jpg?1791030997",
+      "card": "https://cards.scryfall.io/normal/front/5/7/574f73a7-9ff7-4ce3-9f56-002af968d35a.jpg?1791030997"
+    },
+    "artist": "Anthony Palumbo",
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "310",
+    "typeLine": "Creature — Merfolk Warrior",
+    "oracleText": "This creature can't be blocked.",
+    "scryfallId": "574f73a7-9ff7-4ce3-9f56-002af968d35a",
+    "scryfallUri": "https://scryfall.com/card/m19/310/mist-cloaked-herald?utm_source=api"
+  },
   "moatPiranhas": {
     "id": "moatPiranhas",
     "name": "Moat Piranhas",
@@ -2374,6 +2502,43 @@ export const IMPORTED_CARDS = {
     "scryfallId": "00906b47-6316-4e00-bbf5-b801ab583f4f",
     "scryfallUri": "https://scryfall.com/card/m19/192/pelakka-wurm?utm_source=api"
   },
+  "phantomWarrior": {
+    "id": "phantomWarrior",
+    "name": "Phantom Warrior",
+    "manaCost": {
+      "generic": 1,
+      "U": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Illusion",
+      "Warrior"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "keywords": [
+      "can't be blocked"
+    ],
+    "text": "This creature can't be blocked.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/1/1/11cbdf06-f6b5-4bd8-80bf-6d7e57649684.jpg?1783932908",
+      "card": "https://cards.scryfall.io/normal/front/1/1/11cbdf06-f6b5-4bd8-80bf-6d7e57649684.jpg?1783932908"
+    },
+    "artist": "Anna Podedworna",
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "316",
+    "typeLine": "Creature — Illusion Warrior",
+    "oracleText": "This creature can't be blocked.",
+    "scryfallId": "11cbdf06-f6b5-4bd8-80bf-6d7e57649684",
+    "scryfallUri": "https://scryfall.com/card/m20/316/phantom-warrior?utm_source=api"
+  },
   "pitchburnDevils": {
     "id": "pitchburnDevils",
     "name": "Pitchburn Devils",
@@ -2728,6 +2893,61 @@ export const IMPORTED_CARDS = {
     "scryfallId": "281f04d5-af45-4494-ac11-a605d3a06643",
     "scryfallUri": "https://scryfall.com/card/m19/198/rhox-oracle?utm_source=api"
   },
+  "roguesPassage": {
+    "id": "roguesPassage",
+    "name": "Rogue's Passage",
+    "supertypes": [],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForC",
+        "text": "{T}: Add {C}.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "C": 1
+          }
+        }
+      },
+      {
+        "id": "ability2",
+        "text": "{4}, {T}: Target creature can't be blocked this turn.",
+        "cost": {
+          "mana": {
+            "generic": 4
+          },
+          "tap": true
+        },
+        "effect": {
+          "type": "pump",
+          "keywords": [
+            "can't be blocked"
+          ]
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/2/a2a424ea-ef32-4ac5-8f8c-3ea1839f01d4.jpg?1783909045",
+      "card": "https://cards.scryfall.io/normal/front/a/2/a2a424ea-ef32-4ac5-8f8c-3ea1839f01d4.jpg?1783909045"
+    },
+    "artist": "Christine Choi",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "264",
+    "typeLine": "Land",
+    "oracleText": "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.",
+    "scryfallId": "a2a424ea-ef32-4ac5-8f8c-3ea1839f01d4",
+    "scryfallUri": "https://scryfall.com/card/fdn/264/rogues-passage?utm_source=api"
+  },
   "savannahLions": {
     "id": "savannahLions",
     "name": "Savannah Lions",
@@ -2936,6 +3156,62 @@ export const IMPORTED_CARDS = {
     "scryfallId": "973c166e-3e93-4ed5-b4c5-84dc158a8e4f",
     "scryfallUri": "https://scryfall.com/card/m21/236/short-sword?utm_source=api"
   },
+  "siegebreakerGiant": {
+    "id": "siegebreakerGiant",
+    "name": "Siegebreaker Giant",
+    "manaCost": {
+      "generic": 3,
+      "R": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Giant",
+      "Warrior"
+    ],
+    "power": 6,
+    "toughness": 3,
+    "keywords": [
+      "trample"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}{R}: Target creature can't block this turn.",
+        "cost": {
+          "mana": {
+            "generic": 3,
+            "R": 1
+          }
+        },
+        "effect": {
+          "type": "pump",
+          "keywords": [
+            "can't block"
+          ]
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\n{3}{R}: Target creature can't block this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/d/ede2b911-8eec-4993-ab1c-59b55dfb11b4.jpg?1783934545",
+      "card": "https://cards.scryfall.io/normal/front/e/d/ede2b911-8eec-4993-ab1c-59b55dfb11b4.jpg?1783934545"
+    },
+    "artist": "Even Amundsen",
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "157",
+    "typeLine": "Creature — Giant Warrior",
+    "oracleText": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\n{3}{R}: Target creature can't block this turn.",
+    "scryfallId": "ede2b911-8eec-4993-ab1c-59b55dfb11b4",
+    "scryfallUri": "https://scryfall.com/card/m19/157/siegebreaker-giant?utm_source=api"
+  },
   "skeletonArcher": {
     "id": "skeletonArcher",
     "name": "Skeleton Archer",
@@ -2981,6 +3257,62 @@ export const IMPORTED_CARDS = {
     "oracleText": "When this creature enters, it deals 1 damage to any target.",
     "scryfallId": "8fee5cc4-a686-4ce6-aa6b-1b8a88e6dea3",
     "scryfallUri": "https://scryfall.com/card/m19/118/skeleton-archer?utm_source=api"
+  },
+  "skymarchBloodletter": {
+    "id": "skymarchBloodletter",
+    "name": "Skymarch Bloodletter",
+    "manaCost": {
+      "generic": 2,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire",
+      "Soldier"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "keywords": [
+      "flying"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, target opponent loses 1 life and you gain 1 life.",
+        "trigger": "entersBattlefield",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 1,
+            "affected": "target"
+          },
+          {
+            "type": "gainLife",
+            "amount": 1
+          }
+        ],
+        "target": "opponent"
+      }
+    ],
+    "text": "Flying\nWhen this creature enters, target opponent loses 1 life and you gain 1 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/c/2c7f2740-a193-4b4c-af00-2dd22d74a4ba.jpg?1783934563",
+      "card": "https://cards.scryfall.io/normal/front/2/c/2c7f2740-a193-4b4c-af00-2dd22d74a4ba.jpg?1783934563"
+    },
+    "artist": "Tomasz Jedruszek",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "119",
+    "typeLine": "Creature — Vampire Soldier",
+    "oracleText": "Flying\nWhen this creature enters, target opponent loses 1 life and you gain 1 life.",
+    "scryfallId": "2c7f2740-a193-4b4c-af00-2dd22d74a4ba",
+    "scryfallUri": "https://scryfall.com/card/m19/119/skymarch-bloodletter?utm_source=api"
   },
   "skyscanner": {
     "id": "skyscanner",
@@ -3062,6 +3394,189 @@ export const IMPORTED_CARDS = {
     "oracleText": "Flying (This creature can't be blocked except by creatures with flying or reach.)",
     "scryfallId": "2f6b6cbc-b25c-4221-ae65-a29fcf504f2f",
     "scryfallUri": "https://scryfall.com/card/m19/75/snapping-drake?utm_source=api"
+  },
+  "sorinsThirst": {
+    "id": "sorinsThirst",
+    "name": "Sorin's Thirst",
+    "manaCost": {
+      "B": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "dealDamage",
+        "amount": 2
+      },
+      {
+        "type": "gainLife",
+        "amount": 2
+      }
+    ],
+    "target": "creature",
+    "text": "Sorin's Thirst deals 2 damage to target creature and you gain 2 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/0/c0dacbb2-21e1-4220-bf43-75a0729cdc60.jpg?1783932906",
+      "card": "https://cards.scryfall.io/normal/front/c/0/c0dacbb2-21e1-4220-bf43-75a0729cdc60.jpg?1783932906"
+    },
+    "artist": "Karl Kopinski",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "325",
+    "typeLine": "Instant",
+    "oracleText": "Sorin's Thirst deals 2 damage to target creature and you gain 2 life.",
+    "scryfallId": "c0dacbb2-21e1-4220-bf43-75a0729cdc60",
+    "scryfallUri": "https://scryfall.com/card/m20/325/sorins-thirst?utm_source=api"
+  },
+  "sovereignsBite": {
+    "id": "sovereignsBite",
+    "name": "Sovereign's Bite",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "loseLife",
+        "amount": 3,
+        "affected": "target"
+      },
+      {
+        "type": "gainLife",
+        "amount": 3
+      }
+    ],
+    "target": "player",
+    "text": "Target player loses 3 life and you gain 3 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/3/5326d251-bb91-4653-b1fa-44f14c4e0b88.jpg?1783934562",
+      "card": "https://cards.scryfall.io/normal/front/5/3/5326d251-bb91-4653-b1fa-44f14c4e0b88.jpg?1783934562"
+    },
+    "artist": "Volkan Baǵa",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "120",
+    "typeLine": "Sorcery",
+    "oracleText": "Target player loses 3 life and you gain 3 life.",
+    "scryfallId": "5326d251-bb91-4653-b1fa-44f14c4e0b88",
+    "scryfallUri": "https://scryfall.com/card/m19/120/sovereigns-bite?utm_source=api"
+  },
+  "sowerOfChaos": {
+    "id": "sowerOfChaos",
+    "name": "Sower of Chaos",
+    "manaCost": {
+      "generic": 3,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Devil"
+    ],
+    "power": 4,
+    "toughness": 3,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{2}{R}: Target creature can't block this turn.",
+        "cost": {
+          "mana": {
+            "generic": 2,
+            "R": 1
+          }
+        },
+        "effect": {
+          "type": "pump",
+          "keywords": [
+            "can't block"
+          ]
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "{2}{R}: Target creature can't block this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/f/7ff50606-491c-4946-8d03-719b01cfad77.jpg?1783909100",
+      "card": "https://cards.scryfall.io/normal/front/7/f/7ff50606-491c-4946-8d03-719b01cfad77.jpg?1783909100"
+    },
+    "artist": "Brian Valeza",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "fdn",
+    "collectorNumber": "95",
+    "typeLine": "Creature — Devil",
+    "oracleText": "{2}{R}: Target creature can't block this turn.",
+    "scryfallId": "7ff50606-491c-4946-8d03-719b01cfad77",
+    "scryfallUri": "https://scryfall.com/card/fdn/95/sower-of-chaos?utm_source=api"
+  },
+  "spiritOfMalevolence": {
+    "id": "spiritOfMalevolence",
+    "name": "Spirit of Malevolence",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Spirit"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "triggeredAbilities": [
+      {
+        "id": "dies",
+        "text": "When this creature dies, each opponent loses 1 life and you gain 1 life.",
+        "trigger": "dies",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 1,
+            "affected": "eachOpponent"
+          },
+          {
+            "type": "gainLife",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "text": "When this creature dies, each opponent loses 1 life and you gain 1 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/f/cf3765b7-11e2-4837-b5e5-ca24adc0e33c.jpg?1783930618",
+      "card": "https://cards.scryfall.io/normal/front/c/f/cf3765b7-11e2-4837-b5e5-ca24adc0e33c.jpg?1783930618"
+    },
+    "artist": "Josu Hernaiz",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m21",
+    "collectorNumber": "331",
+    "typeLine": "Creature — Spirit",
+    "oracleText": "When this creature dies, each opponent loses 1 life and you gain 1 life.",
+    "scryfallId": "cf3765b7-11e2-4837-b5e5-ca24adc0e33c",
+    "scryfallUri": "https://scryfall.com/card/m21/331/spirit-of-malevolence?utm_source=api"
   },
   "stab": {
     "id": "stab",
@@ -3175,6 +3690,59 @@ export const IMPORTED_CARDS = {
     "oracleText": "When this creature enters, it deals 2 damage to each opponent.",
     "scryfallId": "1b6d123c-c16d-43fa-b183-8a59c7e1a11e",
     "scryfallUri": "https://scryfall.com/card/m21/335/storm-caller?utm_source=api"
+  },
+  "suspiciousBookcase": {
+    "id": "suspiciousBookcase",
+    "name": "Suspicious Bookcase",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact",
+      "Creature"
+    ],
+    "subtypes": [
+      "Wall"
+    ],
+    "power": 0,
+    "toughness": 4,
+    "keywords": [
+      "defender"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}, {T}: Target creature can't be blocked this turn.",
+        "cost": {
+          "mana": {
+            "generic": 3
+          },
+          "tap": true
+        },
+        "effect": {
+          "type": "pump",
+          "keywords": [
+            "can't be blocked"
+          ]
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "Defender\n{3}, {T}: Target creature can't be blocked this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/c/ccf01421-856e-4cdd-8938-148928626f56.jpg?1783934508",
+      "card": "https://cards.scryfall.io/normal/front/c/c/ccf01421-856e-4cdd-8938-148928626f56.jpg?1783934508"
+    },
+    "artist": "Anastasia Ovchinnikova",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "246",
+    "typeLine": "Artifact Creature — Wall",
+    "oracleText": "Defender\n{3}, {T}: Target creature can't be blocked this turn.",
+    "scryfallId": "ccf01421-856e-4cdd-8938-148928626f56",
+    "scryfallUri": "https://scryfall.com/card/m19/246/suspicious-bookcase?utm_source=api"
   },
   "swamp": {
     "id": "swamp",
@@ -3525,6 +4093,99 @@ export const IMPORTED_CARDS = {
     "scryfallId": "7a960516-3864-4a7a-8117-d25dec0dd665",
     "scryfallUri": "https://scryfall.com/card/m20/78/unsummon?utm_source=api"
   },
+  "vampireInterloper": {
+    "id": "vampireInterloper",
+    "name": "Vampire Interloper",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire",
+      "Scout"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "keywords": [
+      "flying",
+      "can't block"
+    ],
+    "text": "Flying\nThis creature can't block.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/c/ac01d4eb-10ec-4bda-aa9b-04c74dabfcaf.jpg?1787562830",
+      "card": "https://cards.scryfall.io/normal/front/a/c/ac01d4eb-10ec-4bda-aa9b-04c74dabfcaf.jpg?1787562830"
+    },
+    "artist": "James Ryman",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "fdn",
+    "collectorNumber": "756",
+    "typeLine": "Creature — Vampire Scout",
+    "oracleText": "Flying\nThis creature can't block.",
+    "scryfallId": "ac01d4eb-10ec-4bda-aa9b-04c74dabfcaf",
+    "scryfallUri": "https://scryfall.com/card/fdn/756/vampire-interloper?utm_source=api"
+  },
+  "vampireNeonate": {
+    "id": "vampireNeonate",
+    "name": "Vampire Neonate",
+    "manaCost": {
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire"
+    ],
+    "power": 0,
+    "toughness": 3,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{2}, {T}: Each opponent loses 1 life and you gain 1 life.",
+        "cost": {
+          "mana": {
+            "generic": 2
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 1,
+            "affected": "eachOpponent"
+          },
+          {
+            "type": "gainLife",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "text": "{2}, {T}: Each opponent loses 1 life and you gain 1 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/1/6/167822a5-2ab5-42f5-afa4-562fe2d7501b.jpg?1783934560",
+      "card": "https://cards.scryfall.io/normal/front/1/6/167822a5-2ab5-42f5-afa4-562fe2d7501b.jpg?1783934560"
+    },
+    "artist": "Daarken",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "124",
+    "typeLine": "Creature — Vampire",
+    "oracleText": "{2}, {T}: Each opponent loses 1 life and you gain 1 life.",
+    "scryfallId": "167822a5-2ab5-42f5-afa4-562fe2d7501b",
+    "scryfallUri": "https://scryfall.com/card/m19/124/vampire-neonate?utm_source=api"
+  },
   "vampireNighthawk": {
     "id": "vampireNighthawk",
     "name": "Vampire Nighthawk",
@@ -3599,6 +4260,169 @@ export const IMPORTED_CARDS = {
     "oracleText": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
     "scryfallId": "b3c185b9-5d97-4a5a-af0b-8b9c44dcd235",
     "scryfallUri": "https://scryfall.com/card/m20/120/vampire-of-the-dire-moon?utm_source=api"
+  },
+  "vampireOpportunist": {
+    "id": "vampireOpportunist",
+    "name": "Vampire Opportunist",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{6}{B}: Each opponent loses 2 life and you gain 2 life.",
+        "cost": {
+          "mana": {
+            "generic": 6,
+            "B": 1
+          }
+        },
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 2,
+            "affected": "eachOpponent"
+          },
+          {
+            "type": "gainLife",
+            "amount": 2
+          }
+        ]
+      }
+    ],
+    "text": "{6}{B}: Each opponent loses 2 life and you gain 2 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/e/ced4b4a9-73a8-4135-b150-cd78d1558aca.jpg?1783932906",
+      "card": "https://cards.scryfall.io/normal/front/c/e/ced4b4a9-73a8-4135-b150-cd78d1558aca.jpg?1783932906"
+    },
+    "artist": "Jason Rainville",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "326",
+    "typeLine": "Creature — Vampire",
+    "oracleText": "{6}{B}: Each opponent loses 2 life and you gain 2 life.",
+    "scryfallId": "ced4b4a9-73a8-4135-b150-cd78d1558aca",
+    "scryfallUri": "https://scryfall.com/card/m20/326/vampire-opportunist?utm_source=api"
+  },
+  "vampireSovereign": {
+    "id": "vampireSovereign",
+    "name": "Vampire Sovereign",
+    "manaCost": {
+      "generic": 3,
+      "B": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire",
+      "Noble"
+    ],
+    "power": 3,
+    "toughness": 4,
+    "keywords": [
+      "flying"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, target opponent loses 3 life and you gain 3 life.",
+        "trigger": "entersBattlefield",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 3,
+            "affected": "target"
+          },
+          {
+            "type": "gainLife",
+            "amount": 3
+          }
+        ],
+        "target": "opponent"
+      }
+    ],
+    "text": "Flying\nWhen this creature enters, target opponent loses 3 life and you gain 3 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/e/ee338221-ead9-4b89-8b0c-12745c4ca13d.jpg?1783934560",
+      "card": "https://cards.scryfall.io/normal/front/e/e/ee338221-ead9-4b89-8b0c-12745c4ca13d.jpg?1783934560"
+    },
+    "artist": "Volkan Baǵa",
+    "colors": [
+      "B"
+    ],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "125",
+    "typeLine": "Creature — Vampire Noble",
+    "oracleText": "Flying\nWhen this creature enters, target opponent loses 3 life and you gain 3 life.",
+    "scryfallId": "ee338221-ead9-4b89-8b0c-12745c4ca13d",
+    "scryfallUri": "https://scryfall.com/card/m19/125/vampire-sovereign?utm_source=api"
+  },
+  "vampireSpawn": {
+    "id": "vampireSpawn",
+    "name": "Vampire Spawn",
+    "manaCost": {
+      "generic": 2,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Vampire"
+    ],
+    "power": 2,
+    "toughness": 3,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, each opponent loses 2 life and you gain 2 life.",
+        "trigger": "entersBattlefield",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 2,
+            "affected": "eachOpponent"
+          },
+          {
+            "type": "gainLife",
+            "amount": 2
+          }
+        ]
+      }
+    ],
+    "text": "When this creature enters, each opponent loses 2 life and you gain 2 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/6/b6fc8d2e-ad63-498d-83b6-5f72b5ae0e67.jpg?1783908954",
+      "card": "https://cards.scryfall.io/normal/front/b/6/b6fc8d2e-ad63-498d-83b6-5f72b5ae0e67.jpg?1783908954"
+    },
+    "artist": "Alex Brock",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "fdn",
+    "collectorNumber": "532",
+    "typeLine": "Creature — Vampire",
+    "oracleText": "When this creature enters, each opponent loses 2 life and you gain 2 life.",
+    "scryfallId": "b6fc8d2e-ad63-498d-83b6-5f72b5ae0e67",
+    "scryfallUri": "https://scryfall.com/card/fdn/532/vampire-spawn?utm_source=api"
   },
   "viashinoPyromancer": {
     "id": "viashinoPyromancer",

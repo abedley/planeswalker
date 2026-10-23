@@ -7,7 +7,8 @@
  * - a land, creature, artifact, enchantment, instant or sorcery (no supertypes except Basic)
  * - a mana cost of generic and/or W, U, B, R, G, C symbols
  * - numeric power and toughness
- * - supported keywords (see KEYWORD in src/cards/cards.js)
+ * - supported keywords (see KEYWORD in src/cards/cards.js), and "This creature can't
+ *   block." / "This creature can't be blocked." 
  * - activated abilities, "<cost>: <effect>", made of the costs and effect sentences
  *   in rulesText.js (including mana abilities such as "{T}: Add {G}."), optionally
  *   followed by "Activate only as a sorcery."
@@ -20,7 +21,7 @@
  * Anything else, such as other rules text, is reported as unsupported.
  */
 import {
-  CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, ACTIVATION_TIMING, TRIGGER, equipAbility,
+  CARD_TYPE, SUBTYPE, EFFECT, TARGET, AFFECTED, ACTIVATION_TIMING, TRIGGER, KEYWORD, equipAbility,
 } from '../../src/cards/cards.js';
 import {
   normalizeSelfReferences, parseManaSymbols, parseKeywordList, parseEffects, parseCost, sentences, SUPPORTED_KEYWORDS,
@@ -226,6 +227,14 @@ function parseOracleText(card, typeInfo, problems) {
       const fits = bonus.kind === 'Enchanted' ? isAuraCard : isEquipmentCard;
       if (!fits) problems.push(`Unsupported rules text: "${line}"`);
       else if (bonus.effect) staticAbilities.push(bonus.effect);
+      continue;
+    }
+
+    // 509.1b: "This creature can't block." / "This creature can't be blocked.", which
+    // this game writes as keywords.
+    const restriction = /^~ (can't block|can't be blocked)\.$/.exec(normalized);
+    if (restriction) {
+      keywords.push(restriction[1] === "can't block" ? KEYWORD.CANT_BLOCK : KEYWORD.CANT_BE_BLOCKED);
       continue;
     }
 

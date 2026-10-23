@@ -15,10 +15,10 @@ export const REAL_DECKS = Object.freeze({
     thornhideWolves: 2, vigilantBaloth: 2, thrashingBrontodon: 1, colossalDreadmaw: 2,
     giantGrowth: 1, titanicGrowth: 2, overrun: 2, overcome: 1,
   }),
-  /** Blue Skies: walls hold the ground while flyers attack; counters and card draw. */
+  /** Blue Skies: walls hold the ground while flyers (and unblockable creatures) attack; counters and card draw. */
   blueSkies: deck({
     island: 17,
-    aegisTurtle: 1, wallOfMist: 2, tolarianScholar: 2, cloudkinSeer: 3, skyscanner: 2, snappingDrake: 3,
+    aegisTurtle: 1, wallOfMist: 2, phantomWarrior: 2, cloudkinSeer: 3, skyscanner: 2, snappingDrake: 3,
     bigfinBouncer: 2, airElemental: 2, essenceScatter: 2, unsummon: 2, divination: 2,
   }),
   /** White Weenie: cheap creatures, tokens and team pumps. */
@@ -34,12 +34,12 @@ export const REAL_DECKS = Object.freeze({
     savannahLions: 3, healersHawk: 2, daybreakChaplain: 3, griffinSentinel: 3, gallantCavalry: 2,
     concordiaPegasus: 3, raiseTheAlarm: 3, momentOfHeroism: 2, revitalize: 2,
   }),
-  /** Black Removal: deathtouch, lifelink and kill spells. */
+  /** Black Removal: deathtouch, lifelink, kill spells and draining the opponent. */
   blackRemoval: deck({
     swamp: 17,
-    childOfNight: 3, vampireOfTheDireMoon: 2, walkingCorpse: 2, fetidImp: 2, tatteredMummy: 1,
-    vampireNighthawk: 2, skeletonArcher: 2, twoHeadedZombie: 2,
-    stab: 1, boneSplinters: 1, villageRites: 1, murder: 2, herosDownfall: 1, bloodDivination: 1,
+    childOfNight: 3, vampireInterloper: 2, walkingCorpse: 2, tatteredMummy: 1, vampireNighthawk: 2,
+    skeletonArcher: 2, twoHeadedZombie: 2, vampireSpawn: 2, vampireSovereign: 1,
+    stab: 1, boneSplinters: 1, murder: 2, herosDownfall: 1, sovereignsBite: 1,
   }),
   /** Black Rabble: the lighter black build. */
   blackRabble: deck({
@@ -51,7 +51,7 @@ export const REAL_DECKS = Object.freeze({
   redBurn: deck({
     mountain: 17,
     fanaticalFirebrand: 3, viashinoPyromancer: 2, boggartBrute: 2, emberHauler: 2, hostileMinotaur: 2,
-    pitchburnDevils: 1, fireElemental: 1, shivanDragon: 1,
+    pitchburnDevils: 1, siegebreakerGiant: 1, shivanDragon: 1,
     shock: 3, lightningStrike: 2, electrify: 1, lavaAxe: 1, boltwave: 1, burnBright: 1,
   }),
   /** Red Raiders: the lighter red build. */
@@ -75,4 +75,8 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   'mysticArchaeologist', 'cancel', 'negate', 'moatPiranhas', 'keenGlidemaster', 'wishcoinCrab',
   'maraudersAxe', 'shortSword', 'stoneGolem', 'palladiumMyr', 'manalith',
   'dayOfJudgment', 'preposterousProportions', 'stormCaller', 'chandrasMagmutt', 'pyroclasticElemental',
+  'sowerOfChaos', 'vampireInterloper', 'frilledSeaSerpent', 'mistCloakedHerald', 'roguesPassage', 'suspiciousBookcase',
+  'skymarchBloodletter', 'spiritOfMalevolence', 'vampireNeonate', 'vampireOpportunist', 'agonizingSyphon', 'sorinsThirst',
+  // Out of the decks, but still worth offering.
+  'bloodDivination', 'giantSpider', 'tolarianScholar',
 ]);

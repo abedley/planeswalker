@@ -175,7 +175,7 @@ A card is only imported if the engine supports everything it does:
 - Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
 - Its power and toughness are fixed numbers.
 - Its rules text is only:
-  - supported keywords
+  - supported keywords, and "CARDNAME can't block." / "CARDNAME can't be blocked."
   - activated abilities, "<cost>: <effect>", optionally ending "Activate only as a sorcery."
   - triggered abilities, "When CARDNAME enters [the battlefield], <effect>" and "When CARDNAME
     dies, <effect>". Elvish Visionary, Wall of Omens, Flametongue Kavu and Doomed Traveler
@@ -195,6 +195,8 @@ The grammar is in `tools/scryfall/rulesText.js`.
     permanent / all creatures / …"
   - "Return target creature to its owner's hand."
   - "Tap / Untap target creature."
+  - "Target creature / Creatures your opponents control / … can't block this turn." and "…
+    [gets +N/+N and] can't be blocked this turn."
   - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
     turn."
   - "Put a +1/+1 counter on …"
@@ -206,14 +208,19 @@ The grammar is in `tools/scryfall/rulesText.js`.
   - "Add {B}{B}{B}." and "Add one mana of any color."
   - "<effect> and create <tokens>.", which is read as two sentences, e.g. "Draw two cards and
     create two Treasure tokens."
+  - "<effect> and <effect>.", also read as two sentences.
+    - Both may have subjects: "Target opponent loses 3 life and you gain 3 life."
+    - The second may take the first's subject: "Target player draws two cards and loses 2 life."
+      reads as "… draws two cards." and "Target player loses 2 life.", the same target, not a
+      second one.
 
 **Examples:**
 - **Imports:** Prodigal Sorcerer, Mogg Fanatic, Mind Stone, Shivan Dragon, Greed, Counterspell,
   Unsummon, Naturalize, Dark Ritual, Raise the Alarm, Pyroclasm, Wrath of God, Overrun, Lava
-  Spike, Thought Scour, Village Rites, Bone Splinters, Bake into a Pie, Big Score and Birds of
-  Paradise.
-- **Rejected:** Royal Assassin ("target tapped creature"), Sign in Blood (one sentence doing two
-  things), Fling ("damage equal to …") and Gilded Lotus ("three mana of any one color").
+  Spike, Thought Scour, Village Rites, Bone Splinters, Bake into a Pie, Big Score, Birds of
+  Paradise, Sign in Blood, Vampire Sovereign, Phantom Warrior and Siegebreaker Giant.
+- **Rejected:** Royal Assassin ("target tapped creature"), Fling ("damage equal to …") and
+  Gilded Lotus ("three mana of any one color").
 
 Every other card is skipped, and the report says what isn't supported, for example:
 
@@ -231,7 +238,7 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 97 cards from M19, M20, M21 and
+`cards/real-cards.txt` lists the real cards the campaign uses: 114 cards from M19, M20, M21 and
 Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
 their art, in `CARD_PRESENTATION`.
 
@@ -476,6 +483,10 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
     - **Defender:** the creature can't attack (702.3).
     - **Vigilance:** attacking doesn't tap the creature (702.20).
     - **Flying:** only creatures with flying or reach can block it (702.9, 702.17).
+    - **Can't block / can't be blocked:** blocking restrictions (509.1b), written as keywords
+      (`KEYWORD.CANT_BLOCK`, `KEYWORD.CANT_BE_BLOCKED`). They're either printed ("This creature
+      can't block.") or granted for a turn, like any keyword a pump grants ("Target creature
+      can't block this turn.").
     - **Menace:** it can't be blocked by just one creature (702.111). Each `SET_BLOCKER` is offered
       on its own, but `CONFIRM_BLOCKERS` only appears once no menace attacker has exactly one
       blocker.

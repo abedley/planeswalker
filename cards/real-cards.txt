@@ -98,6 +98,27 @@ Chandra's Magmutt (M21)
 Pyroclastic Elemental (M20)
 Tattered Mummy (M19)
 
+# Evasion: creatures that can't block or can't be blocked, and ways to make them
+Siegebreaker Giant (M19)
+Sower of Chaos (FDN)
+Vampire Interloper (FDN)
+Frilled Sea Serpent (M19)
+Mist-Cloaked Herald (M19)
+Phantom Warrior (M20)
+Rogue's Passage (FDN)
+Suspicious Bookcase (M19)
+
+# Drain: "each opponent loses N life and you gain N life"
+Skymarch Bloodletter (M19)
+Sovereign's Bite (M19)
+Spirit of Malevolence (M21)
+Vampire Neonate (M19)
+Vampire Opportunist (M20)
+Vampire Sovereign (M19)
+Vampire Spawn (FDN)
+Agonizing Syphon (M20)
+Sorin's Thirst (M20)
+
 # Rewards only
 Gigantosaurus (M19)
 Pelakka Wurm (M19)

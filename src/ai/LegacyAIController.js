@@ -212,6 +212,7 @@ export class LegacyAIController extends EventEmitter {
         [AFFECTED.EACH_PLAYER]: [this.#playerId, opponentId],
         [AFFECTED.EACH_CREATURE]: creatures.map((p) => p.id),
         [AFFECTED.EACH_CREATURE_YOU_CONTROL]: creatures.filter((p) => p.controllerId === this.#playerId).map((p) => p.id),
+        [AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL]: creatures.filter((p) => p.controllerId !== this.#playerId).map((p) => p.id),
         [AFFECTED.SOURCE]: [sourceId],
       }[effectAffects(effect)] ?? [];
       for (const id of affected) {

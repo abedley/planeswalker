@@ -336,10 +336,14 @@ function windowAllows(window, effects, instantSpeed, targetId, state, me) {
   const harmful = effects.some(isHarmfulEffect);
   const trick = effects.some((e) => e.type === EFFECT.PUMP && (e.power ?? 0) + (e.toughness ?? 0) > 0);
   const onCreature = targetId && state.battlefield.some((p) => p.id === targetId && isCreature(p));
+  // Blocking restrictions only matter if they're in place before blockers are declared.
+  const restricts = effects.some((e) => e.type === EFFECT.PUMP
+    && (e.keywords ?? []).some((k) => k === KEYWORD.CANT_BLOCK || k === KEYWORD.CANT_BE_BLOCKED));
   switch (window) {
     case WINDOW.MAIN:
-      // Sorcery-speed things now. Instants: removal (clearing the way) now, the rest later.
-      return !instantSpeed || (harmful && onCreature && targetId && isTheirs(state, me, targetId));
+      // Sorcery-speed things now. Instants: removal (clearing the way) and blocking
+      // restrictions now, the rest later.
+      return !instantSpeed || restricts || (harmful && onCreature && targetId && isTheirs(state, me, targetId));
     case WINDOW.COMBAT:
       return trick || (harmful && onCreature);
     case WINDOW.ATTACKED:

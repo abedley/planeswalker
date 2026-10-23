@@ -42,8 +42,8 @@ import { ponderTargets } from './ponder.js';
  * Options: `weights` (the deck's evaluation weights: a deck or archetype name, or
  * weights, see weightsFor), `budgetMs` (thinking time, default 2000), `minThinkMs`
  * (default 600), `responseMs` (default 400), `jitterMs` (default 200), `passMs`
- * (default 60), `seed`, `runner` (a search runner, see searchRunner.js), `timers`
- * (`{ setTimeout, clearTimeout, now }`, for tests).
+ * (default 60), `attacking` (`'lookahead'`: see searchPolicy), `seed`, `runner` (a
+ * search runner, see searchRunner.js), `timers` (`{ setTimeout, clearTimeout, now }`, for tests).
  */
 export class SearchAIController extends EventEmitter {
   #game;
@@ -61,6 +61,8 @@ export class SearchAIController extends EventEmitter {
   #timers;
   #fallback;
   #weights;
+  /** How it attacks by default, and which attacks it considers (see searchPolicy). */
+  #attacking;
   #unsubscribers;
   #current = null;
   #timer = null;
@@ -70,7 +72,7 @@ export class SearchAIController extends EventEmitter {
 
   constructor({
     game, playerId, weights, budgetMs = 2000, minThinkMs = 600, responseMs = 400, jitterMs = 200, passMs = 60,
-    seed = Math.floor(Math.random() * 2 ** 32), runner = createSearchRunner(), timers = {
+    attacking = 'basic', seed = Math.floor(Math.random() * 2 ** 32), runner = createSearchRunner(), timers = {
       setTimeout: (...args) => setTimeout(...args),
       clearTimeout: (id) => clearTimeout(id),
       now: () => performance.now(),
@@ -88,7 +90,8 @@ export class SearchAIController extends EventEmitter {
     this.#random = seededRandom(seed ^ 0x5bd1e995);
     this.#runner = runner;
     this.#timers = timers;
-    this.#fallback = new BasicAIController({ game: null, playerId });
+    this.#attacking = attacking;
+    this.#fallback = new BasicAIController({ game: null, playerId, attacking });
     this.#weights = weightsFor(weights);
     this.#unsubscribers = [
       game.on('state', (state) => this.#onState(state)),
@@ -169,7 +172,7 @@ export class SearchAIController extends EventEmitter {
 
   async #decide(state, context, budgetMs, thinking) {
     const me = this.#playerId;
-    const macros = listMacros(state, me);
+    const macros = listMacros(state, me, { attacking: this.#attacking });
     if (macros.length <= 1) return this.#fallback.chooseAction(state);
 
     const view = this.#game.getPlayerView(me);
@@ -199,7 +202,9 @@ export class SearchAIController extends EventEmitter {
     this.#ponderTimer = setTimeout(() => {
       if (this.#detached || this.#game.peekState().version !== version) return;
       const me = this.#playerId;
-      const targets = ponderTargets(this.#game.clone(), me, { macro, limit: PONDER_TARGETS, skipCurrent: Boolean(macro) });
+      const targets = ponderTargets(this.#game.clone(), me, {
+        macro, limit: PONDER_TARGETS, skipCurrent: Boolean(macro), attacking: this.#attacking,
+      });
       this.#runner.ponder(targets.map(({ view, macros, defaults }) => ({
         key: viewKey(view), view, me, macros, defaults, weights: this.#weights,
         seed: Math.floor(this.#random() * 2 ** 32),

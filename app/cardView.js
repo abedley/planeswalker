@@ -53,12 +53,26 @@ export function fullCard(cardIn, definitions, { big = false } = {}) {
     card.token ? h('div.cf-token', 'Token') : null);
 }
 
+/** Blocking restrictions (509.1b), which have no ability symbol: their board badges. */
+const RESTRICTIONS = [["can't block", "Can't block", 'no-block'], ["can't be blocked", 'Unblockable', 'unblockable']];
+
+/**
+ * Badges for a creature's blocking restrictions. One it has only this turn (not
+ * printed: from a spell or ability) is marked `.now`.
+ */
+export function restrictionBadges(card) {
+  const printed = new Set(card.base?.keywords ?? card.keywords ?? []);
+  const badges = RESTRICTIONS.filter(([keyword]) => card.keywords?.includes(keyword))
+    .map(([keyword, label, kind]) => h(`span.rb.${kind}${printed.has(keyword) ? '' : '.now'}`, label));
+  return badges.length ? h('div.restrict', badges) : null;
+}
+
 /** What changes how a permanent looks; its board element is redrawn only when this changes. */
 export function boardSignature(p, extra = '') {
   return [p.power, p.toughness, p.damage, JSON.stringify(p.counters ?? {}), (p.keywords ?? []).join(), p.base?.power, p.base?.toughness, extra].join('|');
 }
 
-/** A creature on the battlefield: art, keywords, power/toughness, damage and counters. */
+/** A creature on the battlefield: art, keywords and blocking restrictions, power/toughness, damage and counters. */
 export function boardCard(permanent, definitions, { attachments = [] } = {}) {
   const card = presentationOf(permanent, definitions);
   const powerClass = card.base && card.power > card.base.power ? 'up' : card.base && card.power < card.base.power ? 'down' : '';
@@ -70,6 +84,7 @@ export function boardCard(permanent, definitions, { attachments = [] } = {}) {
     // Without real art, cards would look alike: name them.
     card.image?.art ? null : h('div.board-name', card.name),
     keywordIcons(card.keywords),
+    restrictionBadges(card),
     attachments.length ? h('div.attach', attachments.map((a) => h(`span.tab.f-${frameOf(a)}`, icon(a.types.includes('Artifact') ? 'artifact' : 'enchantment')))) : null,
     counters ? h('div.counter', `+${counters}`) : null,
     h('div.stat.power', { class: powerClass }, String(card.power)),

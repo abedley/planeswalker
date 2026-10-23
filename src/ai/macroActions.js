@@ -17,8 +17,11 @@ import { DECISION } from '../engine/Game.js';
 import { PHASE } from '../engine/turnStructure.js';
 import { canPayMana } from '../engine/mana.js';
 import { isCreature, isLand, isInstant, isAura, hasKeyword, KEYWORD, EFFECT } from '../cards/cards.js';
-import { planAttack, planBlocks, creatureValue } from './combat.js';
+import {
+  planAttack, planBlocks, chooseBlocks, creatureValue, BLOCKING,
+} from './combat.js';
 import { candidateTargets, scoreEffects, costScore } from './scoring.js';
+import { planLookaheadAttack } from './attacking.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction,
 } from './manaPlanning.js';
@@ -53,24 +56,29 @@ export const HEURISTIC_PLANS = Object.freeze({
 /**
  * The macro actions `me` can choose from now (empty if it isn't their decision).
  * `heuristicPlans`: also offer the attacks and blocks of HEURISTIC_PLANS.
+ * `attacking: 'lookahead'`: also offer planLookaheadAttack's attacks (each strategy's).
  */
-export function listMacros(state, me, { heuristicPlans = false } = {}) {
+export function listMacros(state, me, { heuristicPlans = false, attacking = 'basic' } = {}) {
   const mine = state.validActions.filter((a) => a.playerId === me);
   if (mine.length === 0) return [];
   const decision = state.pendingDecision;
-  if (decision?.type === DECISION.DECLARE_ATTACKERS) return attackMacros(state, me, mine, heuristicPlans);
+  if (decision?.type === DECISION.DECLARE_ATTACKERS) return attackMacros(state, me, mine, heuristicPlans, attacking);
   if (decision?.type === DECISION.DECLARE_BLOCKERS) return blockMacros(state, me, mine, heuristicPlans);
   if (decision) return mine.map((action) => keyed({ kind: 'raw', action }));
   return priorityMacros(state, me, mine);
 }
 
-function attackMacros(state, me, mine, heuristicPlans) {
+function attackMacros(state, me, mine, heuristicPlans, attacking) {
   const decision = state.pendingDecision;
   const ids = [...new Set([...decision.attackers, ...mine.filter((a) => a.type === ACTION.TOGGLE_ATTACKER).map((a) => a.cardId)])].sort();
   const creatures = ids.map((id) => state.battlefield.find((p) => p.id === id));
   const plan = planAttack(state, me, creatures);
   const sets = [plan, [], ids];
   if (heuristicPlans) for (const heuristics of HEURISTIC_PLANS.attack) sets.push(planAttack(state, me, creatures, { heuristics }));
+  if (attacking === 'lookahead') {
+    const lookahead = planLookaheadAttack(state, me, creatures);
+    sets.push(lookahead.attackers, ...Object.values(lookahead.strategies));
+  }
   if (ids.length <= 4) {
     // Every subset.
     for (let mask = 1; mask < 2 ** ids.length; mask++) sets.push(ids.filter((_, i) => mask & (2 ** i)));
@@ -84,8 +92,9 @@ function blockMacros(state, me, mine, heuristicPlans) {
   const decision = state.pendingDecision;
   const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
     || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
-  const plan = planBlocks(state, me, canBlockPair);
-  const options = [plan, {}];
+  // The basic AI's blocks, and planBlocks' greedy ones.
+  const plan = chooseBlocks(state, me, canBlockPair);
+  const options = [plan, {}, chooseBlocks(state, me, canBlockPair, { blocking: BLOCKING.GREEDY })];
   if (heuristicPlans) for (const heuristics of HEURISTIC_PLANS.block) options.push(planBlocks(state, me, canBlockPair, { heuristics }));
   // The plan without each blocker in turn (menace pairs stay together).
   for (const blockerId of Object.keys(plan)) {

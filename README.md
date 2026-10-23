@@ -114,6 +114,10 @@ when inspecting). Cards without art, such as the samples and tokens, get generat
 in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
 can have `art` and `color`; otherwise they get a monogram crest.
 
+**Blocking restrictions:** a creature that can't block, or can't be blocked, wears a badge on
+the board ("Can't block" in red, "Unblockable" in blue). One that has it only this turn, from a
+spell or ability, has a gold outline.
+
 **Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
 color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
 [Keyrune](https://keyrune.andrewgioia.com) fonts by Andrew Gioia, vendored in `app/vendor/`.
@@ -175,7 +179,7 @@ A card is only imported if the engine supports everything it does:
 - Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
 - Its power and toughness are fixed numbers.
 - Its rules text is only:
-  - supported keywords
+  - supported keywords, and "CARDNAME can't block." / "CARDNAME can't be blocked."
   - activated abilities, "<cost>: <effect>", optionally ending "Activate only as a sorcery."
   - triggered abilities, "When CARDNAME enters [the battlefield], <effect>" and "When CARDNAME
     dies, <effect>". Elvish Visionary, Wall of Omens, Flametongue Kavu and Doomed Traveler
@@ -195,6 +199,8 @@ The grammar is in `tools/scryfall/rulesText.js`.
     permanent / all creatures / …"
   - "Return target creature to its owner's hand."
   - "Tap / Untap target creature."
+  - "Target creature / Creatures your opponents control / … can't block this turn." and "…
+    [gets +N/+N and] can't be blocked this turn."
   - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
     turn."
   - "Put a +1/+1 counter on …"
@@ -206,14 +212,19 @@ The grammar is in `tools/scryfall/rulesText.js`.
   - "Add {B}{B}{B}." and "Add one mana of any color."
   - "<effect> and create <tokens>.", which is read as two sentences, e.g. "Draw two cards and
     create two Treasure tokens."
+  - "<effect> and <effect>.", also read as two sentences.
+    - Both may have subjects: "Target opponent loses 3 life and you gain 3 life."
+    - The second may take the first's subject: "Target player draws two cards and loses 2 life."
+      reads as "… draws two cards." and "Target player loses 2 life.", the same target, not a
+      second one.
 
 **Examples:**
 - **Imports:** Prodigal Sorcerer, Mogg Fanatic, Mind Stone, Shivan Dragon, Greed, Counterspell,
   Unsummon, Naturalize, Dark Ritual, Raise the Alarm, Pyroclasm, Wrath of God, Overrun, Lava
-  Spike, Thought Scour, Village Rites, Bone Splinters, Bake into a Pie, Big Score and Birds of
-  Paradise.
-- **Rejected:** Royal Assassin ("target tapped creature"), Sign in Blood (one sentence doing two
-  things), Fling ("damage equal to …") and Gilded Lotus ("three mana of any one color").
+  Spike, Thought Scour, Village Rites, Bone Splinters, Bake into a Pie, Big Score, Birds of
+  Paradise, Sign in Blood, Vampire Sovereign, Phantom Warrior and Siegebreaker Giant.
+- **Rejected:** Royal Assassin ("target tapped creature"), Fling ("damage equal to …") and
+  Gilded Lotus ("three mana of any one color").
 
 Every other card is skipped, and the report says what isn't supported, for example:
 
@@ -231,7 +242,7 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 86 cards from M19, M20, M21 and
+`cards/real-cards.txt` lists the real cards the campaign uses: 114 cards from M19, M20, M21 and
 Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
 their art, in `CARD_PRESENTATION`.
 
@@ -476,6 +487,10 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
     - **Defender:** the creature can't attack (702.3).
     - **Vigilance:** attacking doesn't tap the creature (702.20).
     - **Flying:** only creatures with flying or reach can block it (702.9, 702.17).
+    - **Can't block / can't be blocked:** blocking restrictions (509.1b), written as keywords
+      (`KEYWORD.CANT_BLOCK`, `KEYWORD.CANT_BE_BLOCKED`). They're either printed ("This creature
+      can't block.") or granted for a turn, like any keyword a pump grants ("Target creature
+      can't block this turn.").
     - **Menace:** it can't be blocked by just one creature (702.111). Each `SET_BLOCKER` is offered
       on its own, but `CONFIRM_BLOCKERS` only appears once no menace attacker has exactly one
       blocker.
@@ -706,13 +721,22 @@ emits `action` events. None of them looks at the opponent's hand or any library.
 
 A fast heuristic player, also used to play out the search AI's simulations (5–20 µs per decision).
 - **Combat** (`combat.js`):
-  - **Attacks:** with creatures the opponent can't block profitably, and with everything when
-    that's lethal through the best possible blocks. Then it adds any other attacker that makes
-    the whole attack better against the defender's best blocks: each blocker stops only one
-    attacker, so more attackers than they can block well get through ("swarming"). It keeps enough blockers home to survive
-    the crack-back, and goes all in when it's losing the race to deck out.
-  - **Blocks:** kills attackers or trades up, double-blocks big threats, and chump-blocks only
-    to survive.
+  - **Attacks:** by *Lookahead attacks* below: it plays out racing, attacking for value and
+    holding back for a few turns, and picks the strategy whose worst case is best. It plans each
+    declaration once, at its first step.
+  - **The previous attacks** (`attacking: 'basic'`, `planAttack`):
+    - It attacks with creatures the opponent can't block profitably, and with everything when
+      that's lethal through the best possible blocks.
+    - Then it adds any other attacker that makes the whole attack better against the
+      defender's best blocks: each blocker stops only one attacker, so more attackers than
+      they can block well get through ("swarming").
+    - It keeps enough blockers home to survive the crack-back, and goes all in when it's
+      losing the race to deck out.
+    - It expects the defender to block as it does itself (`predictBlocking`).
+  - **Blocks:** the `value` plan of *Blocking plans* below: the blocks worth the most, counting
+    attacker value killed, blocker value lost, and life kept (worth more when life is low),
+    solved exactly. It survives first, and chump-blocks only when the life is worth the creature.
+    `blocking: 'greedy'` blocks as it used to (`planBlocks`: good blocks first, greedily).
   - **Predictions:** its combat predictions follow the engine's rules (first strike, double
     strike, deathtouch, trample, lifelink); a test checks them against real combats for every
     keyword pairing.
@@ -730,6 +754,141 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
 
 `LegacyAIController` is the first version, kept unchanged as a baseline. `strategy: 'passive'`
 only passes and makes empty declarations.
+
+### Blocking plans (`blocking.js`)
+
+The first piece of a new AI. `blockingPlans(attackers, blockers, life)` makes five plans for
+blocking an attack, each a different idea of the best blocks (`BLOCK_PLAN`):
+
+| Plan | Puts first | Then |
+| --- | --- | --- |
+| `life` | the most life left | kills, then creatures kept |
+| `creatures` | the least creature value lost | kills, then life |
+| `kills` | the most attackers killed, then their value | life, then creatures kept |
+| `optimal` | the most attackers killed, then their value | creatures kept, then life |
+| `value` | attacker value killed − blocker value lost + life kept × `damageWeight(life)` | creatures kept, then life |
+
+Every plan survives the combat first, if any blocks can. First-strike damage counts before
+lifelink gains it back. Each plan gives its blocks, whether the defender survives, the life left,
+and the attackers and blockers that die, so the plans can be compared or played out. On real
+boards, the first four plans usually come to two different sets of blocks. `blockingPlansFor(state,
+me, canBlockPair)` reads them from a game state. `optimalBlocks` and `planOptimalBlocks` make
+just the `optimal` plan.
+
+Each plan is exact, with up to 3 blockers on an attacker (`maxGroup`). It fights each attacker
+against each useful group of blockers once, using a flat copy of `resolveCombat`'s rules, and the
+plans share those fights. Then each plan searches the attackers, memoizing on how many of each
+class of identical blockers are left.
+
+- **Speed:** measured on 1,478 blocking decisions from basic-AI games on the real and sample
+  decks.
+  - With up to 4 creatures a side, all four plans take 11–18 µs (median); `optimal` alone takes
+    5–8 µs, faster than `planBlocks`.
+  - With 7–10 creatures a side, all four take 66–231 µs (median).
+- **Budgets:** boards beyond `stateLimit` or `nodeLimit` get a best effort flagged
+  `exact: false`. That only happens well past the campaign's 10 creatures a side.
+- **Tests:** `test/blocking.test.js` checks every plan against brute force on random boards.
+
+`value` is `planBlocks`' own scoring, solved exactly instead of greedily, and it's how the basic
+AI blocks. To try another plan, pass `blocking: '<plan>'` (arena: `basic:blocks=<plan>`;
+`greedy` for `planBlocks`). Here is each plan, in place of `planBlocks`, against the basic AI as
+it was (blocking with `planBlocks`), in mirror matches on every deck:
+
+| Blocking plan | Games | Win rate vs basic (95% CI) |
+| --- | --- | --- |
+| `value` | 2640 | 54.2% (52.3–56.1%) |
+| `creatures` | 2640 | 51.2% (49.3–53.1%) |
+| `optimal` | 1320 | 50.0% (47.3–52.7%) |
+| `kills` | 1320 | 43.2% (40.5–45.9%) |
+| `life` | 1320 | 40.2% (37.6–42.9%) |
+
+`value` also beats `creatures` head to head, 54.6% (52.7–56.5%) over 2640 games.
+
+- **Chump blocks:** the plans that put life before creatures (`life`, and `kills` after its
+  kills) chump-block attackers they can't kill, and lose for it.
+- **Trades:** putting kills first (`optimal`) trades a big creature for a small one.
+- **Weighing both:** weighing value killed against value lost, as `planBlocks` does, is what
+  wins. Solving that exactly gains about 4 points.
+
+With `value` as the default, the basic AI's attacks also expect the defender to block that way
+(`predictBlocking`; arena: `basic:predict=greedy` for the old expectation). The search AI's
+evaluation predicts the next combat the same way, and it offers both `value` and greedy blocks
+as candidates.
+
+| Match | Games | First AI's win rate (95% CI) |
+| --- | --- | --- |
+| basic (now) vs basic as it was (greedy blocks, greedy predictions) | 2640 | 53.0% (51.1–54.9%) |
+| basic (now) vs the same with greedy predictions | 2640 | 50.9% (49.0–52.8%) |
+| search (now) vs search as it was, 150 ms, real decks | 200 | 56.0% (49.1–62.7%) |
+
+Predicting `value` blocks is neutral in the arena, where both sides block the same way, but it's
+right, as each side expects the blocks it will actually meet. Playouts are up to 9% slower (the
+benchmark's standard deck: 52 to 48 games/s).
+
+### Lookahead attacks (`attacking.js`)
+
+The second piece of the new AI. `planLookaheadAttack(state, me, candidates)` picks one of three
+strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
+
+| Strategy | Attacks with |
+| --- | --- |
+| `aggressive` | everything that can attack, to race |
+| `value` | attackers added one at a time while the trade improves against the defender's blocks: creature value killed minus value lost, plus a little for chip damage (more when the defender is low), but only when it loses no more than it kills |
+| `hold` | the `value` attack, minus the creatures it will want as blockers when the opponent attacks with everything next turn |
+
+- **Lookahead:** each of our strategies plays out for 3 of our turns, and theirs after each,
+  against each of the opponent's strategies. It uses only the creatures in play (nobody casts
+  another), and defenders block with the `value` plan. So a crack-back that would kill us shows
+  up, and so does a race we'd win.
+- **Choice:** it takes the strategy whose worst case is best. A win scores more the sooner it
+  comes; otherwise the score is board value plus life, which counts for more when it's low.
+- **Default:** it's how the basic AI attacks (`attacking: 'basic'` for `planAttack`; arena:
+  `basic:attack=basic`).
+- **Speed:**
+  - It copies only what combat needs of each creature, with its value and keyword flags
+    worked out once.
+  - It caches the combats it predicts and each strategy's attacks, under small integer keys.
+  - The later turns of its playouts use a quick guess at the blocks (`quickBlocks`; `quick:
+    false` blocks exactly; arena `quick=0`). Each attacker, the biggest threat first, meets the
+    free blocker that gains the defender most; then chump blocks follow while the damage would
+    be lethal.
+  - Its exact block predictions get smaller budgets, and at most two blockers on an attacker.
+  - Its `value` attacks only try attackers that gain alone.
+
+  On 1217 attack decisions from basic-AI games it takes 1.8 ms on average (it took 11 ms
+  before these), and 0.3 ms on boards of up to 8 creatures. `planAttack` takes 1.0–1.3 ms and
+  0.09 ms there.
+- **In the search AI:** `attacking: 'lookahead'` (`searchPolicy`, `SearchAIController`; arena:
+  `search:at=lookahead`) makes the lookahead's attack the search's default, and offers each
+  strategy's attack as a candidate. Its simulations keep the basic AI's attacks.
+- **Thinking time:** with `budgetMs` (`attackBudgetMs`; arena: `think=<ms>`), it thinks for
+  about that long. It looks 1, 2, 3, ... turns ahead (up to 8), each time trying more plans:
+  - the strategies
+  - each strategy's first attack followed by another (hold now, race later)
+  - other first attacks (every subset of the attackers on small boards)
+
+  It answers from the deepest look it finished.
+
+| Match | Games | First AI's win rate (95% CI) |
+| --- | --- | --- |
+| basic with lookahead attacks vs basic | 2640 | 52.1% (50.2–54.0%) |
+| the same, with the speed-ups above | 2640 | 51.2% (49.3–53.1%) |
+| quick blocks in playouts vs exact blocks | 2640 | 49.3% (47.4–51.2%) |
+| lookahead attacks thinking up to 50 ms vs without a budget | 1320 | 50.7% (48.0–53.4%) |
+| search with lookahead attacks vs search, 150 ms, real decks | 400 | 51.2% (46.4–56.1%) |
+
+It wins or ties on 9 of the 11 decks. Its games run longer, as it holds back more: green's go from
+22 to 31 turns. In the arena, the basic AI's decisions now take 1.2–1.5 times as long on average
+as with `planAttack`. But longer games build bigger boards, so whole games between basic AIs run
+several times slower on the white and green decks.
+
+The chip damage rule and the cache changed none of those 2640 games.
+
+More thinking time doesn't help yet, as with the search AI. The lookahead's own model is the
+limit:
+- no cards are cast
+- each side follows one of three strategies
+- it plans for the opponent's best reply
 
 ### Search AI (`SearchAIController`)
 

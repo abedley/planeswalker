@@ -68,15 +68,30 @@ export function contestant(name) {
   const [base, settings = ''] = name.split(':');
   if (!settings) return CONTESTANTS[base];
   // basic:h=attrition+danger: the basic AI with those heuristics on (see planAttack, planBlocks).
+  // basic:blocks=greedy,predict=greedy: how it blocks, and how it expects blocks when
+  // it attacks (see chooseBlocks: greedy, or a plan of blockingPlans).
+  // basic:attack=lookahead,think=50: it attacks by planLookaheadAttack (thinking up to 50 ms);
+  // look=2: looking 2 of its turns ahead; quick=0: with exact blocks in its playouts.
   if (base === 'basic') {
-    const names = settings.replace(/^h=/, '').split('+').filter(Boolean);
-    // name@value sets a heuristic's strength, e.g. danger@6.
-    const heuristics = Object.fromEntries(names.map((h) => {
-      const [key, value] = h.split('@');
-      return [key, value === undefined ? true : Number(value)];
-    }));
+    const options = { heuristics: {} };
+    for (const part of settings.split(',')) {
+      const [key, value] = part.includes('=') ? part.split('=') : ['h', part];
+      if (key === 'blocks') options.blocking = value;
+      else if (key === 'predict') options.predictBlocking = value;
+      else if (key === 'attack') options.attacking = value;
+      else if (key === 'think') options.attackBudgetMs = Number(value);
+      else if (key === 'look') options.attackTurns = Number(value);
+      else if (key === 'quick') options.attackQuick = value !== '0';
+      else if (key === 'h') {
+        // name@value sets a heuristic's strength, e.g. danger@6.
+        for (const h of value.split('+').filter(Boolean)) {
+          const [name, strength] = h.split('@');
+          options.heuristics[name] = strength === undefined ? true : Number(strength);
+        }
+      } else throw new Error(`Unknown basic AI setting "${key}"`);
+    }
     return (playerId) => {
-      const ai = new BasicAIController({ game: null, playerId, heuristics });
+      const ai = new BasicAIController({ game: null, playerId, ...options });
       return (state) => ai.chooseAction(state);
     };
   }
@@ -94,6 +109,8 @@ export function contestant(name) {
       if (value.startsWith('@')) return ['weights', JSON.parse(readFileSync(value.slice(1), 'utf8'))];
       return ['weights', value];
     }
+    // at=lookahead: how it attacks (see searchPolicy).
+    if (key === 'at') return ['attacking', value];
     // e=tiered: the evaluation (see evaluateTiered); the rest are numbers.
     return [keys[key] ?? key, key === 'e' ? value : Number(value)];
   }));

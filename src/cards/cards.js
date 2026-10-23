@@ -86,6 +86,7 @@ export const AFFECTED = Object.freeze({
   EACH_PLAYER: 'eachPlayer',
   EACH_CREATURE: 'eachCreature',
   EACH_CREATURE_YOU_CONTROL: 'eachCreatureYouControl',
+  EACH_CREATURE_OPPONENTS_CONTROL: 'eachCreatureOpponentsControl',
   /** The ability's source, the permanent itself ("this creature"). */
   SOURCE: 'source',
 });
@@ -108,6 +109,11 @@ export const KEYWORD = Object.freeze({
   TRAMPLE: 'trample', // 702.19
   VIGILANCE: 'vigilance', // 702.20
   MENACE: 'menace', // 702.111
+  // Not keywords in the rules, but blocking restrictions (509.1b) written like them:
+  // printed ("This creature can't block.") or for a turn ("Target creature can't block
+  // this turn.", a PUMP that grants it).
+  CANT_BLOCK: "can't block",
+  CANT_BE_BLOCKED: "can't be blocked",
 });
 
 export const EFFECT = Object.freeze({
@@ -173,7 +179,8 @@ export const effectAffects = (effect) => effect.affected
 
 /** Whether an effect hurts what it affects, e.g. damage or -2/-2 (for AI decisions). */
 export const isHarmfulEffect = (effect) => HARMFUL_EFFECTS.has(effect.type)
-  || (effect.type === EFFECT.PUMP && (effect.power ?? 0) + (effect.toughness ?? 0) < 0);
+  || (effect.type === EFFECT.PUMP && ((effect.power ?? 0) + (effect.toughness ?? 0) < 0
+    || (effect.keywords ?? []).includes(KEYWORD.CANT_BLOCK)));
 
 /** An ability's effects, whether written as `effects` or a single `effect`. */
 export const abilityEffects = (ability) => ability.effects ?? (ability.effect ? [ability.effect] : []);

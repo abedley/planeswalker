@@ -295,12 +295,13 @@ export function worthSearching(state, me) {
  * searching and plays the chosen macro out over the following actions. It only
  * ever looks at `game.getPlayerView(me)`.
  *
- * @param {object} options `{ algorithm: 'greedy' | 'ismcts', seed, determinizations, budgetMs, weights, onSearch }`,
- *   where `weights` is anything weightsFor() takes (a deck or archetype name, or weights).
+ * @param {object} options `{ algorithm: 'greedy' | 'ismcts', seed, determinizations, budgetMs, weights, onSearch, attacking }`,
+ *   where `weights` is anything weightsFor() takes (a deck or archetype name, or weights), and
+ *   `attacking: 'lookahead'` makes planLookaheadAttack's attack the default, and its strategies' attacks candidates.
  */
-export function searchPolicy(me, { weights, ...rest } = {}) {
+export function searchPolicy(me, { weights, attacking = 'basic', ...rest } = {}) {
   const options = { ...rest, weights: weightsFor(weights) };
-  const fallback = new BasicAIController({ game: null, playerId: me });
+  const fallback = new BasicAIController({ game: null, playerId: me, attacking });
   const random = seededRandom(options.seed ?? 1);
   let current = null;
   return (state, game) => {
@@ -314,7 +315,7 @@ export function searchPolicy(me, { weights, ...rest } = {}) {
     }
     current = null;
     if (!worthSearching(state, me)) return fallback.chooseAction(state);
-    const macros = listMacros(state, me, { heuristicPlans: options.heuristicPlans });
+    const macros = listMacros(state, me, { heuristicPlans: options.heuristicPlans, attacking });
     if (macros.length <= 1) return fallback.chooseAction(state);
     const view = game.getPlayerView(me);
     const defaults = defaultMacros(state, me, macros, fallback);

@@ -12,6 +12,9 @@
  * - "Return target creature to its owner's hand."
  * - "<Tap | Untap> target creature."
  * - "<Target creature | Creatures you control | ~> get(s) +N/+N [and gain(s) <keywords>] until end of turn."
+ * - "<Target creature | Creatures your opponents control | ...> can't block this turn." and
+ *   "<...> [gets +N/+N and] can't be blocked this turn." (a PUMP granting KEYWORD.CANT_BLOCK
+ *   or KEYWORD.CANT_BE_BLOCKED)
  * - "Put a +1/+1 counter on <target creature | ~ | each creature you control>."
  * - "<You | Target player | Each opponent | ...> <gain(s) | lose(s)> N life."
  * - "[Target player] draw(s) N cards." / "[Target player] mill(s) N cards."
@@ -20,6 +23,8 @@
  * - "Counter target <spell | creature spell | noncreature spell>."
  * - "Add {G}{G}." / "Add one mana of any color."
  * - "<effect> and create <tokens>.", e.g. "Draw two cards and create a Treasure token."
+ * - "<effect> and <effect>.", e.g. "Target opponent loses 2 life and you gain 2 life.",
+ *   where the second can take the first's subject: "You draw two cards and lose 2 life."
  *
  * Supported costs: {T}, mana symbols, "Pay N life", "Sacrifice ~",
  * "Sacrifice a creature" (artifact, enchantment, land, permanent), "Discard a card".
@@ -89,11 +94,16 @@ const PERMANENT_SUBJECTS = {
   'each creature': [AFFECTED.EACH_CREATURE],
   'creatures you control': [AFFECTED.EACH_CREATURE_YOU_CONTROL],
   'each creature you control': [AFFECTED.EACH_CREATURE_YOU_CONTROL],
+  'creatures your opponents control': [AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL],
+  'each creature your opponents control': [AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL],
+  'all creatures your opponents control': [AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL],
   '~': [AFFECTED.SOURCE],
 };
 const CREATURE_SUBJECTS = Object.fromEntries(Object.entries(PERMANENT_SUBJECTS).filter(([phrase]) => (
   phrase === '~' || phrase.includes('creature')
 )));
+/** 509.1b: "can't block" / "can't be blocked", as the keywords this game writes them as. */
+const RESTRICTIONS = { "can't block": KEYWORD.CANT_BLOCK, "can't be blocked": KEYWORD.CANT_BE_BLOCKED };
 const PLAYER_SUBJECTS = {
   you: [AFFECTED.YOU],
   'target player': [AFFECTED.TARGET, TARGET.PLAYER],
@@ -164,6 +174,16 @@ const SENTENCES = [
       const keywords = keywordText ? parseKeywordList(keywordText, problems) : [];
       if (!subject || !keywords) return null;
       const fields = { power: Number(power), toughness: Number(toughness), ...(keywords.length ? { keywords } : {}) };
+      return [[subject, effect(EFFECT.PUMP, fields, subject)]];
+    },
+  },
+  {
+    // "Target creature can't block this turn." / "~ gets +2/+0 and can't be blocked this turn."
+    pattern: /^(.+?) (?:gets? ([+-]\d+)\/([+-]\d+)(?: until end of turn)? and )?(can't block|can't be blocked) this turn\.$/,
+    parse: ([, phrase, power, toughness, restriction]) => {
+      const subject = lookup(CREATURE_SUBJECTS, phrase);
+      if (!subject) return null;
+      const fields = { ...(power ? { power: Number(power), toughness: Number(toughness) } : {}), keywords: [RESTRICTIONS[restriction]] };
       return [[subject, effect(EFFECT.PUMP, fields, subject)]];
     },
   },
@@ -269,6 +289,46 @@ export const sentences = (text) => text.split(/(?<=\.)\s+/)
   }))
   .filter(Boolean);
 
+/** One sentence's `[subject, effect]` pairs, or null if it isn't a supported sentence. */
+function parseSentence(sentence, problems) {
+  const rule = SENTENCES.find(({ pattern }) => pattern.test(sentence));
+  return rule?.parse(rule.pattern.exec(sentence), problems) ?? null;
+}
+
+/** Every subject phrase, longest first, for finding a sentence's subject. */
+const SUBJECT_PHRASES = [...new Set([...Object.keys(PERMANENT_SUBJECTS), ...Object.keys(PLAYER_SUBJECTS)])]
+  .sort((a, b) => b.length - a.length);
+
+const capitalize = (text) => text[0].toUpperCase() + text.slice(1);
+
+/**
+ * A sentence of two effects joined by "and": "Target opponent loses 2 life and you
+ * gain 2 life." The second may leave out its subject, taking the first's: "You draw
+ * two cards and lose 2 life." Returns its `[subject, effect]` pairs, or null. Each
+ * "and" is tried in turn, as the effects may themselves contain one.
+ */
+function parseTwoPartSentence(sentence, problems) {
+  const body = sentence.replace(/\.$/, '');
+  for (const match of body.matchAll(/ and /g)) {
+    const left = body.slice(0, match.index);
+    const right = body.slice(match.index + match[0].length);
+    // Trial parses report nothing; only an accepted reading counts.
+    const first = parseSentence(`${left}.`, []);
+    if (!first) continue;
+    let second = parseSentence(`${capitalize(right)}.`, []);
+    if (!second) {
+      const subject = SUBJECT_PHRASES.find((phrase) => left.toLowerCase().startsWith(`${phrase} `));
+      // With no subject, the first effect is the controller's own ("Draw a card and lose 1 life.").
+      const borrowed = subject ? left.slice(0, subject.length) : 'You';
+      second = parseSentence(`${capitalize(borrowed)} ${right}.`, []);
+      // A borrowed target is the same target, not another one.
+      if (second) second = second.map(([[affected, targetKind], parsed]) => [[affected, targetKind, true], parsed]);
+    }
+    if (second) return [...first, ...second];
+  }
+  return null;
+}
+
 /**
  * Parses effect sentences (already normalized with "~") into `{ effects, target }`,
  * or `{ failed: sentence }` for the first sentence that isn't supported. At most
@@ -278,11 +338,10 @@ export function parseEffects(text, problems) {
   const effects = [];
   const targets = [];
   for (const sentence of sentences(text)) {
-    const rule = SENTENCES.find(({ pattern }) => pattern.test(sentence));
-    const parsed = rule?.parse(rule.pattern.exec(sentence), problems);
+    const parsed = parseSentence(sentence, problems) ?? parseTwoPartSentence(sentence, problems);
     if (!parsed) return { failed: sentence };
-    for (const [[affected, targetKind], parsedEffect] of parsed) {
-      if (affected === AFFECTED.TARGET) targets.push(targetKind);
+    for (const [[affected, targetKind, sameTarget], parsedEffect] of parsed) {
+      if (affected === AFFECTED.TARGET && !sameTarget) targets.push(targetKind);
       effects.push(parsedEffect);
     }
   }

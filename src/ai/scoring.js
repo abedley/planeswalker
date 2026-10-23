@@ -31,6 +31,7 @@ export function affectedIds(state, me, effect, targets, sourceId) {
     case AFFECTED.EACH_PLAYER: return [me, opponentId];
     case AFFECTED.EACH_CREATURE: return creatures.map((p) => p.id);
     case AFFECTED.EACH_CREATURE_YOU_CONTROL: return creatures.filter((p) => p.controllerId === me).map((p) => p.id);
+    case AFFECTED.EACH_CREATURE_OPPONENTS_CONTROL: return creatures.filter((p) => p.controllerId !== me).map((p) => p.id);
     case AFFECTED.SOURCE: return [sourceId];
     default: return [];
   }
@@ -88,8 +89,17 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
         case EFFECT.PUMP: {
           if (!isCreature(permanent)) break;
           const toughness = permanent.toughness + (effect.toughness ?? 0);
+          const granted = effect.keywords ?? [];
           if (toughness - permanent.damage <= 0) score -= side(id) * permanentValue(permanent);
           else if (side(id) > 0 && preCombat && canAttack(permanent) && (effect.power ?? 0) > 0) score += 2;
+          // Before combat: a blocker that can't block, like a tapped one; an attacker that can't be blocked.
+          if (granted.includes(KEYWORD.CANT_BLOCK) && preCombat && !permanent.tapped && !hasKeyword(permanent, KEYWORD.CANT_BLOCK)) {
+            score -= side(id) * 2;
+          }
+          if (granted.includes(KEYWORD.CANT_BE_BLOCKED) && side(id) > 0 && preCombat && canAttack(permanent)
+            && !hasKeyword(permanent, KEYWORD.CANT_BE_BLOCKED)) {
+            score += 1 + 0.5 * Math.max(0, permanent.power + (effect.power ?? 0));
+          }
           break;
         }
         case EFFECT.ADD_COUNTERS:

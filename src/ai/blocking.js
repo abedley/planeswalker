@@ -5,6 +5,8 @@
  * - `creatures`: the least creature value lost
  * - `kills`: the most attackers killed (then the most attacker value)
  * - `optimal`: the most kills, then the least lost, then the most life
+ * - `value`: the most value: attacker value killed, minus blocker value lost, plus
+ *   life kept (weighted as planBlocks weighs it, more when life is low)
  * Each plan breaks ties with the other counts (see PRIORITIES).
  *
  * It's exact (up to `maxGroup` blockers on one attacker) and built for the AI's
@@ -36,7 +38,7 @@
  * valuable blockers it can.
  */
 import { hasKeyword, isCreature, KEYWORD } from '../cards/cards.js';
-import { canBlock, creatureValue } from './combat.js';
+import { canBlock, creatureValue, damageWeight } from './combat.js';
 
 const EPS = 1e-9;
 /** Bitmasks are 32-bit ints, so at most this many blockers, and attackers to block, are considered. */
@@ -238,6 +240,11 @@ export const BLOCK_PLAN = Object.freeze({
   KILLS: 'kills',
   /** Kill the most, then lose the least, then keep the most life. */
   OPTIMAL: 'optimal',
+  /**
+   * The most value: attacker value killed, minus blocker value lost, plus life
+   * kept, weighted by damageWeight (more when life is low), as planBlocks weighs them.
+   */
+  VALUE: 'value',
 });
 
 // An option's counts, `v`, each the more the better.
@@ -245,6 +252,8 @@ const KILLS = 0;
 const KILLED_VALUE = 1;
 const KEPT = 2; // minus the blocker value lost
 const LIFE = 3; // minus the damage taken, net of lifelink
+const VALUE = 4; // KILLED_VALUE + KEPT + LIFE * damageWeight(life)
+const COUNTS = 5;
 
 /** Each plan's priority order over the counts, after surviving, which always comes first. */
 const PRIORITIES = Object.freeze({
@@ -252,7 +261,16 @@ const PRIORITIES = Object.freeze({
   [BLOCK_PLAN.CREATURES]: [KEPT, KILLS, KILLED_VALUE, LIFE],
   [BLOCK_PLAN.KILLS]: [KILLS, KILLED_VALUE, LIFE, KEPT],
   [BLOCK_PLAN.OPTIMAL]: [KILLS, KILLED_VALUE, KEPT, LIFE],
+  [BLOCK_PLAN.VALUE]: [VALUE, KEPT, LIFE, KILLS, KILLED_VALUE],
 });
+
+/** Counts a and b added up. */
+const add = (a, b) => {
+  const sum = new Array(COUNTS);
+  for (let i = 0; i < COUNTS; i++) sum[i] = a[i] + b[i];
+  return sum;
+};
+const NONE = Object.freeze(new Array(COUNTS).fill(0));
 
 /** Whether counts p are at least as good as counts q in priority order `order`. */
 function atLeastIn(order, p, q) {
@@ -298,7 +316,7 @@ function within(sub, of) {
  * a group takes the first ones of a class, so each group of classes is fought once.
  * An option's `classes` are its blockers' classes, and `delta` adds them to a state.
  */
-function attackerOptions(a, legal, groupMax, safe, radix) {
+function attackerOptions(a, legal, groupMax, safe, radix, lifeWeight) {
   const minSize = a.flags & MENACE ? 2 : 1;
   const toughnessLeft = a.toughness - a.damage;
   const options = [];
@@ -326,7 +344,13 @@ function attackerOptions(a, legal, groupMax, safe, radix) {
       ks,
       ns,
       delta,
-      v: [result.attackerDies ? 1 : 0, result.attackerDies ? a.value : 0, -lost, result.gain - result.damage],
+      v: [
+        result.attackerDies ? 1 : 0,
+        result.attackerDies ? a.value : 0,
+        -lost,
+        result.gain - result.damage,
+        (result.attackerDies ? a.value : 0) - lost + (result.gain - result.damage) * lifeWeight,
+      ],
       kill: result.attackerDies,
       lost,
       net1: result.damage1 - result.gain1,
@@ -419,6 +443,7 @@ function undominated(options, atLeast) {
  * - `creatures`: the least creature value lost, then the most kills, then the most life
  * - `kills`: the most attackers killed (then attacker value), then the most life, then the least lost
  * - `optimal`: the most kills, then the least lost, then the most life
+ * - `value`: the most value (see BLOCK_PLAN.VALUE), then the least lost, then the most life
  *
  * Plans often agree; each is computed on its own. Groups are fought once for all of them.
  *
@@ -434,7 +459,7 @@ function undominated(options, atLeast) {
  * @returns {Object<string, {
  *   blocks: Object<string, string>, survives: boolean, lifeAfter: number,
  *   deadAttackers: string[], deadBlockers: string[],
- *   kills: number, killedValue: number, lostValue: number, exact: boolean, nodes: number,
+ *   kills: number, killedValue: number, lostValue: number, value: number, exact: boolean, nodes: number,
  * }>} each plan by name. `blocks` maps blocker ids to attacker ids; the dead are the
  *   creatures the combat would kill, in the order given. `exact` is false when a cap was reached, and the
  *   blocks may then not be that plan's best.
@@ -498,7 +523,7 @@ export function blockingPlans(attackers, blockers, life, {
     let legalMask = 0;
     for (const b of blk) if (blockMasks[b.index] & (1 << i)) legalMask |= 1 << b.index;
     const key = `${a.power},${a.toughness},${a.damage},${a.flags},${a.value},${legalMask}`;
-    if (!shared.has(key)) shared.set(key, attackerOptions(a, byClass.filter((b) => legalMask & (1 << b.index)), groupMax, safe, radix));
+    if (!shared.has(key)) shared.set(key, attackerOptions(a, byClass.filter((b) => legalMask & (1 << b.index)), groupMax, safe, radix, damageWeight(life)));
     return shared.get(key);
   });
 
@@ -524,13 +549,13 @@ export function blockingPlans(attackers, blockers, life, {
       tableStamp = 0;
     }
     const stamp = ++tableStamp;
-    const sV = [[0, 0, 0, 0]];
+    const sV = [NONE];
     const sNet1 = [0];
     const sChoice = [null];
     const sNext = [0];
     const store = (o, next) => {
       const v = sV[next];
-      sV.push([o.v[0] + v[0], o.v[1] + v[1], o.v[2] + v[2], o.v[3] + v[3]]);
+      sV.push(add(o.v, v));
       sNet1.push(o.net1 + sNet1[next]);
       sChoice.push(o);
       sNext.push(next);
@@ -575,7 +600,7 @@ export function blockingPlans(attackers, blockers, life, {
         if (!fits(o, state)) continue;
         const child = suffixBest(d + 1, state + o.delta);
         const c = sV[child];
-        const v = [o.v[0] + c[0], o.v[1] + c[1], o.v[2] + c[2], o.v[3] + c[3]];
+        const v = add(o.v, c);
         if (!best || !atLeastIn(order, bestV, v)) {
           best = o;
           bestNext = child;
@@ -651,18 +676,17 @@ export function blockingPlans(attackers, blockers, life, {
             if (!fits(o, state)) continue;
             const after = state + o.delta;
             const n1 = net1 + o.net1;
-            const w = [v[0] + o.v[0], v[1] + o.v[1], v[2] + o.v[2], v[3] + o.v[3]];
+            const w = add(v, o.v);
             if (!canSurvive(d + 1, after, n1, -w[LIFE])) continue;
             if (found) {
               const c = sV[suffixBest(d + 1, after)];
-              const bound = [w[0] + c[0], w[1] + c[1], w[2] + c[2], w[3] + c[3]];
-              if (compareKeys(keyOf(1, bound), bestKey) <= 0) continue;
+              if (compareKeys(keyOf(1, add(w, c)), bestKey) <= 0) continue;
             }
             chosen[d] = o;
             visit(d + 1, after, w, n1);
           }
         };
-        visit(0, 0, [0, 0, 0, 0], 0);
+        visit(0, 0, NONE, 0);
       }
     }
     return { choice, exact, nodes: sV.length - 1 + searched };
@@ -678,7 +702,7 @@ export function blockingPlans(attackers, blockers, life, {
     const blocks = {};
     const dead = new Set();
     const next = sizes.map(() => 0);
-    const v = [0, 0, 0, 0];
+    const v = new Array(COUNTS).fill(0);
     let net1 = 0;
     for (let d = 0; d < depth; d++) {
       const o = choice[d];
@@ -689,7 +713,7 @@ export function blockingPlans(attackers, blockers, life, {
         if (o.deaths & (1 << position)) dead.add(blocker.creature);
       });
       if (o.kill) dead.add(attacker.creature);
-      for (let i = 0; i < 4; i++) v[i] += o.v[i];
+      for (let i = 0; i < COUNTS; i++) v[i] += o.v[i];
       net1 += o.net1;
     }
     result[plan] = {
@@ -701,6 +725,7 @@ export function blockingPlans(attackers, blockers, life, {
       kills: v[KILLS],
       killedValue: v[KILLED_VALUE],
       lostValue: 0 - v[KEPT], // not -v[KEPT], which makes -0 of 0
+      value: v[VALUE],
       exact,
       nodes,
     };

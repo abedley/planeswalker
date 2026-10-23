@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KEYWORD, CARD_TYPE } from '../src/index.js';
-import { resolveCombat, canBlock, creatureValue } from '../src/ai/combat.js';
+import { resolveCombat, canBlock, creatureValue, damageWeight } from '../src/ai/combat.js';
 import {
   fight, optimalBlocks, planOptimalBlocks, blockingPlans, blockingPlansFor, BLOCK_PLAN,
 } from '../src/ai/blocking.js';
@@ -56,7 +56,7 @@ test('fight() agrees with resolveCombat on random combats', () => {
 /**
  * How blocks (`{ blockerId: attackerId }`) play out, by the solver's rules: whether
  * the defender survives, its counts (kills, killed value, minus value lost, minus
- * net damage), and what dies; null if a group breaks the rules (more than 3
+ * net damage, value), and what dies; null if a group breaks the rules (more than 3
  * blockers, or 1 on menace). Like the solver, a group lists identical blockers
  * alike (the attacker's tie-breaks depend on the order).
  */
@@ -85,6 +85,7 @@ function score(attackers, blockers, life, blocks) {
       deadBlockers.push(b.id);
     });
   }
+  counts.push(counts[1] + counts[2] + counts[3] * damageWeight(life));
   return { survives: life - net1 > 0 && life + counts[3] > 0, counts, deadAttackers, deadBlockers };
 }
 
@@ -94,6 +95,7 @@ const ORDERS = {
   [BLOCK_PLAN.CREATURES]: [2, 0, 1, 3],
   [BLOCK_PLAN.KILLS]: [0, 1, 3, 2],
   [BLOCK_PLAN.OPTIMAL]: [0, 1, 2, 3],
+  [BLOCK_PLAN.VALUE]: [4, 2, 3, 0, 1],
 };
 const keyIn = (order, { survives, counts }) => [survives ? 1 : 0, ...order.map((i) => counts[i])];
 const compare = (a, b) => a.map((v, i) => v - b[i]).find((d) => Math.abs(d) > 1e-9) ?? 0;
@@ -144,7 +146,7 @@ test('each plan finds its best blocks on random boards', () => {
         }
         // What it reports is what its blocks do, and nothing scores better in its order.
         const scored = score(attackers, blockers, life, got.blocks);
-        assert.equal(compare(keyOf(got, life), [scored.survives ? 1 : 0, ...scored.counts]), 0, `board ${seed}/${i} ${plan}\n${board}`);
+        assert.equal(compare([...keyOf(got, life), got.value], [scored.survives ? 1 : 0, ...scored.counts]), 0, `board ${seed}/${i} ${plan}\n${board}`);
         assert.deepEqual([got.deadAttackers, got.deadBlockers], [scored.deadAttackers, blockers.filter((b) => scored.deadBlockers.includes(b.id)).map((b) => b.id)]);
         const key = keyIn(order, scored);
         assert.equal(compare(key, expected[plan]), 0, `board ${seed}/${i} ${plan}: expected ${expected[plan]}, got ${key}\n${board}`);
@@ -290,4 +292,18 @@ test('blockingPlansFor reads a game state, and makes only the plans asked for', 
   assert.deepEqual(Object.keys(plans), [BLOCK_PLAN.CREATURES, BLOCK_PLAN.KILLS]);
   assert.deepEqual(plans.creatures.blocks, {});
   assert.deepEqual(plans.kills.blocks, { [blocker.id]: attacker.id });
+});
+
+test('the value plan trades only when it gains', () => {
+  // Killing a 1/1 deathtoucher with a 5/5 kills the most, but loses more than it kills.
+  const snake = creature(1, 1, [DEATHTOUCH]);
+  const giant = creature(5, 5);
+  const plans = blockingPlans([snake], [giant], 20);
+  assert.deepEqual(plans.optimal.blocks, { [giant.id]: snake.id });
+  assert.deepEqual(plans.value.blocks, {});
+  // A chump block is worth its creature only when life is short.
+  const dragon = creature(5, 5);
+  const token = creature(1, 1);
+  assert.deepEqual(blockingPlans([dragon], [token], 20).value.blocks, {});
+  assert.deepEqual(blockingPlans([dragon], [token], 8).value.blocks, { [token.id]: dragon.id });
 });

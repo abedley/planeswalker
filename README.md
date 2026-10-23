@@ -733,7 +733,7 @@ only passes and makes empty declarations.
 
 ### Blocking plans (`blocking.js`)
 
-The first piece of a new AI. `blockingPlans(attackers, blockers, life)` makes four plans for
+The first piece of a new AI. `blockingPlans(attackers, blockers, life)` makes five plans for
 blocking an attack, each a different idea of the best blocks (`BLOCK_PLAN`):
 
 | Plan | Puts first | Then |
@@ -742,11 +742,12 @@ blocking an attack, each a different idea of the best blocks (`BLOCK_PLAN`):
 | `creatures` | the least creature value lost | kills, then life |
 | `kills` | the most attackers killed, then their value | life, then creatures kept |
 | `optimal` | the most attackers killed, then their value | creatures kept, then life |
+| `value` | attacker value killed − blocker value lost + life kept × `damageWeight(life)` | creatures kept, then life |
 
 Every plan survives the combat first, if any blocks can. First-strike damage counts before
 lifelink gains it back. Each plan gives its blocks, whether the defender survives, the life left,
 and the attackers and blockers that die, so the plans can be compared or played out. On real
-boards, the four plans usually come to two different sets of blocks. `blockingPlansFor(state,
+boards, the first four plans usually come to two different sets of blocks. `blockingPlansFor(state,
 me, canBlockPair)` reads them from a game state. `optimalBlocks` and `planOptimalBlocks` make
 just the `optimal` plan.
 
@@ -763,6 +764,26 @@ class of identical blockers are left.
 - **Budgets:** boards beyond `stateLimit` or `nodeLimit` get a best effort flagged
   `exact: false`. That only happens well past the campaign's 10 creatures a side.
 - **Tests:** `test/blocking.test.js` checks every plan against brute force on random boards.
+
+`value` is `planBlocks`' own scoring, solved exactly instead of greedily. To try a plan in the
+basic AI, pass `blocking: '<plan>'` (arena: `basic:blocks=<plan>`). Here is each plan, in place
+of `planBlocks`, against the basic AI, in mirror matches on every deck:
+
+| Blocking plan | Games | Win rate vs basic (95% CI) |
+| --- | --- | --- |
+| `value` | 2640 | 54.2% (52.3–56.1%) |
+| `creatures` | 2640 | 51.2% (49.3–53.1%) |
+| `optimal` | 1320 | 50.0% (47.3–52.7%) |
+| `kills` | 1320 | 43.2% (40.5–45.9%) |
+| `life` | 1320 | 40.2% (37.6–42.9%) |
+
+`value` also beats `creatures` head to head, 54.6% (52.7–56.5%) over 2640 games.
+
+- **Chump blocks:** the plans that put life before creatures (`life`, and `kills` after its
+  kills) chump-block attackers they can't kill, and lose for it.
+- **Trades:** putting kills first (`optimal`) trades a big creature for a small one.
+- **Weighing both:** weighing value killed against value lost, as `planBlocks` does, is what
+  wins. Solving that exactly gains about 4 points.
 
 ### Search AI (`SearchAIController`)
 

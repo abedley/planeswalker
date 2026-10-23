@@ -16,6 +16,7 @@ import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
+import { BLOCK_PLAN } from './blocking.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -67,8 +68,9 @@ const WINDOW = Object.freeze({
  * default, BLOCKING.GREEDY for planBlocks, or another plan (BLOCK_PLAN).
  * `predictBlocking` is how it expects the defender to block when it plans attacks.
  * Both default to BLOCKING.VALUE.
- * `attacking: 'lookahead'` attacks by planLookaheadAttack instead of planAttack,
- * thinking for up to `attackBudgetMs` per attack if it's given (more time, deeper looks).
+ * `attacking` is how it attacks: 'lookahead' (the default) by planLookaheadAttack,
+ * thinking for up to `attackBudgetMs` per attack if it's given (more time, deeper
+ * looks), or `attackTurns` of its turns ahead (default 3); 'basic' by planAttack.
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -81,18 +83,25 @@ export class BasicAIController extends EventEmitter {
   #predictBlocking;
   #attacking;
   #attackBudgetMs;
+  #attackTurns;
   #timer = null;
   #unsubscribers;
-  /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
-  #declaration = { key: null, steps: 0 };
+  /**
+   * The current attack or block declaration: its plan, made at its first step, and
+   * the changes made so far, to stop any back-and-forth.
+   */
+  #declaration = { key: null, steps: 0, plan: null };
 
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
-    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'basic', attackBudgetMs = null,
+    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3,
   }) {
     super();
+    if (blocking !== BLOCKING.GREEDY && !Object.values(BLOCK_PLAN).includes(blocking)) throw new Error(`Unknown block plan: ${blocking}`);
+    if (!['basic', 'lookahead'].includes(attacking)) throw new Error(`Unknown attacking: ${attacking}`);
     this.#attacking = attacking;
     this.#attackBudgetMs = attackBudgetMs;
+    this.#attackTurns = attackTurns;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -133,7 +142,7 @@ export class BasicAIController extends EventEmitter {
     const decision = state.pendingDecision;
     if (decision?.type === DECISION.DECLARE_ATTACKERS || decision?.type === DECISION.DECLARE_BLOCKERS) {
       const key = `${state.turn}:${state.segmentIndex}:${decision.type}`;
-      if (this.#declaration.key !== key) this.#declaration = { key, steps: 0 };
+      if (this.#declaration.key !== key) this.#declaration = { key, steps: 0, plan: null };
       // Plans are stable, so this never triggers in practice; it guarantees termination anyway.
       if (++this.#declaration.steps > 60) return find(ACTION.CONFIRM_ATTACKERS) ?? find(ACTION.CONFIRM_BLOCKERS) ?? mine[0];
     }
@@ -141,16 +150,18 @@ export class BasicAIController extends EventEmitter {
       case DECISION.DECLARE_ATTACKERS: {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
-        const wanted = passive ? []
-          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs }).attackers
+        // Planned once per declaration: it takes an action per attacker to carry out.
+        this.#declaration.plan ??= passive ? []
+          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns }).attackers
             : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
-        return moveTowards(decision.attackers, wanted, find);
+        return moveTowards(decision.attackers, this.#declaration.plan, find);
       }
       case DECISION.DECLARE_BLOCKERS: {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
-        const plan = passive ? {} : chooseBlocks(state, me, canBlockPair, { blocking: this.#blocking, heuristics: this.#heuristics });
-        return chooseBlock(decision.blocks, plan, find);
+        // Planned once per declaration, as for attacks.
+        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, { blocking: this.#blocking, heuristics: this.#heuristics });
+        return chooseBlock(decision.blocks, this.#declaration.plan, find);
       }
       case DECISION.ASSIGN_COMBAT_DAMAGE:
         return bestBy(mine, (a) => assignmentScore(state, decision, a.assignment));

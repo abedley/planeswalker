@@ -10,8 +10,9 @@
  * thousands of times a second.
  */
 import { isCreature, isLand, hasKeyword, manaValue, KEYWORD } from '../cards/cards.js';
-// blocking.js imports this module too; both only use the other's functions when called.
-import { blockingPlansFor, BLOCK_PLAN } from './blocking.js';
+// blocking.js imports this module too, so neither may use the other's exports while
+// loading (here, only inside functions).
+import { blockingPlansFor } from './blocking.js';
 
 const has = hasKeyword;
 
@@ -348,8 +349,8 @@ function attackOutcome(state, opponent, group, blocking) {
 
 /** How the AIs choose blocks: a plan of blockingPlans (BLOCK_PLAN), or planBlocks. */
 export const BLOCKING = Object.freeze({
-  /** blockingPlans' `value` plan: planBlocks' scoring, solved exactly. */
-  VALUE: BLOCK_PLAN.VALUE,
+  /** blockingPlans' `value` plan (BLOCK_PLAN.VALUE): planBlocks' scoring, solved exactly. */
+  VALUE: 'value',
   /** planBlocks: good blocks first, greedily. */
   GREEDY: 'greedy',
 });

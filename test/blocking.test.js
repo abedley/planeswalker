@@ -308,3 +308,12 @@ test('the value plan trades only when it gains', () => {
   assert.deepEqual(blockingPlans([dragon], [token], 20).value.blocks, {});
   assert.deepEqual(blockingPlans([dragon], [token], 8).value.blocks, { [token.id]: dragon.id });
 });
+
+test('each AI module loads first, whatever imports it', async () => {
+  const { execFileSync } = await import('node:child_process');
+  for (const module of ['blocking', 'attacking', 'combat']) {
+    execFileSync(process.execPath, ['--input-type=module', '-e', `await import(${JSON.stringify(new URL(`../src/ai/${module}.js`, import.meta.url).href)})`]);
+  }
+  const { BLOCKING } = await import('../src/ai/combat.js');
+  assert.equal(BLOCKING.VALUE, BLOCK_PLAN.VALUE);
+});

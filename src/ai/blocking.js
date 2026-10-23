@@ -53,19 +53,33 @@ const TR = 8;
 const LL = 16;
 const MENACE = 32;
 
-/** A creature as the solver (and fight()) needs it: plain numbers and flags. */
-export function record(creature, index) {
+/** The flags of combatFlags(). */
+export const COMBAT_FLAG = Object.freeze({
+  FIRST_STRIKE: FS, DOUBLE_STRIKE: DS, DEATHTOUCH: DT, TRAMPLE: TR, LIFELINK: LL, MENACE,
+});
+
+/** A creature's combat keywords, as flags. */
+export function combatFlags(creature) {
   const has = (k) => hasKeyword(creature, k);
+  return (has(KEYWORD.FIRST_STRIKE) ? FS : 0) | (has(KEYWORD.DOUBLE_STRIKE) ? DS : 0)
+    | (has(KEYWORD.DEATHTOUCH) ? DT : 0) | (has(KEYWORD.TRAMPLE) ? TR : 0)
+    | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0);
+}
+
+/**
+ * A creature as the solver (and fight()) needs it: plain numbers and flags. A
+ * creature can carry its value and flags, worked out once (`cachedValue`,
+ * `cachedFlags`, as the lookahead's creatures do).
+ */
+export function record(creature, index) {
   return {
     creature,
     index,
     power: creature.power,
     toughness: creature.toughness,
     damage: creature.damage ?? 0,
-    flags: (has(KEYWORD.FIRST_STRIKE) ? FS : 0) | (has(KEYWORD.DOUBLE_STRIKE) ? DS : 0)
-      | (has(KEYWORD.DEATHTOUCH) ? DT : 0) | (has(KEYWORD.TRAMPLE) ? TR : 0)
-      | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0),
-    value: creatureValue(creature),
+    flags: creature.cachedFlags ?? combatFlags(creature),
+    value: creature.cachedValue ?? creatureValue(creature),
   };
 }
 
@@ -301,17 +315,6 @@ const rescueFrom = new Uint8Array(MAX_BLOCKERS + 1);
 const gainFrom = new Uint8Array(MAX_BLOCKERS + 1);
 const top = new Float64Array(4);
 
-/** Whether the sorted class list `sub` is a sub-multiset of the sorted class list `of`. */
-function within(sub, of) {
-  let j = 0;
-  for (let i = 0; i < sub.length; i++) {
-    while (j < of.length && of[j] < sub[i]) j++;
-    if (j === of.length || of[j] !== sub[i]) return false;
-    j++;
-  }
-  return true;
-}
-
 /**
  * The options worth considering for one attacker: unblocked, and each blocking
  * group (legal, at most `groupMax` blockers) that might beat its subsets, `all`;
@@ -423,16 +426,24 @@ const sortIn = (order, options) => options.sort((x, y) => {
   return 0;
 });
 
+/** A list of classes (sorted, at most 4, each below 255) as one number. */
+const classesCode = (classes, mask = -1) => {
+  let code = 0;
+  for (let i = 0; i < classes.length; i++) if (mask & (1 << i)) code = code * 256 + classes[i] + 1;
+  return code;
+};
+
 /** The options that no subset option (unblocked included) is at least as good as, by `atLeast(p, o)`. */
 function undominated(options, atLeast) {
+  // Each option by its classes, so an option's subsets (at most 7) are looked up, not searched for.
+  if (!options.byClasses) options.byClasses = new Map(options.map((o) => [classesCode(o.classes), o]));
   const useful = [];
   for (const o of options) {
+    const n = o.classes.length;
     let dominated = false;
-    for (const p of options) {
-      if (p !== o && p.classes.length <= o.classes.length && atLeast(p, o) && within(p.classes, o.classes)) {
-        dominated = true;
-        break;
-      }
+    for (let mask = 0; mask < (1 << n) - 1 && !dominated; mask++) {
+      const p = options.byClasses.get(classesCode(o.classes, mask));
+      if (p && atLeast(p, o)) dominated = true;
     }
     if (!dominated) useful.push(o);
   }
@@ -483,6 +494,7 @@ export function blockingPlans(attackers, blockers, life, {
       blockMasks.push(mask);
     }
   }
+  if (blk.length === 0) return unblockedPlans(atk, life, plans);
   const groupMax = Math.min(maxGroup, 4);
 
   // Identical blockers (the same in combat, and able to block the same attackers)
@@ -553,17 +565,28 @@ export function blockingPlans(attackers, blockers, life, {
       tableStamp = 0;
     }
     const stamp = ++tableStamp;
-    const sV = [NONE];
+    // Each count of each slot (sums[i][slot]), kept apart so the search allocates nothing.
+    const sums = Array.from({ length: COUNTS }, () => [0]);
     const sNet1 = [0];
     const sChoice = [null];
     const sNext = [0];
     const store = (o, next) => {
-      const v = sV[next];
-      sV.push(add(o.v, v));
+      for (let i = 0; i < COUNTS; i++) sums[i].push(o.v[i] + sums[i][next]);
       sNet1.push(o.net1 + sNet1[next]);
       sChoice.push(o);
       sNext.push(next);
-      return sV.length - 1;
+      return sNext.length - 1;
+    };
+    /** A slot's counts, as an array. */
+    const countsOf = (slot) => sums.map((counts) => counts[slot]);
+    /** Whether option o then slot c beats option b then slot bc, in this order. */
+    const beats = (o, c, b, bc) => {
+      for (const i of order) {
+        const d = o.v[i] + sums[i][c] - (b.v[i] + sums[i][bc]);
+        if (d > EPS) return true;
+        if (d < -EPS) return false;
+      }
+      return false;
     };
     const remember = (key, slot) => {
       if (flat) {
@@ -596,19 +619,15 @@ export function blockingPlans(attackers, blockers, life, {
         const known = memo.get(key);
         if (known !== undefined) return known;
       }
-      if (sV.length > stateLimit) return remember(key, greedyTail(d, state));
+      if (sNext.length > stateLimit) return remember(key, greedyTail(d, state));
       let best = null;
       let bestNext = 0;
-      let bestV = null;
       for (const o of levels[d]) {
         if (!fits(o, state)) continue;
         const child = suffixBest(d + 1, state + o.delta);
-        const c = sV[child];
-        const v = add(o.v, c);
-        if (!best || !atLeastIn(order, bestV, v)) {
+        if (!best || beats(o, child, best, bestNext)) {
           best = o;
           bestNext = child;
-          bestV = v;
         }
       }
       return remember(key, store(best, bestNext));
@@ -620,7 +639,7 @@ export function blockingPlans(attackers, blockers, life, {
     const root = suffixBest(0, 0);
     let choice = [];
     for (let slot = root; slot !== 0; slot = sNext[slot]) choice.push(sChoice[slot]);
-    let bestKey = keyOf(survives(sNet1[root], -sV[root][LIFE]) ? 1 : 0, sV[root]);
+    let bestKey = keyOf(survives(sNet1[root], -sums[LIFE][root]) ? 1 : 0, countsOf(root));
     let searched = 0;
 
     if (!bestKey[0]) {
@@ -683,7 +702,7 @@ export function blockingPlans(attackers, blockers, life, {
             const w = add(v, o.v);
             if (!canSurvive(d + 1, after, n1, -w[LIFE])) continue;
             if (found) {
-              const c = sV[suffixBest(d + 1, after)];
+              const c = countsOf(suffixBest(d + 1, after));
               if (compareKeys(keyOf(1, add(w, c)), bestKey) <= 0) continue;
             }
             chosen[d] = o;
@@ -693,7 +712,19 @@ export function blockingPlans(attackers, blockers, life, {
         visit(0, 0, NONE, 0);
       }
     }
-    return { choice, exact, nodes: sV.length - 1 + searched };
+    return { choice, exact, nodes: sNext.length - 1 + searched };
+  };
+
+  /** With one attacker, nothing competes for blockers: its best option, surviving first. */
+  const single = (order) => {
+    let best = null;
+    let bestKey = null;
+    // As in search(), no bigger group than needed.
+    for (const o of undominated(optionsOf[sequence[0]].all, (p, q) => paretoAtLeast(p, q) && atLeastIn(order, p.v, q.v))) {
+      const key = [survives(o.net1, -o.v[LIFE]) ? 1 : 0, ...order.map((i) => o.v[i])];
+      if (!best || compareKeys(key, bestKey) > 0) [best, bestKey] = [o, key];
+    }
+    return { choice: [best], exact: true, nodes: 0 };
   };
 
   // Each plan: hand out each class's blockers to the groups that use it, and read
@@ -702,7 +733,7 @@ export function blockingPlans(attackers, blockers, life, {
   for (const plan of plans) {
     const order = PRIORITIES[plan];
     if (!order) throw new Error(`Unknown block plan: ${plan}`);
-    const { choice, exact, nodes } = search(order);
+    const { choice, exact, nodes } = depth === 1 ? single(order) : search(order);
     const blocks = {};
     const dead = new Set();
     const next = sizes.map(() => 0);
@@ -732,6 +763,35 @@ export function blockingPlans(attackers, blockers, life, {
       value: v[VALUE],
       exact,
       nodes,
+    };
+  }
+  return result;
+}
+
+/** blockingPlans when nothing can block: every plan lets everything through. */
+function unblockedPlans(atk, life, plans) {
+  let damage1 = 0;
+  let damage = 0;
+  for (const a of atk) {
+    if (a.power <= 0) continue;
+    if (a.flags & (FS | DS)) damage1 += a.power;
+    damage += a.power * (a.flags & DS ? 2 : 1);
+  }
+  const result = {};
+  for (const plan of plans) {
+    if (!PRIORITIES[plan]) throw new Error(`Unknown block plan: ${plan}`);
+    result[plan] = {
+      blocks: {},
+      survives: life - damage1 > 0 && life - damage > 0,
+      lifeAfter: life - damage,
+      deadAttackers: [],
+      deadBlockers: [],
+      kills: 0,
+      killedValue: 0,
+      lostValue: 0,
+      value: -damage * damageWeight(life),
+      exact: true,
+      nodes: 0,
     };
   }
   return result;

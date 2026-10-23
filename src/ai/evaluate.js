@@ -10,7 +10,7 @@
 import { isCreature, isLand } from '../cards/cards.js';
 import { GAME_STATUS } from '../engine/Game.js';
 import {
-  creatureValue, damageThrough, planAttack, planBlocks, combatValue, damageWeight, canBlock,
+  creatureValue, damageThrough, planAttack, chooseBlocks, combatValue, damageWeight, canBlock,
 } from './combat.js';
 import { TUNED_WEIGHTS, DECK_WEIGHTS } from './weights.js';
 
@@ -224,7 +224,7 @@ function nextCombat(state, attackerId) {
   if (group.length === 0) return 0;
   const byId = (id) => state.battlefield.find((p) => p.id === id);
   const hypothetical = { ...state, combat: { attackers: group.map((c) => ({ cardId: c.id, blockerIds: [] })) } };
-  const blocks = planBlocks(hypothetical, defenderId, (b, a) => canBlock(byId(b), byId(a)));
+  const blocks = chooseBlocks(hypothetical, defenderId, (b, a) => canBlock(byId(b), byId(a)));
   const defender = state.players.find((p) => p.id === defenderId);
   return combatValue(group.map((attacker) => {
     const blockers = Object.entries(blocks).filter(([, a]) => a === attacker.id).map(([b]) => byId(b));

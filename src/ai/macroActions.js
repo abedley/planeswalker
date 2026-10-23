@@ -17,7 +17,9 @@ import { DECISION } from '../engine/Game.js';
 import { PHASE } from '../engine/turnStructure.js';
 import { canPayMana } from '../engine/mana.js';
 import { isCreature, isLand, isInstant, isAura, hasKeyword, KEYWORD, EFFECT } from '../cards/cards.js';
-import { planAttack, planBlocks, creatureValue } from './combat.js';
+import {
+  planAttack, planBlocks, chooseBlocks, creatureValue, BLOCKING,
+} from './combat.js';
 import { candidateTargets, scoreEffects, costScore } from './scoring.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction,
@@ -84,8 +86,9 @@ function blockMacros(state, me, mine, heuristicPlans) {
   const decision = state.pendingDecision;
   const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
     || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
-  const plan = planBlocks(state, me, canBlockPair);
-  const options = [plan, {}];
+  // The basic AI's blocks, and planBlocks' greedy ones.
+  const plan = chooseBlocks(state, me, canBlockPair);
+  const options = [plan, {}, chooseBlocks(state, me, canBlockPair, { blocking: BLOCKING.GREEDY })];
   if (heuristicPlans) for (const heuristics of HEURISTIC_PLANS.block) options.push(planBlocks(state, me, canBlockPair, { heuristics }));
   // The plan without each blocker in turn (menace pairs stay together).
   for (const blockerId of Object.keys(plan)) {

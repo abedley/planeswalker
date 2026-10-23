@@ -710,9 +710,12 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
     that's lethal through the best possible blocks. Then it adds any other attacker that makes
     the whole attack better against the defender's best blocks: each blocker stops only one
     attacker, so more attackers than they can block well get through ("swarming"). It keeps enough blockers home to survive
-    the crack-back, and goes all in when it's losing the race to deck out.
-  - **Blocks:** kills attackers or trades up, double-blocks big threats, and chump-blocks only
-    to survive.
+    the crack-back, and goes all in when it's losing the race to deck out. It expects the
+    defender to block as it does itself (`predictBlocking`).
+  - **Blocks:** the `value` plan of *Blocking plans* below: the blocks worth the most, counting
+    attacker value killed, blocker value lost, and life kept (worth more when life is low),
+    solved exactly. It survives first, and chump-blocks only when the life is worth the creature.
+    `blocking: 'greedy'` blocks as it used to (`planBlocks`: good blocks first, greedily).
   - **Predictions:** its combat predictions follow the engine's rules (first strike, double
     strike, deathtouch, trample, lifelink); a test checks them against real combats for every
     keyword pairing.
@@ -765,9 +768,10 @@ class of identical blockers are left.
   `exact: false`. That only happens well past the campaign's 10 creatures a side.
 - **Tests:** `test/blocking.test.js` checks every plan against brute force on random boards.
 
-`value` is `planBlocks`' own scoring, solved exactly instead of greedily. To try a plan in the
-basic AI, pass `blocking: '<plan>'` (arena: `basic:blocks=<plan>`). Here is each plan, in place
-of `planBlocks`, against the basic AI, in mirror matches on every deck:
+`value` is `planBlocks`' own scoring, solved exactly instead of greedily, and it's how the basic
+AI blocks. To try another plan, pass `blocking: '<plan>'` (arena: `basic:blocks=<plan>`;
+`greedy` for `planBlocks`). Here is each plan, in place of `planBlocks`, against the basic AI as
+it was (blocking with `planBlocks`), in mirror matches on every deck:
 
 | Blocking plan | Games | Win rate vs basic (95% CI) |
 | --- | --- | --- |
@@ -784,6 +788,20 @@ of `planBlocks`, against the basic AI, in mirror matches on every deck:
 - **Trades:** putting kills first (`optimal`) trades a big creature for a small one.
 - **Weighing both:** weighing value killed against value lost, as `planBlocks` does, is what
   wins. Solving that exactly gains about 4 points.
+
+With `value` as the default, the basic AI's attacks also expect the defender to block that way
+(`predictBlocking`; arena: `basic:predict=greedy` for the old expectation). The search AI's
+evaluation predicts the next combat the same way, and it offers both `value` and greedy blocks
+as candidates.
+
+| Match | Games | First AI's win rate (95% CI) |
+| --- | --- | --- |
+| basic (now) vs basic as it was (greedy blocks, greedy predictions) | 2640 | 53.0% (51.1–54.9%) |
+| basic (now) vs the same with greedy predictions | 2640 | 50.9% (49.0–52.8%) |
+
+Predicting `value` blocks is neutral in the arena, where both sides block the same way, but it's
+right, as each side expects the blocks it will actually meet. Playouts are up to 9% slower (the
+benchmark's standard deck: 52 to 48 games/s).
 
 ### Search AI (`SearchAIController`)
 

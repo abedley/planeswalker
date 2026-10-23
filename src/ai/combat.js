@@ -10,6 +10,8 @@
  * thousands of times a second.
  */
 import { isCreature, isLand, hasKeyword, manaValue, KEYWORD } from '../cards/cards.js';
+// blocking.js imports this module too; both only use the other's functions when called.
+import { blockingPlansFor, BLOCK_PLAN } from './blocking.js';
 
 const has = hasKeyword;
 
@@ -202,8 +204,9 @@ export function damageThrough(attackers, blockers) {
  *   losing at least as much), and
  * - everything when the attack is lethal through the best possible blocks,
  * - keeping enough creatures home to survive the opponent's next attack.
+ * It expects the defender to block as chooseBlocks does with `blocking`.
  */
-export function planAttack(state, me, candidates, { swarm = true, heuristics = {} } = {}) {
+export function planAttack(state, me, candidates, { swarm = true, heuristics = {}, blocking = BLOCKING.VALUE } = {}) {
   const opponent = state.players.find((p) => p.id !== me);
   // Our creatures by the opponent's turn: those in play, and those we can still cast
   // this turn (after combat), which block just as well.
@@ -269,9 +272,9 @@ export function planAttack(state, me, candidates, { swarm = true, heuristics = {
   // attacker whenever it makes the whole attack better against their best blocks.
   if (swarm) {
     const extra = attackers.filter((c) => !chosen.includes(c)).sort((a, b) => b.power - a.power || (a.id < b.id ? -1 : 1));
-    let best = attackOutcome(state, opponent, chosen);
+    let best = attackOutcome(state, opponent, chosen, blocking);
     for (const attacker of extra) {
-      const outcome = attackOutcome(state, opponent, [...chosen, attacker]);
+      const outcome = attackOutcome(state, opponent, [...chosen, attacker], blocking);
       if (outcome > best + 0.25) {
         chosen.push(attacker);
         best = outcome;
@@ -330,17 +333,35 @@ export function plannedCreatures(state, me) {
 
 /**
  * How good attacking with `group` is (combatValue, from the attacker's side) if
- * `opponent` blocks as planBlocks would.
+ * `opponent` blocks as chooseBlocks would with `blocking`.
  */
-function attackOutcome(state, opponent, group) {
+function attackOutcome(state, opponent, group, blocking) {
   if (group.length === 0) return 0;
   const hypothetical = { ...state, combat: { attackers: group.map((c) => ({ cardId: c.id, blockerIds: [] })) } };
   const byId = (id) => state.battlefield.find((p) => p.id === id);
-  const blocks = planBlocks(hypothetical, opponent.id, (b, a) => canBlock(byId(b), byId(a)));
+  const blocks = chooseBlocks(hypothetical, opponent.id, (b, a) => canBlock(byId(b), byId(a)), { blocking });
   return combatValue(group.map((attacker) => {
     const blockers = Object.entries(blocks).filter(([, a]) => a === attacker.id).map(([b]) => byId(b));
     return { attacker, blockers, blocked: blockers.length > 0 };
   }), { damageWeight: damageWeight(opponent.life) });
+}
+
+/** How the AIs choose blocks: a plan of blockingPlans (BLOCK_PLAN), or planBlocks. */
+export const BLOCKING = Object.freeze({
+  /** blockingPlans' `value` plan: planBlocks' scoring, solved exactly. */
+  VALUE: BLOCK_PLAN.VALUE,
+  /** planBlocks: good blocks first, greedily. */
+  GREEDY: 'greedy',
+});
+
+/**
+ * Blocks for the defending player `me`, `{ blockerId: attackerId }`, as `blocking`
+ * chooses them: BLOCKING.GREEDY for planBlocks (with `heuristics`), or any plan of
+ * blockingPlans. `canBlockPair(blockerId, attackerId)` says which blocks the engine allows.
+ */
+export function chooseBlocks(state, me, canBlockPair, { blocking = BLOCKING.VALUE, heuristics = {} } = {}) {
+  if (blocking === BLOCKING.GREEDY) return planBlocks(state, me, canBlockPair, { heuristics });
+  return blockingPlansFor(state, me, canBlockPair, { plans: [blocking] })[blocking].blocks;
 }
 
 /**

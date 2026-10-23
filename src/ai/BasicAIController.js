@@ -10,12 +10,11 @@ import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction,
 } from './manaPlanning.js';
 import {
-  creatureValue, planAttack, planBlocks, combatValue, damageWeight,
+  creatureValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
 } from './combat.js';
 import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
 } from './scoring.js';
-import { blockingPlansFor } from './blocking.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -63,8 +62,10 @@ const WINDOW = Object.freeze({
  * schedules the action with setTimeout so a viewer can follow along.
  * `swarm: false` attacks the way the previous version did, without swarming (see
  * planAttack), as a baseline for the arena (`basic-noswarm`).
- * `blocking: <plan>` blocks by one of blockingPlans' plans (BLOCK_PLAN, e.g.
- * 'optimal') instead of planBlocks.
+ * `blocking` is how it blocks (see chooseBlocks): blockingPlans' `value` plan by
+ * default, BLOCKING.GREEDY for planBlocks, or another plan (BLOCK_PLAN).
+ * `predictBlocking` is how it expects the defender to block when it plans attacks.
+ * Both default to BLOCKING.VALUE.
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -74,17 +75,20 @@ export class BasicAIController extends EventEmitter {
   #swarm;
   #heuristics;
   #blocking;
+  #predictBlocking;
   #timer = null;
   #unsubscribers;
   /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
   #declaration = { key: null, steps: 0 };
 
   constructor({
-    game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {}, blocking = null,
+    game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
+    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE,
   }) {
     super();
     this.#swarm = swarm;
     this.#blocking = blocking;
+    this.#predictBlocking = predictBlocking;
     // Creatures after combat (see permanentSpellOptions) is on unless turned off (`postCombat: false`).
     this.#heuristics = { postCombat: true, ...heuristics };
     this.#game = game;
@@ -130,16 +134,15 @@ export class BasicAIController extends EventEmitter {
       case DECISION.DECLARE_ATTACKERS: {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
-        const wanted = passive ? [] : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics });
+        const wanted = passive ? [] : planAttack(state, me, candidates, {
+          swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking,
+        });
         return moveTowards(decision.attackers, wanted, find);
       }
       case DECISION.DECLARE_BLOCKERS: {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
-        if (passive) return chooseBlock(decision.blocks, {}, find);
-        const plan = this.#blocking
-          ? blockingPlansFor(state, me, canBlockPair, { plans: [this.#blocking] })[this.#blocking].blocks
-          : planBlocks(state, me, canBlockPair, { heuristics: this.#heuristics });
+        const plan = passive ? {} : chooseBlocks(state, me, canBlockPair, { blocking: this.#blocking, heuristics: this.#heuristics });
         return chooseBlock(decision.blocks, plan, find);
       }
       case DECISION.ASSIGN_COMBAT_DAMAGE:

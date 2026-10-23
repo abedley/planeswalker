@@ -30,3 +30,9 @@ test('the basic AI can block by a blocking plan', () => {
   assert.equal(totals.games, 4);
   assert.throws(() => playGame({ seats: { p1: 'basic:blocks=nonsense', p2: 'basic' }, seed: 1, ...DECKS.keywords }), /Unknown block plan/);
 });
+
+test('the basic AI can block and predict blocks the old, greedy way', () => {
+  const { totals } = runArena({ a: 'basic', b: 'basic:blocks=greedy,predict=greedy', games: 1, decks: ['white'] });
+  assert.equal(totals.games, 2);
+  assert.throws(() => playGame({ seats: { p1: 'basic:speed=9', p2: 'basic' }, seed: 1, ...DECKS.white }), /Unknown basic AI setting/);
+});

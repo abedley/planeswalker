@@ -67,24 +67,25 @@ export const CONTESTANTS = {
 export function contestant(name) {
   const [base, settings = ''] = name.split(':');
   if (!settings) return CONTESTANTS[base];
-  // basic:blocks=optimal: the basic AI blocking by one of blockingPlans' plans.
-  if (base === 'basic' && settings.startsWith('blocks=')) {
-    const blocking = settings.slice('blocks='.length);
-    return (playerId) => {
-      const ai = new BasicAIController({ game: null, playerId, blocking });
-      return (state) => ai.chooseAction(state);
-    };
-  }
   // basic:h=attrition+danger: the basic AI with those heuristics on (see planAttack, planBlocks).
+  // basic:blocks=greedy,predict=greedy: how it blocks, and how it expects blocks when
+  // it attacks (see chooseBlocks: greedy, or a plan of blockingPlans).
   if (base === 'basic') {
-    const names = settings.replace(/^h=/, '').split('+').filter(Boolean);
-    // name@value sets a heuristic's strength, e.g. danger@6.
-    const heuristics = Object.fromEntries(names.map((h) => {
-      const [key, value] = h.split('@');
-      return [key, value === undefined ? true : Number(value)];
-    }));
+    const options = { heuristics: {} };
+    for (const part of settings.split(',')) {
+      const [key, value] = part.includes('=') ? part.split('=') : ['h', part];
+      if (key === 'blocks') options.blocking = value;
+      else if (key === 'predict') options.predictBlocking = value;
+      else if (key === 'h') {
+        // name@value sets a heuristic's strength, e.g. danger@6.
+        for (const h of value.split('+').filter(Boolean)) {
+          const [name, strength] = h.split('@');
+          options.heuristics[name] = strength === undefined ? true : Number(strength);
+        }
+      } else throw new Error(`Unknown basic AI setting "${key}"`);
+    }
     return (playerId) => {
-      const ai = new BasicAIController({ game: null, playerId, heuristics });
+      const ai = new BasicAIController({ game: null, playerId, ...options });
       return (state) => ai.chooseAction(state);
     };
   }

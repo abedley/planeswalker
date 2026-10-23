@@ -41,3 +41,18 @@ test('attacks with no one when nothing can attack', () => {
   const wall = creature('me', 0, 5, [KEYWORD.DEFENDER]);
   assert.deepEqual(plan([wall], [creature('them', 2, 2)], 20, 20).attackers, []);
 });
+
+test('looks further ahead, and at more plans, with more time to think', () => {
+  const mine = [creature('me', 3, 3), creature('me', 2, 2), creature('me', 4, 1), creature('me', 1, 1)];
+  const theirs = [creature('them', 3, 3), creature('them', 2, 2), creature('them', 1, 4)];
+  const quick = planLookaheadAttack(board(mine, theirs, 14, 11), 'me', mine);
+  assert.equal(quick.turns, 3);
+  assert.equal(quick.plans, 3);
+  const long = planLookaheadAttack(board(mine, theirs, 14, 11), 'me', mine, { budgetMs: 200 });
+  assert.ok(long.turns > quick.turns, `${long.turns} turns`);
+  assert.ok(long.plans > quick.plans, `${long.plans} plans`);
+  const ids = new Set(mine.map((c) => c.id));
+  assert.ok(long.attackers.every((id) => ids.has(id)));
+  // No time at all still gives an attack.
+  assert.ok(Array.isArray(planLookaheadAttack(board(mine, theirs, 14, 11), 'me', mine, { budgetMs: 0 }).attackers));
+});

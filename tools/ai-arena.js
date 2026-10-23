@@ -70,7 +70,7 @@ export function contestant(name) {
   // basic:h=attrition+danger: the basic AI with those heuristics on (see planAttack, planBlocks).
   // basic:blocks=greedy,predict=greedy: how it blocks, and how it expects blocks when
   // it attacks (see chooseBlocks: greedy, or a plan of blockingPlans).
-  // basic:attack=lookahead: it attacks by planLookaheadAttack.
+  // basic:attack=lookahead,think=50: it attacks by planLookaheadAttack (thinking up to 50 ms).
   if (base === 'basic') {
     const options = { heuristics: {} };
     for (const part of settings.split(',')) {
@@ -78,6 +78,7 @@ export function contestant(name) {
       if (key === 'blocks') options.blocking = value;
       else if (key === 'predict') options.predictBlocking = value;
       else if (key === 'attack') options.attacking = value;
+      else if (key === 'think') options.attackBudgetMs = Number(value);
       else if (key === 'h') {
         // name@value sets a heuristic's strength, e.g. danger@6.
         for (const h of value.split('+').filter(Boolean)) {

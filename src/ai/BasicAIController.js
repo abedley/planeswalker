@@ -67,7 +67,8 @@ const WINDOW = Object.freeze({
  * default, BLOCKING.GREEDY for planBlocks, or another plan (BLOCK_PLAN).
  * `predictBlocking` is how it expects the defender to block when it plans attacks.
  * Both default to BLOCKING.VALUE.
- * `attacking: 'lookahead'` attacks by planLookaheadAttack instead of planAttack.
+ * `attacking: 'lookahead'` attacks by planLookaheadAttack instead of planAttack,
+ * thinking for up to `attackBudgetMs` per attack if it's given (more time, deeper looks).
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -79,6 +80,7 @@ export class BasicAIController extends EventEmitter {
   #blocking;
   #predictBlocking;
   #attacking;
+  #attackBudgetMs;
   #timer = null;
   #unsubscribers;
   /** Changes made in the current attack or block declaration, to stop any back-and-forth. */
@@ -86,10 +88,11 @@ export class BasicAIController extends EventEmitter {
 
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
-    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'basic',
+    blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'basic', attackBudgetMs = null,
   }) {
     super();
     this.#attacking = attacking;
+    this.#attackBudgetMs = attackBudgetMs;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -139,7 +142,7 @@ export class BasicAIController extends EventEmitter {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
         const wanted = passive ? []
-          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates).attackers
+          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs }).attackers
             : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
         return moveTowards(decision.attackers, wanted, find);
       }

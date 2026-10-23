@@ -106,6 +106,8 @@ export function contestant(name) {
       if (value.startsWith('@')) return ['weights', JSON.parse(readFileSync(value.slice(1), 'utf8'))];
       return ['weights', value];
     }
+    // at=lookahead: how it attacks (see searchPolicy).
+    if (key === 'at') return ['attacking', value];
     // e=tiered: the evaluation (see evaluateTiered); the rest are numbers.
     return [keys[key] ?? key, key === 'e' ? value : Number(value)];
   }));

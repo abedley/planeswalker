@@ -43,9 +43,12 @@ const contextOf = (state) => `${state.turn}:${state.segmentIndex}:${state.pendin
  * where `me` has a decision worth searching: `[{ view, macros, defaults }]`,
  * nearest first. `macro`: the play `me` is in the middle of, carried on first.
  * `skipCurrent`: don't count the current position (it's being searched already).
+ * `attacking`: how `me` attacks (see searchPolicy).
  */
-export function ponderTargets(game, me, { macro = null, limit = 3, maxSteps = 400, skipCurrent = false } = {}) {
-  const fallback = new BasicAIController({ game: null, playerId: me });
+export function ponderTargets(game, me, {
+  macro = null, limit = 3, maxSteps = 400, skipCurrent = false, attacking = 'basic',
+} = {}) {
+  const fallback = new BasicAIController({ game: null, playerId: me, attacking });
   const targets = [];
   let current = macro;
   const context = current ? contextOf(game.peekState()) : null;
@@ -63,10 +66,10 @@ export function ponderTargets(game, me, { macro = null, limit = 3, maxSteps = 40
       } else {
         current = null;
         if (!(first && skipCurrent) && worthSearching(state, me)) {
-          const macros = listMacros(state, me);
+          const macros = listMacros(state, me, { attacking });
           if (macros.length > 1) {
             // `state` is the game's own (peekState), so everything is taken from it now.
-            const defaults = defaultMacros(state, me, macros, new BasicAIController({ game: null, playerId: me }));
+            const defaults = defaultMacros(state, me, macros, new BasicAIController({ game: null, playerId: me, attacking }));
             targets.push({ view: game.getPlayerView(me), macros, defaults });
           }
         }

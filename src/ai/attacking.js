@@ -177,10 +177,10 @@ const SUBSETS_UP_TO = 6;
  *   It answers from the deepest look whose strategies all finished.
  *
  * @returns {{ attackers: string[], strategy: string, later: string, turns: number,
- *   plans: number, scores: Object<string, number> }} the attackers' ids, the plan
- *   chosen (its first attack's strategy, or 'other', and the strategy after), how many
- *   turns it looked ahead, how many plans it scored at that depth, and each
- *   strategy's worst-case score there.
+ *   plans: number, scores: Object<string, number>, strategies: Object<string, string[]> }}
+ *   the attackers' ids, the plan chosen (its first attack's strategy, or 'other', and
+ *   the strategy after), how many turns it looked ahead, how many plans it scored at
+ *   that depth, each strategy's worst-case score there, and each strategy's attack.
  */
 export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs = null } = {}) {
   const able = new Set(candidates.filter((c) => c.power > 0).map((c) => c.id));
@@ -236,6 +236,7 @@ export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs
     }
     return worst;
   };
+  const strategies = Object.fromEntries(order.map((strategy) => [strategy, firsts[strategy].map((c) => c.id)]));
   let answer = null;
   for (let depth = budgetMs === null ? turns : 1; depth <= (budgetMs === null ? turns : MAX_TURNS); depth++) {
     const scores = {};
@@ -252,13 +253,13 @@ export function planLookaheadAttack(state, me, candidates, { turns = 3, budgetMs
     if (tried < order.length) break;
     answer = {
       attackers: best.plan.first.map((c) => c.id), strategy: best.plan.strategy, later: best.plan.later,
-      turns: depth, plans: tried, scores,
+      turns: depth, plans: tried, scores, strategies,
     };
     if (performance.now() > deadline) break;
   }
   // Out of time before even one look: the value attack.
   return answer ?? {
     attackers: firsts[ATTACK_STRATEGY.VALUE].map((c) => c.id), strategy: ATTACK_STRATEGY.VALUE,
-    later: ATTACK_STRATEGY.VALUE, turns: 0, plans: 0, scores: {},
+    later: ATTACK_STRATEGY.VALUE, turns: 0, plans: 0, scores: {}, strategies,
   };
 }

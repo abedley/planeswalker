@@ -114,6 +114,10 @@ when inspecting). Cards without art, such as the samples and tokens, get generat
 in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
 can have `art` and `color`; otherwise they get a monogram crest.
 
+**Blocking restrictions:** a creature that can't block, or can't be blocked, wears a badge on
+the board ("Can't block" in red, "Unblockable" in blue). One that has it only this turn, from a
+spell or ability, has a gold outline.
+
 **Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
 color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
 [Keyrune](https://keyrune.andrewgioia.com) fonts by Andrew Gioia, vendored in `app/vendor/`.

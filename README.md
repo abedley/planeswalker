@@ -812,7 +812,7 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
 | Strategy | Attacks with |
 | --- | --- |
 | `aggressive` | everything that can attack, to race |
-| `value` | attackers added one at a time while the trade improves against the defender's blocks: creature value killed minus value lost, plus a little for chip damage (more when the defender is low) |
+| `value` | attackers added one at a time while the trade improves against the defender's blocks: creature value killed minus value lost, plus a little for chip damage (more when the defender is low), but only when it loses no more than it kills |
 | `hold` | the `value` attack, minus the creatures it will want as blockers when the opponent attacks with everything next turn |
 
 - **Lookahead:** each of our strategies plays out for 3 of our turns, and theirs after each,
@@ -823,13 +823,31 @@ strategies (`ATTACK_STRATEGY`) by playing each out a few turns:
   comes; otherwise the score is board value plus life, which counts for more when it's low.
 - **Trying it:** it's opt-in, `BasicAIController({ attacking: 'lookahead' })` (arena:
   `basic:attack=lookahead`).
+- **Speed:** within a decision, it caches the combats it predicts.
+- **Thinking time:** with `budgetMs` (`attackBudgetMs`; arena: `think=<ms>`), it thinks for
+  about that long. It looks 1, 2, 3, ... turns ahead (up to 8), each time trying more plans:
+  - the strategies
+  - each strategy's first attack followed by another (hold now, race later)
+  - other first attacks (every subset of the attackers on small boards)
+
+  It answers from the deepest look it finished.
 
 | Match | Games | First AI's win rate (95% CI) |
 | --- | --- | --- |
 | basic with lookahead attacks vs basic | 2640 | 52.1% (50.2–54.0%) |
+| lookahead attacks thinking up to 50 ms vs without a budget | 1320 | 50.7% (48.0–53.4%) |
 
 It wins or ties on 9 of the 11 decks. Its games run longer, as it holds back more: green's go from
-22 to 31 turns. Its attack decisions take up to a few milliseconds on big boards.
+22 to 31 turns. Its decisions take about 1 ms on average on the biggest boards (the keyword
+sampler's).
+
+The chip damage rule and the cache changed none of those 2640 games.
+
+More thinking time doesn't help yet, as with the search AI. The lookahead's own model is the
+limit:
+- no cards are cast
+- each side follows one of three strategies
+- it plans for the opponent's best reply
 
 ### Search AI (`SearchAIController`)
 

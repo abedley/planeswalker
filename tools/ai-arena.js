@@ -67,6 +67,14 @@ export const CONTESTANTS = {
 export function contestant(name) {
   const [base, settings = ''] = name.split(':');
   if (!settings) return CONTESTANTS[base];
+  // basic:blocks=optimal: the basic AI blocking by one of blockingPlans' plans.
+  if (base === 'basic' && settings.startsWith('blocks=')) {
+    const blocking = settings.slice('blocks='.length);
+    return (playerId) => {
+      const ai = new BasicAIController({ game: null, playerId, blocking });
+      return (state) => ai.chooseAction(state);
+    };
+  }
   // basic:h=attrition+danger: the basic AI with those heuristics on (see planAttack, planBlocks).
   if (base === 'basic') {
     const names = settings.replace(/^h=/, '').split('+').filter(Boolean);

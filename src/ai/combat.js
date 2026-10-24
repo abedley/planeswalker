@@ -9,7 +9,7 @@
  * rather than run through a game copy because the AI's rollouts call them
  * thousands of times a second.
  */
-import { isCreature, isLand, hasKeyword, manaValue, KEYWORD } from '../cards/cards.js';
+import { isCreature, isLand, hasKeyword, cantAttack, manaValue, KEYWORD } from '../cards/cards.js';
 // blocking.js imports this module too, so neither may use the other's exports while
 // loading (here, only inside functions).
 import { blockingPlansFor } from './blocking.js';
@@ -31,8 +31,28 @@ export function creatureValue(creature) {
   if (has(creature, KEYWORD.VIGILANCE)) value += 0.5;
   if (has(creature, KEYWORD.REACH)) value += 0.5;
   if (has(creature, KEYWORD.HASTE)) value += 0.2;
-  if (has(creature, KEYWORD.DEFENDER)) value -= 1.5 * power;
+  if (cantAttack(creature)) value -= 1.5 * power;
+  // Pacified (can't attack or block): little more than a body to sacrifice.
+  if (has(creature, KEYWORD.CANT_ATTACK) && has(creature, KEYWORD.CANT_BLOCK)) value -= toughness;
   return value;
+}
+
+/**
+ * How much value a curse Aura (isCurse) takes from `creature`: the drop in
+ * creatureValue with the Aura's bonus applied, or all of it if that kills it.
+ */
+export function curseValue(creature, aura) {
+  let cursed = creature;
+  for (const e of aura.staticAbilities ?? []) {
+    cursed = {
+      ...cursed,
+      power: cursed.power + (e.power ?? 0),
+      toughness: cursed.toughness + (e.toughness ?? 0),
+      keywords: [...new Set([...(cursed.keywords ?? []), ...(e.keywords ?? [])])],
+    };
+  }
+  const value = creatureValue(creature);
+  return cursed.toughness <= (creature.damage ?? 0) ? value : value - creatureValue(cursed);
 }
 
 /** Whether `blocker` may block `attacker` (702.9b, 702.17b); menace is a rule about the whole block. */
@@ -228,7 +248,7 @@ export function planAttack(state, me, candidates, { swarm = true, heuristics = {
   if (me_.library.length < opponent.library.length && me_.library.length <= 6) return attackers.map((c) => c.id);
 
   const myLife = me_.life;
-  const theirAttackers = theirs.filter((c) => !has(c, KEYWORD.DEFENDER));
+  const theirAttackers = theirs.filter((c) => !cantAttack(c));
   // Turns for a side to kill the other at this rate (blockers untapped), Infinity if never.
   const clock = (attacking, defending, life) => {
     const perTurn = damageThrough(attacking, defending.map((c) => ({ ...c, tapped: false })));
@@ -289,7 +309,7 @@ export function planAttack(state, me, candidates, { swarm = true, heuristics = {
     const home = mine.filter((c) => !attacking.includes(c) || has(c, KEYWORD.VIGILANCE));
     // Next turn our creatures untap; theirs can all attack.
     const untapped = home.map((c) => ({ ...c, tapped: false }));
-    return damageThrough(theirs.filter((c) => !has(c, KEYWORD.DEFENDER)), untapped);
+    return damageThrough(theirs.filter((c) => !cantAttack(c)), untapped);
   };
   // H4 (Forge's blockers kept home): a creature stays home if attacking with it
   // would cost more life on their crack-back than the damage it can expect to deal.

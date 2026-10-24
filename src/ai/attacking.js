@@ -17,7 +17,7 @@
  * a race we win. A win scores more the sooner it comes; otherwise the score is board
  * value plus life, which counts for more when it's low.
  */
-import { hasKeyword, isCreature, KEYWORD } from '../cards/cards.js';
+import { hasKeyword, cantAttack, isCreature, KEYWORD } from '../cards/cards.js';
 import { creatureValue, damageWeight, canBlock } from './combat.js';
 import {
   blockingPlans, BLOCK_PLAN, fight, record, combatFlags, COMBAT_FLAG,
@@ -42,7 +42,7 @@ const has = hasKeyword;
  * A side in the lookahead: `{ life, creatures }`, where creatures are copies of
  * permanents, with `sick` on those that can't attack this turn.
  */
-const ready = (c) => !c.tapped && !c.sick && c.power > 0 && !has(c, KEYWORD.DEFENDER);
+const ready = (c) => !c.tapped && !c.sick && c.power > 0 && !cantAttack(c);
 
 /**
  * The blocking search's budgets in the lookahead (see blockingPlans): lower than
@@ -247,7 +247,7 @@ const STRATEGIES = {
   [ATTACK_STRATEGY.VALUE]: valueAttack,
   [ATTACK_STRATEGY.HOLD]: (attacking, defending, able, cache) => {
     // The blockers we'd use if they attacked with everything, with all of ours untapped.
-    const theirs = defending.creatures.filter((c) => c.power > 0 && !has(c, KEYWORD.DEFENDER));
+    const theirs = defending.creatures.filter((c) => c.power > 0 && !cantAttack(c));
     const ours = { life: attacking.life, creatures: attacking.creatures.map((c) => ({ ...c, tapped: false })) };
     const needed = theirs.length ? blocksAgainst(theirs, ours, cache).blocks : {};
     return valueAttack(attacking, defending, able, cache).filter((c) => !needed[c.id] || has(c, KEYWORD.VIGILANCE));

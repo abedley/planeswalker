@@ -7,7 +7,7 @@ import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.j
 import { importCards, parseCardLine } from '../tools/import-cards.js';
 import { readImportedCards, readImportedModule, writeImportedCards } from '../tools/scryfall/importedModule.js';
 import {
-  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER,
+  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER, KEYWORD,
 } from '../src/index.js';
 import { FIXTURES } from './fixtures/scryfallCards.js';
 
@@ -200,9 +200,24 @@ test('reports Aura and Equipment text the engine can\'t do', () => {
   assert.deepEqual(problems('rancor'), [
     'Unsupported rules text: "When Rancor is put into a graveyard from the battlefield, return Rancor to its owner\'s hand."',
   ]);
-  assert.deepEqual(problems('pacifism'), ['Unsupported rules text: "Enchanted creature can\'t attack or block."']);
+  assert.deepEqual(problems('claustrophobia'), [
+    'Unsupported rules text: "When this Aura enters, tap enchanted creature."',
+    'Unsupported rules text: "Enchanted creature doesn\'t untap during its controller\'s untap step."',
+  ]);
   assert.deepEqual(problems('lightningGreaves'), ['Unsupported keyword granted: shroud.']);
   assert.deepEqual(problems('gloriousAnthem'), ['Unsupported rules text: "Creatures you control get +1/+1."']);
+});
+
+test('converts Auras that restrict attacking and blocking', () => {
+  const restriction = (key) => convert(key).definition.staticAbilities;
+  assert.deepEqual(restriction('pacifism'), [{ affected: AFFECTED.ATTACHED_PERMANENT, keywords: [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK] }]);
+  assert.deepEqual(restriction('maniacalRage'), [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, toughness: 2, keywords: [KEYWORD.CANT_BLOCK] }]);
+  assert.deepEqual(restriction('aetherTunnel'), [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 1, keywords: [KEYWORD.CANT_BE_BLOCKED] }]);
+});
+
+test('converts an Aura\'s "When this Aura enters" trigger', () => {
+  const favor = convert('divineFavor').definition;
+  assert.deepEqual([favor.triggeredAbilities[0].effect, favor.staticAbilities[0].toughness], [{ type: 'gainLife', amount: 3 }, 3]);
 });
 
 test('imported Auras and Equipment work in a game', () => {

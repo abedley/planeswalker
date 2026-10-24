@@ -3,10 +3,11 @@
  * "points" as creatureValue (src/ai/combat.js). Shared by the AIs.
  */
 import {
-  isCreature, hasKeyword, KEYWORD, EFFECT, AFFECTED, TARGET, PLAYER_TARGETS, SPELL_TARGETS,
+  isCreature, hasKeyword, cantAttack, KEYWORD, EFFECT, AFFECTED, TARGET, PLAYER_TARGETS, SPELL_TARGETS,
   effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
 import { creatureValue } from './combat.js';
+import { doomedSacrificeCost } from './doomed.js';
 
 /** A permanent's worth: creatures by creatureValue, other permanents a flat amount. */
 export const permanentValue = (p) => (isCreature(p) ? 2 + creatureValue(p) : 4);
@@ -47,7 +48,7 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
   const playerById = (id) => state.players.find((p) => p.id === id);
   // +1 for things that are ours, -1 for things that are the opponent's.
   const side = (id) => ((id === me || byId(id)?.controllerId === me) ? 1 : -1);
-  const canAttack = (c) => !c.tapped && (!c.summoningSick || hasKeyword(c, KEYWORD.HASTE)) && !hasKeyword(c, KEYWORD.DEFENDER);
+  const canAttack = (c) => !c.tapped && (!c.summoningSick || hasKeyword(c, KEYWORD.HASTE)) && !cantAttack(c);
   // Damage and life loss to a player, more valuable as their life gets low; lethal is decisive.
   const lifeScore = (id, amount) => {
     const { life } = playerById(id);
@@ -142,13 +143,19 @@ export function spellThreat(state, me, spell) {
   return Math.max(0, scoreEffects(state, spell.controllerId, card.spell.effects, spell.targets ?? [], card.id));
 }
 
-/** What paying a cost's sacrifices, discards and life would lose `me` (zero or negative). */
-export function costScore(state, me, cost, costChoices, sourceId) {
+/**
+ * What paying a cost's sacrifices, discards and life would lose `me` (zero or
+ * negative). With `doomed` (doomedCreatures), a creature about to die anyway costs
+ * little to sacrifice (doomedSacrificeCost).
+ */
+export function costScore(state, me, cost, costChoices, sourceId, doomed = null) {
   const byId = (id) => state.battlefield.find((p) => p.id === id);
   const sacrificed = [...(cost.sacrificeSelf ? [sourceId] : []), ...(costChoices.sacrifice ?? [])].map(byId);
   const life = state.players.find((p) => p.id === me).life;
+  const value = (p) => doomedSacrificeCost(state, me, p.id, doomed)
+    ?? (isCreature(p) ? (p.token ? creatureValue(p) : permanentValue(p)) : 1);
   return -(cost.life ?? 0) * (life <= 10 ? 1 : 0.4)
-    - sacrificed.reduce((sum, p) => sum + (!p ? 0 : isCreature(p) ? (p.token ? creatureValue(p) : permanentValue(p)) : 1), 0)
+    - sacrificed.reduce((sum, p) => sum + (p ? value(p) : 0), 0)
     - (costChoices.discard?.length ?? 0) * 2;
 }
 

@@ -7,7 +7,7 @@
  * be fitted to game results (tools/tune-ai.js), and each CPU deck can have its
  * own (see weightsFor).
  */
-import { isCreature, isLand } from '../cards/cards.js';
+import { isCreature, isLand, cantAttack } from '../cards/cards.js';
 import { GAME_STATUS } from '../engine/Game.js';
 import {
   creatureValue, damageThrough, planAttack, chooseBlocks, combatValue, damageWeight, canBlock,
@@ -106,7 +106,7 @@ export function features(state, me, { tappedBlockers = true } = {}) {
   const ours = sideFeatures(state, player);
   const theirs = sideFeatures(state, opponent);
   const creaturesOf = (id) => state.battlefield.filter((p) => p.controllerId === id && isCreature(p));
-  const attackers = (id) => creaturesOf(id).filter((c) => !c.keywords.includes('defender'));
+  const attackers = (id) => creaturesOf(id).filter((c) => !cantAttack(c));
   // From their own next turn on, everything has untapped.
   const blockers = (id) => creaturesOf(id).map((c) => ({ ...c, tapped: false }));
   // The active player attacks first, into blockers as they are now: a creature that
@@ -177,7 +177,7 @@ export function evaluateTiered(state, me, tiers = TIERS) {
   const creaturesOf = (id) => state.battlefield.filter((p) => p.controllerId === id && isCreature(p));
   const mine = creaturesOf(me);
   const theirs = creaturesOf(opponent.id);
-  const attackers = (list) => list.filter((c) => !c.keywords.includes('defender'));
+  const attackers = (list) => list.filter((c) => !cantAttack(c));
   const untapped = (list) => list.map((c) => ({ ...c, tapped: false }));
 
   // Winning and not losing: the active player attacks first, into blockers as they are
@@ -217,7 +217,7 @@ export function evaluateTiered(state, me, tiers = TIERS) {
 function nextCombat(state, attackerId) {
   const defenderId = state.players.find((p) => p.id !== attackerId).id;
   const ready = state.battlefield.filter((p) => p.controllerId === attackerId && isCreature(p) && !p.tapped
-    && !p.keywords.includes('defender') && (!p.summoningSick || p.keywords.includes('haste') || state.activePlayerId !== attackerId));
+    && !cantAttack(p) && (!p.summoningSick || p.keywords.includes('haste') || state.activePlayerId !== attackerId));
   if (ready.length === 0) return 0;
   const chosen = new Set(planAttack(state, attackerId, ready));
   const group = ready.filter((c) => chosen.has(c.id));

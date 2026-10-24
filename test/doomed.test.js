@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { STEP } from '../src/engine/turnStructure.js';
 import { EFFECT } from '../src/cards/cards.js';
-import { kills, doomedCreatures, savedByRemoving } from '../src/ai/doomed.js';
+import { kills, doomedCreatures, savedByRemoving, doomedSacrificeCost } from '../src/ai/doomed.js';
 
 const creature = (id, controllerId, power, toughness) => ({
   id, controllerId, name: id, types: ['Creature'], power, toughness, keywords: [], damage: 0, tapped: false,
@@ -62,4 +62,18 @@ test('a creature a spell on the stack will kill is doomed', () => {
     stack: [{ id: 's1', kind: 'spell', controllerId: 'p1', targets: ['bear'], card: { spell: { effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 3 }] } } }],
   });
   assert.deepEqual([...doomedCreatures(state, 'p1')], [['bear', { reason: 'stack' }]]);
+});
+
+test('a doomed creature of ours costs nothing to sacrifice, unless its death in combat buys something', () => {
+  const bear = creature('bear', 'p2', 2, 2);
+  const shocked = combat([], {
+    step: null,
+    others: [bear],
+    stack: [{ id: 's1', kind: 'spell', controllerId: 'p1', targets: ['bear'], card: { spell: { effects: [{ type: EFFECT.DESTROY }] } } }],
+  });
+  assert.equal(doomedSacrificeCost(shocked, 'p2', 'bear', doomedCreatures(shocked, 'p2')), 0);
+  assert.equal(doomedSacrificeCost(shocked, 'p2', 'bear', new Map()), null);
+  // A 3/3 blocking a 3/3: sacrificing the blocker lets the attacker live.
+  const trade = combat([[creature('ox', 'p1', 3, 3), ['cow']]], { others: [creature('cow', 'p2', 3, 3)] });
+  assert.ok(doomedSacrificeCost(trade, 'p2', 'cow', doomedCreatures(trade, 'p2')) > 0);
 });

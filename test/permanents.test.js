@@ -32,6 +32,11 @@ const CARDS = {
     enchant: TARGET.CREATURE,
     staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, keywords: [KEYWORD.FLYING] }],
   },
+  Bonds: {
+    id: 'Bonds', name: 'Bonds', manaCost: {}, types: [CARD_TYPE.ENCHANTMENT], subtypes: [SUBTYPE.AURA],
+    enchant: TARGET.CREATURE,
+    staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, keywords: [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK] }],
+  },
   Blade: {
     id: 'Blade', name: 'Blade', manaCost: {}, types: [CARD_TYPE.ARTIFACT], subtypes: [SUBTYPE.EQUIPMENT],
     staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, keywords: [KEYWORD.FIRST_STRIKE] }],
@@ -173,6 +178,48 @@ test('an Aura enters attached to its target and changes its power, toughness and
   assert.deepEqual([host.power, host.toughness, host.keywords], [4, 4, ['trample']]);
   assert.deepEqual([host.base.power, host.base.toughness, host.base.keywords], [2, 2, []]);
   assert.ok(events.some((e) => e.name === 'attached' && e.payload.cardId === might && e.payload.attachedTo === bear));
+});
+
+test('an Aura that says "can\'t attack or block" keeps its creature out of combat', () => {
+  const { game } = setup({ p1: ['Bear', 'Mouse', 'Bonds'], p2: ['Bear'] });
+  const bear = cast(game, 'p1', 'Bear');
+  const mouse = cast(game, 'p1', 'Mouse');
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  const theirBear = cast(game, 'p2', 'Bear');
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  cast(game, 'p1', 'Bonds', [bear]);
+  assert.deepEqual(permanent(game, bear).keywords, [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK]);
+  passRound(game);
+  passRound(game);
+  // Only the Mouse may attack.
+  assert.deepEqual(actionsOf(game, ACTION.TOGGLE_ATTACKER).map((a) => a.cardId), [mouse]);
+  game.dispatch(confirmAttackers('p1'));
+  advanceTo(game, { turn: 4, phase: PHASE.COMBAT });
+  passRound(game);
+  game.dispatch(toggleAttacker('p2', theirBear));
+  game.dispatch(confirmAttackers('p2'));
+  passRound(game);
+  // Only the Mouse may block.
+  assert.deepEqual([...new Set(actionsOf(game, ACTION.SET_BLOCKER).map((a) => a.cardId))], [mouse]);
+});
+
+test('the basic AI puts a curse on the opponent\'s best creature, and a bonus on its own', async () => {
+  const { BasicAIController } = await import('../src/index.js');
+  const { game } = setup({ p1: ['Mouse', 'Bonds', 'Might'], p2: ['Mouse', 'Bear'] });
+  const mouse = cast(game, 'p1', 'Mouse');
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  cast(game, 'p2', 'Mouse');
+  const theirBear = cast(game, 'p2', 'Bear');
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  const ai = new BasicAIController({ playerId: 'p1' });
+  const casts = [];
+  for (let i = 0; i < 12 && casts.length < 2; i++) {
+    // The opponent passes, so the spells resolve.
+    const action = ai.chooseAction(state(game)) ?? passPriority('p2');
+    if (action.type === ACTION.CAST_SPELL) casts.push([state(game).players[0].hand.find((c) => c.id === action.cardId).name, action.targets]);
+    game.dispatch(action);
+  }
+  assert.deepEqual(casts.sort(), [['Bonds', [theirBear]], ['Might', [mouse]]]);
 });
 
 test('an Aura goes to its owner\'s graveyard when the enchanted creature dies', () => {

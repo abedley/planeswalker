@@ -2,7 +2,7 @@ import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import {
-  isCreature, isLand, isInstant, isAura, isEquipment, hasKeyword, manaValue, KEYWORD, EFFECT, AFFECTED, TARGET,
+  isCreature, isLand, isInstant, isAura, isEquipment, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, TARGET,
   PLAYER_TARGETS, SPELL_TARGETS, effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
@@ -201,7 +201,7 @@ export class LegacyAIController extends EventEmitter {
     // +1 for things that are ours, -1 for things that are the opponent's.
     const side = (id) => ((id === this.#playerId || byId(id)?.controllerId === this.#playerId) ? 1 : -1);
     const preCombat = state.phase === 'precombatMain' && state.activePlayerId === this.#playerId;
-    const canAttack = (c) => !c.tapped && (!c.summoningSick || hasKeyword(c, KEYWORD.HASTE)) && !hasKeyword(c, KEYWORD.DEFENDER);
+    const canAttack = (c) => !c.tapped && (!c.summoningSick || hasKeyword(c, KEYWORD.HASTE)) && !cantAttack(c);
     const worth = (p) => (isCreature(p) ? 10 + p.power : 5);
     let score = 0;
     for (const effect of effects) {

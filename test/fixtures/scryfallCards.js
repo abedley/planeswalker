@@ -92,6 +92,23 @@ export const FIXTURES = {
     name: 'Pacifism', mana_cost: '{1}{W}', type_line: 'Enchantment — Aura',
     oracle_text: 'Enchant creature\nEnchanted creature can\'t attack or block.', keywords: ['Enchant'],
   }),
+  maniacalRage: card({
+    name: 'Maniacal Rage', mana_cost: '{1}{R}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature gets +2/+2 and can\'t block.', keywords: ['Enchant'],
+  }),
+  aetherTunnel: card({
+    name: 'Aether Tunnel', mana_cost: '{1}{U}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nEnchanted creature gets +1/+0 and can\'t be blocked.', keywords: ['Enchant'],
+  }),
+  divineFavor: card({
+    name: 'Divine Favor', mana_cost: '{1}{W}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nWhen this Aura enters, you gain 3 life.\nEnchanted creature gets +1/+3.', keywords: ['Enchant'],
+  }),
+  claustrophobia: card({
+    name: 'Claustrophobia', mana_cost: '{1}{U}{U}', type_line: 'Enchantment — Aura',
+    oracle_text: 'Enchant creature\nWhen this Aura enters, tap enchanted creature.\nEnchanted creature doesn\'t untap during its controller\'s untap step.',
+    keywords: ['Enchant'],
+  }),
   bonesplitter: card({
     name: 'Bonesplitter', mana_cost: '{1}', type_line: 'Artifact — Equipment',
     oracle_text: 'Equipped creature gets +2/+0.\nEquip {1}', keywords: ['Equip'],

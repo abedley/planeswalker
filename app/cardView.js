@@ -53,17 +53,24 @@ export function fullCard(cardIn, definitions, { big = false } = {}) {
     card.token ? h('div.cf-token', 'Token') : null);
 }
 
-/** Blocking restrictions (509.1b), which have no ability symbol: their board badges. */
-const RESTRICTIONS = [["can't block", "Can't block", 'no-block'], ["can't be blocked", 'Unblockable', 'unblockable']];
+/** Attacking and blocking restrictions (508.1c, 509.1b), which have no ability symbol: their board badges. */
+const RESTRICTIONS = [
+  ["can't attack", "Can't attack", 'no-attack'], ["can't block", "Can't block", 'no-block'],
+  ["can't be blocked", 'Unblockable', 'unblockable'],
+];
 
 /**
- * Badges for a creature's blocking restrictions. One it has only this turn (not
- * printed: from a spell or ability) is marked `.now`.
+ * Badges for a creature's attacking and blocking restrictions. One it has only this
+ * turn (neither printed nor from an Aura or Equipment in `attachments`, but from a
+ * spell or ability) is marked `.now`.
  */
-export function restrictionBadges(card) {
-  const printed = new Set(card.base?.keywords ?? card.keywords ?? []);
+export function restrictionBadges(card, attachments = []) {
+  const lasting = new Set([
+    ...(card.base?.keywords ?? card.keywords ?? []),
+    ...attachments.flatMap((a) => (a.staticAbilities ?? []).flatMap((e) => e.keywords ?? [])),
+  ]);
   const badges = RESTRICTIONS.filter(([keyword]) => card.keywords?.includes(keyword))
-    .map(([keyword, label, kind]) => h(`span.rb.${kind}${printed.has(keyword) ? '' : '.now'}`, label));
+    .map(([keyword, label, kind]) => h(`span.rb.${kind}${lasting.has(keyword) ? '' : '.now'}`, label));
   return badges.length ? h('div.restrict', badges) : null;
 }
 
@@ -84,7 +91,7 @@ export function boardCard(permanent, definitions, { attachments = [] } = {}) {
     // Without real art, cards would look alike: name them.
     card.image?.art ? null : h('div.board-name', card.name),
     keywordIcons(card.keywords),
-    restrictionBadges(card),
+    restrictionBadges(card, attachments),
     attachments.length ? h('div.attach', attachments.map((a) => h(`span.tab.f-${frameOf(a)}`, icon(a.types.includes('Artifact') ? 'artifact' : 'enchantment')))) : null,
     counters ? h('div.counter', `+${counters}`) : null,
     h('div.stat.power', { class: powerClass }, String(card.power)),

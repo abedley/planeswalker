@@ -33,6 +33,47 @@ export const IMPORTED_CARDS = {
     "scryfallId": "c7f2014a-fbc9-447c-a440-e06d01066bb9",
     "scryfallUri": "https://scryfall.com/card/fdn/150/aegis-turtle?utm_source=api"
   },
+  "aetherTunnel": {
+    "id": "aetherTunnel",
+    "name": "Aether Tunnel",
+    "manaCost": {
+      "generic": 1,
+      "U": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "keywords": [
+          "can't be blocked"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +1/+0 and can't be blocked.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/d/5d6178ed-6353-4733-81e1-7b3dc592c3bd.jpg?1783934592",
+      "card": "https://cards.scryfall.io/normal/front/5/d/5d6178ed-6353-4733-81e1-7b3dc592c3bd.jpg?1783934592"
+    },
+    "artist": "Lucas Graciano",
+    "colors": [
+      "U"
+    ],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "43",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +1/+0 and can't be blocked.",
+    "scryfallId": "5d6178ed-6353-4733-81e1-7b3dc592c3bd",
+    "scryfallUri": "https://scryfall.com/card/m19/43/aether-tunnel?utm_source=api"
+  },
   "agonizingSyphon": {
     "id": "agonizingSyphon",
     "name": "Agonizing Syphon",
@@ -160,6 +201,103 @@ export const IMPORTED_CARDS = {
     "oracleText": "Flying\nWhen this creature enters, creatures you control get +1/+1 and gain vigilance until end of turn.",
     "scryfallId": "f4bae0e4-1143-4dc4-afb1-e6b4201ff101",
     "scryfallUri": "https://scryfall.com/card/m19/7/angel-of-the-dawn?utm_source=api"
+  },
+  "arcaneEncyclopedia": {
+    "id": "arcaneEncyclopedia",
+    "name": "Arcane Encyclopedia",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Book"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}, {T}: Draw a card.",
+        "cost": {
+          "mana": {
+            "generic": 3
+          },
+          "tap": true
+        },
+        "effect": {
+          "type": "drawCards",
+          "count": 1
+        }
+      }
+    ],
+    "text": "{3}, {T}: Draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/c/0ce4702d-f65b-413e-99da-112f632a0a63.jpg?1783934516",
+      "card": "https://cards.scryfall.io/normal/front/0/c/0ce4702d-f65b-413e-99da-112f632a0a63.jpg?1783934516"
+    },
+    "artist": "Nic Klein",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "227",
+    "typeLine": "Artifact — Book",
+    "oracleText": "{3}, {T}: Draw a card.",
+    "scryfallId": "0ce4702d-f65b-413e-99da-112f632a0a63",
+    "scryfallUri": "https://scryfall.com/card/m19/227/arcane-encyclopedia?utm_source=api"
+  },
+  "basiliskCollar": {
+    "id": "basiliskCollar",
+    "name": "Basilisk Collar",
+    "manaCost": {
+      "generic": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "deathtouch",
+          "lifelink"
+        ]
+      }
+    ],
+    "text": "Equipped creature has deathtouch and lifelink. (Any amount of damage it deals to a creature is enough to destroy it. Damage dealt by this creature also causes you to gain that much life.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/b/7b36fba7-71f7-4b7f-bde5-b3a9752ad21c.jpg?1783908907",
+      "card": "https://cards.scryfall.io/normal/front/7/b/7b36fba7-71f7-4b7f-bde5-b3a9752ad21c.jpg?1783908907"
+    },
+    "artist": "Craig J Spearing",
+    "colors": [],
+    "rarity": "rare",
+    "set": "fdn",
+    "collectorNumber": "669",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature has deathtouch and lifelink. (Any amount of damage it deals to a creature is enough to destroy it. Damage dealt by this creature also causes you to gain that much life.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "7b36fba7-71f7-4b7f-bde5-b3a9752ad21c",
+    "scryfallUri": "https://scryfall.com/card/fdn/669/basilisk-collar?utm_source=api"
   },
   "bigfinBouncer": {
     "id": "bigfinBouncer",
@@ -352,6 +490,60 @@ export const IMPORTED_CARDS = {
     "oracleText": "As an additional cost to cast this spell, sacrifice a creature.\nDestroy target creature.",
     "scryfallId": "7e75a7e9-902a-4733-8cd4-767247174a4c",
     "scryfallUri": "https://scryfall.com/card/m20/92/bone-splinters?utm_source=api"
+  },
+  "brawlersPlate": {
+    "id": "brawlersPlate",
+    "name": "Brawler's Plate",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {4}",
+        "cost": {
+          "mana": {
+            "generic": 4
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 2,
+        "keywords": [
+          "trample"
+        ]
+      }
+    ],
+    "text": "Equipped creature gets +2/+2 and has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)\nEquip {4} ({4}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/a/da0a017e-eb8e-4f92-91f7-7d980461e284.jpg?1783938312",
+      "card": "https://cards.scryfall.io/normal/front/d/a/da0a017e-eb8e-4f92-91f7-7d980461e284.jpg?1783938312"
+    },
+    "artist": "Jung Park",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "ori",
+    "collectorNumber": "224",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +2/+2 and has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)\nEquip {4} ({4}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "da0a017e-eb8e-4f92-91f7-7d980461e284",
+    "scryfallUri": "https://scryfall.com/card/ori/224/brawlers-plate?utm_source=api"
   },
   "burnBright": {
     "id": "burnBright",
@@ -713,6 +905,47 @@ export const IMPORTED_CARDS = {
     "scryfallId": "600d3517-e370-47ae-ac4f-c7ef8995a89c",
     "scryfallUri": "https://scryfall.com/card/m21/12/concordia-pegasus?utm_source=api"
   },
+  "cripplingBlight": {
+    "id": "cripplingBlight",
+    "name": "Crippling Blight",
+    "manaCost": {
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": -1,
+        "toughness": -1,
+        "keywords": [
+          "can't block"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets -1/-1 and can't block.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/f/3f9c1ba3-8b7c-413b-865d-0ca4b2f55903.jpg?1783939185",
+      "card": "https://cards.scryfall.io/normal/front/3/f/3f9c1ba3-8b7c-413b-865d-0ca4b2f55903.jpg?1783939185"
+    },
+    "artist": "Lucas Graciano",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m15",
+    "collectorNumber": "92",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets -1/-1 and can't block.",
+    "scryfallId": "3f9c1ba3-8b7c-413b-865d-0ca4b2f55903",
+    "scryfallUri": "https://scryfall.com/card/m15/92/crippling-blight?utm_source=api"
+  },
   "dawnwingMarshal": {
     "id": "dawnwingMarshal",
     "name": "Dawnwing Marshal",
@@ -874,6 +1107,56 @@ export const IMPORTED_CARDS = {
     "oracleText": "Draw two cards.",
     "scryfallId": "cb3b35b8-f321-46d8-a441-6b9a6efa9021",
     "scryfallUri": "https://scryfall.com/card/m19/51/divination?utm_source=api"
+  },
+  "divineFavor": {
+    "id": "divineFavor",
+    "name": "Divine Favor",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this Aura enters, you gain 3 life.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "gainLife",
+          "amount": 3
+        }
+      }
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 3
+      }
+    ],
+    "text": "Enchant creature\nWhen this Aura enters, you gain 3 life.\nEnchanted creature gets +1/+3.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/4/3/43c1ddf8-e38a-44df-9195-40e2b0d4cd5f.jpg?1783939203",
+      "card": "https://cards.scryfall.io/normal/front/4/3/43c1ddf8-e38a-44df-9195-40e2b0d4cd5f.jpg?1783939203"
+    },
+    "artist": "Allen Williams",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "m15",
+    "collectorNumber": "10",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nWhen this Aura enters, you gain 3 life.\nEnchanted creature gets +1/+3.",
+    "scryfallId": "43c1ddf8-e38a-44df-9195-40e2b0d4cd5f",
+    "scryfallUri": "https://scryfall.com/card/m15/10/divine-favor?utm_source=api"
   },
   "divineVerdict": {
     "id": "divineVerdict",
@@ -1133,6 +1416,50 @@ export const IMPORTED_CARDS = {
     "scryfallId": "975f61eb-a121-4f43-93a4-c6f20c6aee84",
     "scryfallUri": "https://scryfall.com/card/m19/54/essence-scatter?utm_source=api"
   },
+  "explosiveApparatus": {
+    "id": "explosiveApparatus",
+    "name": "Explosive Apparatus",
+    "manaCost": {
+      "generic": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}, {T}, Sacrifice this artifact: It deals 2 damage to any target.",
+        "cost": {
+          "mana": {
+            "generic": 3
+          },
+          "tap": true,
+          "sacrificeSelf": true
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 2
+        },
+        "target": "any"
+      }
+    ],
+    "text": "{3}, {T}, Sacrifice this artifact: It deals 2 damage to any target.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/0/608f431b-a05c-4610-94f7-928d87b2c056.jpg?1783934512",
+      "card": "https://cards.scryfall.io/normal/front/6/0/608f431b-a05c-4610-94f7-928d87b2c056.jpg?1783934512"
+    },
+    "artist": "Lindsey Look",
+    "colors": [],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "233",
+    "typeLine": "Artifact",
+    "oracleText": "{3}, {T}, Sacrifice this artifact: It deals 2 damage to any target.",
+    "scryfallId": "608f431b-a05c-4610-94f7-928d87b2c056",
+    "scryfallUri": "https://scryfall.com/card/m19/233/explosive-apparatus?utm_source=api"
+  },
   "fanaticalFirebrand": {
     "id": "fanaticalFirebrand",
     "name": "Fanatical Firebrand",
@@ -1270,6 +1597,58 @@ export const IMPORTED_CARDS = {
     "oracleText": "",
     "scryfallId": "fcca2f76-3db9-472b-b78e-a87b81e31d0a",
     "scryfallUri": "https://scryfall.com/card/m19/141/fire-elemental?utm_source=api"
+  },
+  "fireshrieker": {
+    "id": "fireshrieker",
+    "name": "Fireshrieker",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "double strike"
+        ]
+      }
+    ],
+    "text": "Equipped creature has double strike. (It deals both first-strike and regular combat damage.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/4/8/484fbce6-71bd-40eb-a71b-86958a094708.jpg?1783908906",
+      "card": "https://cards.scryfall.io/normal/front/4/8/484fbce6-71bd-40eb-a71b-86958a094708.jpg?1783908906"
+    },
+    "artist": "Christopher Moeller",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "674",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature has double strike. (It deals both first-strike and regular combat damage.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "484fbce6-71bd-40eb-a71b-86958a094708",
+    "scryfallUri": "https://scryfall.com/card/fdn/674/fireshrieker?utm_source=api"
   },
   "frilledSeaSerpent": {
     "id": "frilledSeaSerpent",
@@ -1524,6 +1903,102 @@ export const IMPORTED_CARDS = {
     "scryfallId": "c1db84d8-d426-4c0d-b44e-5be7b0f5f5bf",
     "scryfallUri": "https://scryfall.com/card/m19/185/gigantosaurus?utm_source=api"
   },
+  "goblinWarPaint": {
+    "id": "goblinWarPaint",
+    "name": "Goblin War Paint",
+    "manaCost": {
+      "generic": 1,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 2,
+        "keywords": [
+          "haste"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +2/+2 and has haste.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/d/fde711c9-fdef-4024-8269-a59ee0748f95.jpg?1783941068",
+      "card": "https://cards.scryfall.io/normal/front/f/d/fde711c9-fdef-4024-8269-a59ee0748f95.jpg?1783941068"
+    },
+    "artist": "Austin Hsu",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m12",
+    "collectorNumber": "143",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +2/+2 and has haste.",
+    "scryfallId": "fde711c9-fdef-4024-8269-a59ee0748f95",
+    "scryfallUri": "https://scryfall.com/card/m12/143/goblin-war-paint?utm_source=api"
+  },
+  "gorgonFlail": {
+    "id": "gorgonFlail",
+    "name": "Gorgon Flail",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 1,
+        "keywords": [
+          "deathtouch"
+        ]
+      }
+    ],
+    "text": "Equipped creature gets +1/+1 and has deathtouch. (Any amount of damage it deals to a creature is enough to destroy that creature.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/e/eefc48cb-79aa-4e28-a736-ae9e4e2bc97b.jpg?1783942356",
+      "card": "https://cards.scryfall.io/normal/front/e/e/eefc48cb-79aa-4e28-a736-ae9e4e2bc97b.jpg?1783942356"
+    },
+    "artist": "Lars Grant-West",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m10",
+    "collectorNumber": "211",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +1/+1 and has deathtouch. (Any amount of damage it deals to a creature is enough to destroy that creature.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "eefc48cb-79aa-4e28-a736-ae9e4e2bc97b",
+    "scryfallUri": "https://scryfall.com/card/m10/211/gorgon-flail?utm_source=api"
+  },
   "greenwoodSentinel": {
     "id": "greenwoodSentinel",
     "name": "Greenwood Sentinel",
@@ -1704,6 +2179,44 @@ export const IMPORTED_CARDS = {
     "oracleText": "Destroy target creature or planeswalker.",
     "scryfallId": "ad2c01d9-8f54-46c0-9dc9-d4d4764ce1c9",
     "scryfallUri": "https://scryfall.com/card/fdn/175/heros-downfall?utm_source=api"
+  },
+  "holyStrength": {
+    "id": "holyStrength",
+    "name": "Holy Strength",
+    "manaCost": {
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 2
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +1/+2.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/c/ac0987b8-755e-42f1-bd6d-1401fecd4171.jpg?1783941836",
+      "card": "https://cards.scryfall.io/normal/front/a/c/ac0987b8-755e-42f1-bd6d-1401fecd4171.jpg?1783941836"
+    },
+    "artist": "Terese Nielsen",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "m11",
+    "collectorNumber": "16",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +1/+2.",
+    "scryfallId": "ac0987b8-755e-42f1-bd6d-1401fecd4171",
+    "scryfallUri": "https://scryfall.com/card/m11/16/holy-strength?utm_source=api"
   },
   "hostileMinotaur": {
     "id": "hostileMinotaur",
@@ -1920,6 +2433,59 @@ export const IMPORTED_CARDS = {
     "scryfallId": "cce6289e-f665-4faa-8285-c843447f3e52",
     "scryfallUri": "https://scryfall.com/card/m21/54/keen-glidemaster?utm_source=api"
   },
+  "kitesail": {
+    "id": "kitesail",
+    "name": "Kitesail",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "keywords": [
+          "flying"
+        ]
+      }
+    ],
+    "text": "Equipped creature gets +1/+0 and has flying.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/f/2f95cf4c-1845-4260-8571-91c03d582da3.jpg?1783940461",
+      "card": "https://cards.scryfall.io/normal/front/2/f/2f95cf4c-1845-4260-8571-91c03d582da3.jpg?1783940461"
+    },
+    "artist": "Cyril Van Der Haegen",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m13",
+    "collectorNumber": "208",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +1/+0 and has flying.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "2f95cf4c-1845-4260-8571-91c03d582da3",
+    "scryfallUri": "https://scryfall.com/card/m13/208/kitesail?utm_source=api"
+  },
   "lavaAxe": {
     "id": "lavaAxe",
     "name": "Lava Axe",
@@ -1991,6 +2557,88 @@ export const IMPORTED_CARDS = {
     "oracleText": "Lightning Strike deals 3 damage to any target.",
     "scryfallId": "084b7337-c06f-4cbf-8fc0-0b20c221f1dc",
     "scryfallUri": "https://scryfall.com/card/m19/152/lightning-strike?utm_source=api"
+  },
+  "lightningTalons": {
+    "id": "lightningTalons",
+    "name": "Lightning Talons",
+    "manaCost": {
+      "generic": 2,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 3,
+        "keywords": [
+          "first strike"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +3/+0 and has first strike. (It deals combat damage before creatures without first strike.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/7/87186a8a-45da-4cde-a167-c16a6abc4d24.jpg?1783939912",
+      "card": "https://cards.scryfall.io/normal/front/8/7/87186a8a-45da-4cde-a167-c16a6abc4d24.jpg?1783939912"
+    },
+    "artist": "Johann Bodin",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m14",
+    "collectorNumber": "144",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +3/+0 and has first strike. (It deals combat damage before creatures without first strike.)",
+    "scryfallId": "87186a8a-45da-4cde-a167-c16a6abc4d24",
+    "scryfallUri": "https://scryfall.com/card/m14/144/lightning-talons?utm_source=api"
+  },
+  "luminousBonds": {
+    "id": "luminousBonds",
+    "name": "Luminous Bonds",
+    "manaCost": {
+      "generic": 2,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "can't attack",
+          "can't block"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature can't attack or block.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/d/9db10390-725e-40f5-885b-a433e7b46f52.jpg?1783934603",
+      "card": "https://cards.scryfall.io/normal/front/9/d/9db10390-725e-40f5-885b-a433e7b46f52.jpg?1783934603"
+    },
+    "artist": "Steve Argyle",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "m19",
+    "collectorNumber": "25",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature can't attack or block.",
+    "scryfallId": "9db10390-725e-40f5-885b-a433e7b46f52",
+    "scryfallUri": "https://scryfall.com/card/m19/25/luminous-bonds?utm_source=api"
   },
   "mammothSpider": {
     "id": "mammothSpider",
@@ -2067,6 +2715,90 @@ export const IMPORTED_CARDS = {
     "scryfallId": "9dfba61f-9a6d-43e3-ad28-f74f737ef186",
     "scryfallUri": "https://scryfall.com/card/m19/239/manalith?utm_source=api"
   },
+  "maniacalRage": {
+    "id": "maniacalRage",
+    "name": "Maniacal Rage",
+    "manaCost": {
+      "generic": 1,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 2,
+        "keywords": [
+          "can't block"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +2/+2 and can't block.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/9/29a51b9b-881f-4f02-b49e-68fcca234161.jpg?1783932974",
+      "card": "https://cards.scryfall.io/normal/front/2/9/29a51b9b-881f-4f02-b49e-68fcca234161.jpg?1783932974"
+    },
+    "artist": "Heonhwa",
+    "colors": [
+      "R"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "149",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +2/+2 and can't block.",
+    "scryfallId": "29a51b9b-881f-4f02-b49e-68fcca234161",
+    "scryfallUri": "https://scryfall.com/card/m20/149/maniacal-rage?utm_source=api"
+  },
+  "mantleOfWebs": {
+    "id": "mantleOfWebs",
+    "name": "Mantle of Webs",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 3,
+        "keywords": [
+          "reach"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +1/+3 and has reach. (It can block creatures with flying.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/b/3b09e36a-ad53-44ae-8586-2b658e3c533c.jpg?1783938320",
+      "card": "https://cards.scryfall.io/normal/front/3/b/3b09e36a-ad53-44ae-8586-2b658e3c533c.jpg?1783938320"
+    },
+    "artist": "Mathias Kollros",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ori",
+    "collectorNumber": "187",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +1/+3 and has reach. (It can block creatures with flying.)",
+    "scryfallId": "3b09e36a-ad53-44ae-8586-2b658e3c533c",
+    "scryfallUri": "https://scryfall.com/card/ori/187/mantle-of-webs?utm_source=api"
+  },
   "maraudersAxe": {
     "id": "maraudersAxe",
     "name": "Marauder's Axe",
@@ -2116,6 +2848,57 @@ export const IMPORTED_CARDS = {
     "oracleText": "Equipped creature gets +2/+0.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
     "scryfallId": "a2ca16ee-e415-4270-a453-47111d07a07f",
     "scryfallUri": "https://scryfall.com/card/m19/240/marauders-axe?utm_source=api"
+  },
+  "meteorite": {
+    "id": "meteorite",
+    "name": "Meteorite",
+    "manaCost": {
+      "generic": 5
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForAnyColor",
+        "text": "{T}: Add one mana of any color.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "anyColor": 1
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this artifact enters, it deals 2 damage to any target.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "dealDamage",
+          "amount": 2
+        },
+        "target": "any"
+      }
+    ],
+    "text": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/c/ec3a2c95-4e7a-43c5-90bd-6f1de7c82a5c.jpg?1783930657",
+      "card": "https://cards.scryfall.io/normal/front/e/c/ec3a2c95-4e7a-43c5-90bd-6f1de7c82a5c.jpg?1783930657"
+    },
+    "artist": "Scott Murphy",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m21",
+    "collectorNumber": "233",
+    "typeLine": "Artifact",
+    "oracleText": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
+    "scryfallId": "ec3a2c95-4e7a-43c5-90bd-6f1de7c82a5c",
+    "scryfallUri": "https://scryfall.com/card/m21/233/meteorite?utm_source=api"
   },
   "mistCloakedHerald": {
     "id": "mistCloakedHerald",
@@ -2391,6 +3174,45 @@ export const IMPORTED_CARDS = {
     "scryfallId": "33b83158-78b4-425e-8379-be3ef038295c",
     "scryfallUri": "https://scryfall.com/card/m20/69/negate?utm_source=api"
   },
+  "oakenform": {
+    "id": "oakenform",
+    "name": "Oakenform",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 3,
+        "toughness": 3
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +3/+3.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/1/d1ca08a0-c58d-4c13-bf63-0401d89839b4.jpg?1783932899",
+      "card": "https://cards.scryfall.io/normal/front/d/1/d1ca08a0-c58d-4c13-bf63-0401d89839b4.jpg?1783932899"
+    },
+    "artist": "Wayne Reynolds",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "341",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +3/+3.",
+    "scryfallId": "d1ca08a0-c58d-4c13-bf63-0401d89839b4",
+    "scryfallUri": "https://scryfall.com/card/m20/341/oakenform?utm_source=api"
+  },
   "overcome": {
     "id": "overcome",
     "name": "Overcome",
@@ -2470,6 +3292,47 @@ export const IMPORTED_CARDS = {
     "oracleText": "Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)",
     "scryfallId": "1d8e9cbb-8bf4-4a48-a58e-79deb3abdf7f",
     "scryfallUri": "https://scryfall.com/card/fdn/230/overrun?utm_source=api"
+  },
+  "pacifism": {
+    "id": "pacifism",
+    "name": "Pacifism",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "can't attack",
+          "can't block"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature can't attack or block.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/1/31279d7c-5246-40b2-a8c7-0be4a5f24a29.jpg?1783933022",
+      "card": "https://cards.scryfall.io/normal/front/3/1/31279d7c-5246-40b2-a8c7-0be4a5f24a29.jpg?1783933022"
+    },
+    "artist": "Jesper Ejsing",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "32",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature can't attack or block.",
+    "scryfallId": "31279d7c-5246-40b2-a8c7-0be4a5f24a29",
+    "scryfallUri": "https://scryfall.com/card/m20/32/pacifism?utm_source=api"
   },
   "palladiumMyr": {
     "id": "palladiumMyr",
@@ -3012,6 +3875,49 @@ export const IMPORTED_CARDS = {
     "scryfallId": "281f04d5-af45-4494-ac11-a605d3a06643",
     "scryfallUri": "https://scryfall.com/card/m19/198/rhox-oracle?utm_source=api"
   },
+  "rodOfRuin": {
+    "id": "rodOfRuin",
+    "name": "Rod of Ruin",
+    "manaCost": {
+      "generic": 4
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}, {T}: This artifact deals 1 damage to any target.",
+        "cost": {
+          "mana": {
+            "generic": 3
+          },
+          "tap": true
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 1
+        },
+        "target": "any"
+      }
+    ],
+    "text": "{3}, {T}: This artifact deals 1 damage to any target.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/a/9a0e90b8-bc38-4e1c-92ca-ac562cc57e31.jpg?1783939895",
+      "card": "https://cards.scryfall.io/normal/front/9/a/9a0e90b8-bc38-4e1c-92ca-ac562cc57e31.jpg?1783939895"
+    },
+    "artist": "Mark Zug",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "m14",
+    "collectorNumber": "217",
+    "typeLine": "Artifact",
+    "oracleText": "{3}, {T}: This artifact deals 1 damage to any target.",
+    "scryfallId": "9a0e90b8-bc38-4e1c-92ca-ac562cc57e31",
+    "scryfallUri": "https://scryfall.com/card/m14/217/rod-of-ruin?utm_source=api"
+  },
   "roguesPassage": {
     "id": "roguesPassage",
     "name": "Rogue's Passage",
@@ -3098,6 +4004,43 @@ export const IMPORTED_CARDS = {
     "oracleText": "",
     "scryfallId": "9c9ac1bc-cdf3-4fa6-8319-a7ea164e9e47",
     "scryfallUri": "https://scryfall.com/card/fdn/146/savannah-lions?utm_source=api"
+  },
+  "sensoryDeprivation": {
+    "id": "sensoryDeprivation",
+    "name": "Sensory Deprivation",
+    "manaCost": {
+      "U": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": -3
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets -3/-0.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/0/7050735c-b232-47a6-a342-01795bfd0d46.jpg?1783939931",
+      "card": "https://cards.scryfall.io/normal/front/7/0/7050735c-b232-47a6-a342-01795bfd0d46.jpg?1783939931"
+    },
+    "artist": "Steven Belledin",
+    "colors": [
+      "U"
+    ],
+    "rarity": "common",
+    "set": "m14",
+    "collectorNumber": "71",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets -3/-0.",
+    "scryfallId": "7050735c-b232-47a6-a342-01795bfd0d46",
+    "scryfallUri": "https://scryfall.com/card/m14/71/sensory-deprivation?utm_source=api"
   },
   "serraAngel": {
     "id": "serraAngel",
@@ -3905,6 +4848,62 @@ export const IMPORTED_CARDS = {
     "scryfallId": "2bfe9801-b683-45d9-924c-6734110816bf",
     "scryfallUri": "https://scryfall.com/card/m19/269/swamp?utm_source=api"
   },
+  "swordOfVengeance": {
+    "id": "swordOfVengeance",
+    "name": "Sword of Vengeance",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {3}",
+        "cost": {
+          "mana": {
+            "generic": 3
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "keywords": [
+          "first strike",
+          "vigilance",
+          "trample",
+          "haste"
+        ]
+      }
+    ],
+    "text": "Equipped creature gets +2/+0 and has first strike, vigilance, trample, and haste.\nEquip {3}",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/6/96fc0138-46fc-493c-8a28-8630c4759193.jpg?1783941788",
+      "card": "https://cards.scryfall.io/normal/front/9/6/96fc0138-46fc-493c-8a28-8630c4759193.jpg?1783941788"
+    },
+    "artist": "Dan Murayama Scott",
+    "colors": [],
+    "rarity": "rare",
+    "set": "m11",
+    "collectorNumber": "216",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +2/+0 and has first strike, vigilance, trample, and haste.\nEquip {3}",
+    "scryfallId": "96fc0138-46fc-493c-8a28-8630c4759193",
+    "scryfallUri": "https://scryfall.com/card/m11/216/sword-of-vengeance?utm_source=api"
+  },
   "tatteredMummy": {
     "id": "tatteredMummy",
     "name": "Tattered Mummy",
@@ -4177,6 +5176,44 @@ export const IMPORTED_CARDS = {
     "oracleText": "Menace (This creature can't be blocked except by two or more creatures.)",
     "scryfallId": "2cc5760e-8b27-4d37-9772-c9eda90b1d95",
     "scryfallUri": "https://scryfall.com/card/m19/123/two-headed-zombie?utm_source=api"
+  },
+  "unholyStrength": {
+    "id": "unholyStrength",
+    "name": "Unholy Strength",
+    "manaCost": {
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 1
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +2/+1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/2/521652cf-96f7-46a6-9b25-3e988b605a10.jpg?1783941810",
+      "card": "https://cards.scryfall.io/normal/front/5/2/521652cf-96f7-46a6-9b25-3e988b605a10.jpg?1783941810"
+    },
+    "artist": "Terese Nielsen",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m11",
+    "collectorNumber": "119",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +2/+1.",
+    "scryfallId": "521652cf-96f7-46a6-9b25-3e988b605a10",
+    "scryfallUri": "https://scryfall.com/card/m11/119/unholy-strength?utm_source=api"
   },
   "unsummon": {
     "id": "unsummon",
@@ -4543,6 +5580,101 @@ export const IMPORTED_CARDS = {
     "scryfallId": "b6fc8d2e-ad63-498d-83b6-5f72b5ae0e67",
     "scryfallUri": "https://scryfall.com/card/fdn/532/vampire-spawn?utm_source=api"
   },
+  "veteransSidearm": {
+    "id": "veteransSidearm",
+    "name": "Veteran's Sidearm",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {1}",
+        "cost": {
+          "mana": {
+            "generic": 1
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 1
+      }
+    ],
+    "text": "Equipped creature gets +1/+1.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/c/9c1b3e7d-0fd8-4324-be7b-382e75ae9c17.jpg?1783938307",
+      "card": "https://cards.scryfall.io/normal/front/9/c/9c1b3e7d-0fd8-4324-be7b-382e75ae9c17.jpg?1783938307"
+    },
+    "artist": "Aaron Miller",
+    "colors": [],
+    "rarity": "common",
+    "set": "ori",
+    "collectorNumber": "242",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +1/+1.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "9c1b3e7d-0fd8-4324-be7b-382e75ae9c17",
+    "scryfallUri": "https://scryfall.com/card/ori/242/veterans-sidearm?utm_source=api"
+  },
+  "vialOfDragonfire": {
+    "id": "vialOfDragonfire",
+    "name": "Vial of Dragonfire",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{2}, {T}, Sacrifice this artifact: It deals 2 damage to target creature.",
+        "cost": {
+          "mana": {
+            "generic": 2
+          },
+          "tap": true,
+          "sacrificeSelf": true
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 2
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "{2}, {T}, Sacrifice this artifact: It deals 2 damage to target creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/7/57db6ba8-f6c1-41be-8bee-93e573d052d7.jpg?1783932939",
+      "card": "https://cards.scryfall.io/normal/front/5/7/57db6ba8-f6c1-41be-8bee-93e573d052d7.jpg?1783932939"
+    },
+    "artist": "Franz Vohwinkel",
+    "colors": [],
+    "rarity": "common",
+    "set": "m20",
+    "collectorNumber": "241",
+    "typeLine": "Artifact",
+    "oracleText": "{2}, {T}, Sacrifice this artifact: It deals 2 damage to target creature.",
+    "scryfallId": "57db6ba8-f6c1-41be-8bee-93e573d052d7",
+    "scryfallUri": "https://scryfall.com/card/m20/241/vial-of-dragonfire?utm_source=api"
+  },
   "viashinoPyromancer": {
     "id": "viashinoPyromancer",
     "name": "Viashino Pyromancer",
@@ -4767,6 +5899,83 @@ export const IMPORTED_CARDS = {
     "oracleText": "Defender",
     "scryfallId": "4fb995c8-1bc2-4ff4-b8e9-f9b6bc0de0fe",
     "scryfallUri": "https://scryfall.com/card/m19/83/wall-of-mist?utm_source=api"
+  },
+  "weakness": {
+    "id": "weakness",
+    "name": "Weakness",
+    "manaCost": {
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": -2,
+        "toughness": -1
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets -2/-1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/e/ceb8322c-63e1-4618-8ee3-7e635cc8bf5e.jpg?1783942376",
+      "card": "https://cards.scryfall.io/normal/front/c/e/ceb8322c-63e1-4618-8ee3-7e635cc8bf5e.jpg?1783942376"
+    },
+    "artist": "Kev Walker",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "m10",
+    "collectorNumber": "121",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets -2/-1.",
+    "scryfallId": "ceb8322c-63e1-4618-8ee3-7e635cc8bf5e",
+    "scryfallUri": "https://scryfall.com/card/m10/121/weakness?utm_source=api"
+  },
+  "weightOfTheUnderworld": {
+    "id": "weightOfTheUnderworld",
+    "name": "Weight of the Underworld",
+    "manaCost": {
+      "generic": 3,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": -3,
+        "toughness": -2
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets -3/-2.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/2/e2f31943-e26c-4bd2-bdbd-d980836f99b9.jpg?1783938334",
+      "card": "https://cards.scryfall.io/normal/front/e/2/e2f31943-e26c-4bd2-bdbd-d980836f99b9.jpg?1783938334"
+    },
+    "artist": "Wesley Burt",
+    "colors": [
+      "B"
+    ],
+    "rarity": "common",
+    "set": "ori",
+    "collectorNumber": "126",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets -3/-2.",
+    "scryfallId": "e2f31943-e26c-4bd2-bdbd-d980836f99b9",
+    "scryfallUri": "https://scryfall.com/card/ori/126/weight-of-the-underworld?utm_source=api"
   },
   "wishcoinCrab": {
     "id": "wishcoinCrab",

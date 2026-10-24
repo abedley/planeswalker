@@ -45,7 +45,7 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function normalizeSelfReferences(text, cardName) {
   return text
     .replace(new RegExp(escapeRegExp(cardName), 'g'), '~')
-    .replace(/\b[Tt]his (?:creature|artifact|enchantment|land|spell|permanent)\b/g, '~')
+    .replace(/\b[Tt]his (?:creature|artifact|enchantment|land|spell|permanent|Aura|Equipment)\b/g, '~')
     // There are no planeswalkers or battles, so "or planeswalker" adds nothing.
     .replace(/ or planeswalker\b/g, '');
 }

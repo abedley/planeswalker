@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   Game, GAME_STATUS, ACTION, PHASE, STEP, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, EFFECT, KEYWORD,
   passPriority, castSpell, toggleAttacker, confirmAttackers, setBlocker, confirmBlockers,
-  BasicAIController,
+  BasicAIController, matchesPermanentKind,
 } from '../src/index.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
@@ -260,4 +260,16 @@ test('two basic AIs play a full game with instants and sorceries', async () => {
     }
     assert.ok(cast.some((e) => e.cardName.startsWith('Sample ')), `seed ${seed}: the AI casts sample spells`);
   }
+});
+
+test('"target attacking or blocking creature" means a creature in combat', () => {
+  const bear = { id: 'bear', controllerId: 'p1', types: ['Creature'] };
+  const wall = { id: 'wall', controllerId: 'p2', types: ['Creature'] };
+  const idle = { id: 'idle', controllerId: 'p2', types: ['Creature'] };
+  const combat = { attackers: [{ cardId: 'bear', blockerIds: ['wall'] }] };
+  const kinds = (p) => [TARGET.ATTACKING_CREATURE, TARGET.ATTACKING_OR_BLOCKING_CREATURE].map((k) => matchesPermanentKind(p, k, 'p2', combat));
+  assert.deepEqual(kinds(bear), [true, true]);
+  assert.deepEqual(kinds(wall), [false, true]);
+  assert.deepEqual(kinds(idle), [false, false]);
+  assert.equal(matchesPermanentKind(bear, TARGET.ATTACKING_CREATURE, 'p2'), false); // outside combat
 });

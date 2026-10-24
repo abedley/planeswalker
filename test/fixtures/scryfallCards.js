@@ -138,6 +138,7 @@ export const FIXTURES = {
     oracle_text: '{T}: Destroy target tapped creature.', power: '1', toughness: '1',
   }),
   // Instants and sorceries
+  divineVerdict: card({ name: 'Divine Verdict', mana_cost: '{3}{W}', type_line: 'Instant', oracle_text: 'Destroy target attacking or blocking creature.' }),
   unsummon: card({ name: 'Unsummon', mana_cost: '{U}', type_line: 'Instant', oracle_text: 'Return target creature to its owner\'s hand.' }),
   naturalize: card({ name: 'Naturalize', mana_cost: '{1}{G}', type_line: 'Instant', oracle_text: 'Destroy target artifact or enchantment.' }),
   essenceScatter: card({ name: 'Essence Scatter', mana_cost: '{1}{U}', type_line: 'Instant', oracle_text: 'Counter target creature spell.' }),

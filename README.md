@@ -204,6 +204,8 @@ The grammar is in `tools/scryfall/rulesText.js`.
     permanent / all creatures / …"
   - "Return target creature to its owner's hand."
   - "Tap / Untap target creature."
+  - Creatures in combat can be targets: "target attacking creature" and "target attacking or
+    blocking creature" (Divine Verdict, Gideon's Reproach).
   - "Target creature / Creatures your opponents control / … can't block this turn." and "…
     [gets +N/+N and] can't be blocked this turn."
   - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
@@ -247,8 +249,9 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 114 cards from M19, M20, M21 and
-Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
+`cards/real-cards.txt` lists the real cards the campaign uses: 117 cards, mostly from M19, M20,
+M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach (DOM) and Prodigal Pyromancer
+(M11). Forest and Llanowar Elves are defined by hand, so for those the importer records only
 their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
@@ -1132,11 +1135,28 @@ Removal on a doomed creature of the opponent's isn't worth that creature's death
 coming anyway. It's worth only what removing it first saves: in a trade, our blocker, or the
 damage it would have dealt.
 
-It's right, but it hardly ever comes up. In 259,000 decisions in basic-AI games on every deck,
-it changed one, and the arena shows nothing: 50.0% (47.3–52.7%) over 1320 games. The basic AI
-casts its removal in its own main phase, at the biggest threat, where nothing is about to die.
-Of 643 removal spells in basic-AI games on the real and sample spell decks, 468 came in the main
-phase and 9 in combat.
+At first it hardly ever came up. The basic AI casts its removal in its own main phase, at the
+biggest threat, where nothing is about to die. Of 643 removal spells in basic-AI games on the
+real and sample spell decks, 468 came in the main phase and 9 in combat. Over 259,000 decisions it
+changed one, and it scored 50.0% (47.3–52.7%) over 1320 games.
+
+So the decks got cards that act in combat:
+- **White:** Gideon's Reproach (4 damage to target attacking or blocking creature) and Divine
+  Verdict (destroy one). They can only be cast in combat, and the AI holds mana for them as it
+  does for other instants, judging them by the opponent's creatures. Gideon's Reproach replaces
+  Revitalize in the lighter white deck. In the full white deck, it and Divine Verdict replace a
+  Cavalry Drillmaster, a Raise the Alarm and Inspired Charge.
+- **Red:** Prodigal Pyromancer ("{T}: 1 damage to any target"), for Boltwave and Lava Axe in Red
+  Burn, and for Thrill of Possibility in the other red decks.
+
+The cut cards are still offered as rewards. With these cards, combat removal went from 9 to 85 of
+the casts, and the rule changed 31 decisions, all on white.
+
+| Match | Games | Win rate (95% CI) |
+| --- | --- | --- |
+| basic vs basic without `doomed`, white | 600 | 52.0% |
+| the same, red | 600 | 50.2% |
+| both decks | 1200 | 51.1% (48.3–53.9%) |
 
 #### Mulligans (`mulligan.js`)
 

@@ -21,18 +21,18 @@ export const REAL_DECKS = Object.freeze({
     aegisTurtle: 1, wallOfMist: 2, phantomWarrior: 2, cloudkinSeer: 3, skyscanner: 2, snappingDrake: 3,
     bigfinBouncer: 2, airElemental: 2, essenceScatter: 2, unsummon: 2, divination: 2,
   }),
-  /** White Weenie: cheap creatures, tokens and team pumps. */
+  /** White Weenie: cheap creatures, tokens and team pumps, and removal for creatures in combat. */
   whiteWeenie: deck({
     plains: 17,
     savannahLions: 3, dawnwingMarshal: 2, daybreakChaplain: 2, griffinSentinel: 2, inspiringCaptain: 2,
-    gallantCavalry: 2, cavalryDrillmaster: 2, serraAngel: 2, angelOfTheDawn: 1, concordiaPegasus: 1,
-    raiseTheAlarm: 2, momentOfHeroism: 1, inspiredCharge: 1,
+    gallantCavalry: 2, cavalryDrillmaster: 1, serraAngel: 2, angelOfTheDawn: 1, concordiaPegasus: 1,
+    raiseTheAlarm: 1, momentOfHeroism: 1, gideonsReproach: 2, divineVerdict: 1,
   }),
   /** White Recruits: the lighter white build. */
   whiteRecruits: deck({
     plains: 17,
     savannahLions: 3, healersHawk: 2, daybreakChaplain: 3, griffinSentinel: 3, gallantCavalry: 2,
-    concordiaPegasus: 3, raiseTheAlarm: 3, momentOfHeroism: 2, revitalize: 2,
+    concordiaPegasus: 3, raiseTheAlarm: 3, momentOfHeroism: 2, gideonsReproach: 2,
   }),
   /** Black Removal: deathtouch, lifelink, kill spells and draining the opponent. */
   blackRemoval: deck({
@@ -47,25 +47,25 @@ export const REAL_DECKS = Object.freeze({
     childOfNight: 3, walkingCorpse: 3, doomedDissenter: 3, vampireOfTheDireMoon: 2, fetidImp: 2,
     skeletonArcher: 2, twoHeadedZombie: 3, stab: 2, villageRites: 2, boneSplinters: 1,
   }),
-  /** Red Burn: hasty creatures and burn to the face. */
+  /** Red Burn: hasty creatures, pingers and burn to the face. */
   redBurn: deck({
     mountain: 17,
-    fanaticalFirebrand: 3, viashinoPyromancer: 2, boggartBrute: 2, emberHauler: 2, hostileMinotaur: 2,
+    fanaticalFirebrand: 3, prodigalPyromancer: 2, viashinoPyromancer: 2, boggartBrute: 2, emberHauler: 2, hostileMinotaur: 2,
     pitchburnDevils: 1, siegebreakerGiant: 1, shivanDragon: 1,
-    shock: 3, lightningStrike: 2, electrify: 1, lavaAxe: 1, boltwave: 1, burnBright: 1,
+    shock: 3, lightningStrike: 2, electrify: 1, burnBright: 1,
   }),
   /** Red Raiders: the lighter red build. */
   redRaiders: deck({
     mountain: 17,
     fanaticalFirebrand: 3, hostileMinotaur: 3, boggartBrute: 3, emberHauler: 2, pitchburnDevils: 2,
-    havocDevils: 2, fireElemental: 2, shock: 3, lavaAxe: 2, thrillOfPossibility: 1,
+    havocDevils: 2, fireElemental: 2, prodigalPyromancer: 1, shock: 3, lavaAxe: 2,
   }),
   /** The boss's dragons: burn to hold the ground, then dragons. */
   dragonlord: deck({
     mountain: 17,
     fanaticalFirebrand: 2, viashinoPyromancer: 2, hostileMinotaur: 2, emberHauler: 2, fireElemental: 1,
     rapaciousDragon: 2, volcanicDragon: 2, shivanDragon: 2,
-    shock: 3, lightningStrike: 2, electrify: 2, thrillOfPossibility: 1,
+    prodigalPyromancer: 1, shock: 3, lightningStrike: 2, electrify: 2,
   }),
 });
 
@@ -78,5 +78,5 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   'sowerOfChaos', 'vampireInterloper', 'frilledSeaSerpent', 'mistCloakedHerald', 'roguesPassage', 'suspiciousBookcase',
   'skymarchBloodletter', 'spiritOfMalevolence', 'vampireNeonate', 'vampireOpportunist', 'agonizingSyphon', 'sorinsThirst',
   // Out of the decks, but still worth offering.
-  'bloodDivination', 'giantSpider', 'tolarianScholar',
+  'bloodDivination', 'giantSpider', 'tolarianScholar', 'revitalize', 'inspiredCharge', 'boltwave', 'thrillOfPossibility',
 ]);

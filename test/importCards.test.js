@@ -473,3 +473,10 @@ test('an imported Flametongue Kavu has to target itself when it\'s the only crea
   pass();
   assert.ok(game.getState().players[0].graveyard.some((c) => c.id === kavu));
 });
+
+test('converts removal for creatures in combat', () => {
+  const { ok, definition } = convert('divineVerdict');
+  assert.ok(ok);
+  assert.equal(definition.target, 'attackingOrBlockingCreature');
+  assert.deepEqual(definition.effects, [{ type: 'destroy' }]);
+});

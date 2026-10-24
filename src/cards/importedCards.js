@@ -875,6 +875,41 @@ export const IMPORTED_CARDS = {
     "scryfallId": "cb3b35b8-f321-46d8-a441-6b9a6efa9021",
     "scryfallUri": "https://scryfall.com/card/m19/51/divination?utm_source=api"
   },
+  "divineVerdict": {
+    "id": "divineVerdict",
+    "name": "Divine Verdict",
+    "manaCost": {
+      "generic": 3,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "destroy"
+      }
+    ],
+    "target": "attackingOrBlockingCreature",
+    "text": "Destroy target attacking or blocking creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/6/562f1a7b-149d-42ba-aaea-345ccae7227c.jpg?1783938299",
+      "card": "https://cards.scryfall.io/normal/front/5/6/562f1a7b-149d-42ba-aaea-345ccae7227c.jpg?1783938299"
+    },
+    "artist": "Kev Walker",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "ori",
+    "collectorNumber": "274",
+    "typeLine": "Instant",
+    "oracleText": "Destroy target attacking or blocking creature.",
+    "scryfallId": "562f1a7b-149d-42ba-aaea-345ccae7227c",
+    "scryfallUri": "https://scryfall.com/card/ori/274/divine-verdict?utm_source=api"
+  },
   "doomedDissenter": {
     "id": "doomedDissenter",
     "name": "Doomed Dissenter",
@@ -1420,6 +1455,42 @@ export const IMPORTED_CARDS = {
     "oracleText": "Reach (This creature can block creatures with flying.)",
     "scryfallId": "80996b0d-cd44-445e-96de-677e0018255c",
     "scryfallUri": "https://scryfall.com/card/m19/183/giant-spider?utm_source=api"
+  },
+  "gideonsReproach": {
+    "id": "gideonsReproach",
+    "name": "Gideon's Reproach",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "dealDamage",
+        "amount": 4
+      }
+    ],
+    "target": "attackingOrBlockingCreature",
+    "text": "Gideon's Reproach deals 4 damage to target attacking or blocking creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/b/7b771f44-ce32-41a2-b219-738924b7f42d.jpg?1783935051",
+      "card": "https://cards.scryfall.io/normal/front/7/b/7b771f44-ce32-41a2-b219-738924b7f42d.jpg?1783935051"
+    },
+    "artist": "Izzy",
+    "colors": [
+      "W"
+    ],
+    "rarity": "common",
+    "set": "dom",
+    "collectorNumber": "19",
+    "typeLine": "Instant",
+    "oracleText": "Gideon's Reproach deals 4 damage to target attacking or blocking creature.",
+    "scryfallId": "7b771f44-ce32-41a2-b219-738924b7f42d",
+    "scryfallUri": "https://scryfall.com/card/dom/19/gideons-reproach?utm_source=api"
   },
   "gigantosaurus": {
     "id": "gigantosaurus",
@@ -2665,6 +2736,54 @@ export const IMPORTED_CARDS = {
     "oracleText": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
     "scryfallId": "acb65189-60e4-42e0-9fb1-da6b716b91d7",
     "scryfallUri": "https://scryfall.com/card/fdn/109/preposterous-proportions?utm_source=api"
+  },
+  "prodigalPyromancer": {
+    "id": "prodigalPyromancer",
+    "name": "Prodigal Pyromancer",
+    "manaCost": {
+      "generic": 2,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Wizard"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: This creature deals 1 damage to any target.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "dealDamage",
+          "amount": 1
+        },
+        "target": "any"
+      }
+    ],
+    "text": "{T}: This creature deals 1 damage to any target.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/8/081dba98-2092-4225-8e9e-214fb9263b1c.jpg?1783941802",
+      "card": "https://cards.scryfall.io/normal/front/0/8/081dba98-2092-4225-8e9e-214fb9263b1c.jpg?1783941802"
+    },
+    "artist": "Jeremy Jarvis",
+    "colors": [
+      "R"
+    ],
+    "rarity": "uncommon",
+    "set": "m11",
+    "collectorNumber": "152",
+    "typeLine": "Creature — Human Wizard",
+    "oracleText": "{T}: This creature deals 1 damage to any target.",
+    "scryfallId": "081dba98-2092-4225-8e9e-214fb9263b1c",
+    "scryfallUri": "https://scryfall.com/card/m11/152/prodigal-pyromancer?utm_source=api"
   },
   "pyroclasticElemental": {
     "id": "pyroclasticElemental",

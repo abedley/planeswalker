@@ -57,6 +57,9 @@ export const TARGET = Object.freeze({
   CREATURE: 'creature',
   CREATURE_YOU_CONTROL: 'creatureYouControl',
   CREATURE_OPPONENT_CONTROLS: 'creatureOpponentControls',
+  /** A creature in combat: "target attacking creature", "target attacking or blocking creature". */
+  ATTACKING_CREATURE: 'attackingCreature',
+  ATTACKING_OR_BLOCKING_CREATURE: 'attackingOrBlockingCreature',
   ARTIFACT: 'artifact',
   ENCHANTMENT: 'enchantment',
   ARTIFACT_OR_ENCHANTMENT: 'artifactOrEnchantment',
@@ -328,10 +331,15 @@ export const PLAYER_TARGETS = Object.freeze(new Set([TARGET.PLAYER, TARGET.OPPON
 
 /**
  * Whether a permanent is of a TARGET permanent kind, from the point of view of
- * `controllerId` (for "you control" and "an opponent controls").
+ * `controllerId` (for "you control" and "an opponent controls"). `combat` (the
+ * game's) says which creatures are attacking or blocking.
  */
-export function matchesPermanentKind(permanent, kind, controllerId) {
+export function matchesPermanentKind(permanent, kind, controllerId, combat = null) {
+  const attacking = () => combat?.attackers.some((a) => a.cardId === permanent.id) ?? false;
   switch (kind) {
+    case TARGET.ATTACKING_CREATURE: return isCreature(permanent) && attacking();
+    case TARGET.ATTACKING_OR_BLOCKING_CREATURE:
+      return isCreature(permanent) && (attacking() || (combat?.attackers.some((a) => a.blockerIds.includes(permanent.id)) ?? false));
     case TARGET.CREATURE:
     case TARGET.ANY:
       return isCreature(permanent);

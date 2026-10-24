@@ -1578,7 +1578,7 @@ export class Game extends EventEmitter {
     }
     const permanent = this.#permanent(id);
     if (!permanent || id === excludeId) return false;
-    return matchesPermanentKind(permanent, kind, controllerId);
+    return matchesPermanentKind(permanent, kind, controllerId, this.#combat);
   }
 
   /** Legal targets as `{ id }` objects: permanents, then players, then spells (top of the stack first). */

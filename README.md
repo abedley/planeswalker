@@ -119,9 +119,10 @@ when inspecting). Cards without art, such as the samples and tokens, get generat
 in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
 can have `art` and `color`; otherwise they get a monogram crest.
 
-**Blocking restrictions:** a creature that can't block, or can't be blocked, wears a badge on
-the board ("Can't block" in red, "Unblockable" in blue). One that has it only this turn, from a
-spell or ability, has a gold outline.
+**Attacking and blocking restrictions:** a creature that can't attack, can't block, or can't be
+blocked wears a badge on the board ("Can't attack" and "Can't block" in red, "Unblockable" in
+blue). One that has it only this turn, from a spell or ability, has a gold outline; one that has
+it from its Aura or Equipment (Pacifism, Maniacal Rage, Aether Tunnel) doesn't.
 
 **Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
 color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
@@ -190,7 +191,9 @@ A card is only imported if the engine supports everything it does:
     dies, <effect>". Elvish Visionary, Wall of Omens, Flametongue Kavu and Doomed Traveler
     import; Blood Artist ("Whenever … another creature dies") doesn't.
   - for Auras and Equipment, "Enchant creature", "Enchanted/Equipped creature gets +N/+N and
-    has …" and "Equip {N}"
+    has …", optionally ending "… and can't block" ("can't attack or block", "can't attack",
+    "can't be blocked"), and "Equip {N}". Pacifism, Maniacal Rage, Crippling Blight and Aether
+    Tunnel import. "When this Aura enters, …" works like any other enters trigger (Divine Favor).
 - For instants and sorceries, every sentence must be a supported effect, with at most one
   target in total, plus optionally "As an additional cost to cast this spell, <cost>."
 
@@ -249,10 +252,10 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 117 cards, mostly from M19, M20,
-M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach (DOM) and Prodigal Pyromancer
-(M11). Forest and Llanowar Elves are defined by hand, so for those the importer records only
-their art, in `CARD_PRESENTATION`.
+`cards/real-cards.txt` lists the real cards the campaign uses: 144 cards, mostly from M19, M20,
+M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach (DOM), Prodigal Pyromancer
+(M11) and some older core-set Auras and Equipment (M10–M15, ORI). Forest and Llanowar Elves
+are defined by hand, so for those the importer records only their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
 art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist`, `colors`, `rarity`, `set` and `collectorNumber`.
@@ -585,7 +588,10 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   Abilities can target their own source, except Auras and Equipment attaching to themselves.
 - Auras (303.4): "Enchant creature" Auras target a creature when cast and enter attached to it.
   An Aura that's attached to nothing, or to something it can't enchant, goes to its owner's
-  graveyard (704.5m).
+  graveyard (704.5m). "Enchanted creature can't attack or block." (Pacifism) grants the
+  restrictions `KEYWORD.CANT_ATTACK` (508.1c: it isn't an eligible attacker, like defender) and
+  `KEYWORD.CANT_BLOCK`. Card instances carry their `staticAbilities`, so the AI and the app can
+  read them.
 - Equipment (301.5): enters unattached. "Equip {N}" (702.6) is a sorcery-speed ability that
   targets a creature you control. It uses the stack and moves the Equipment if it's already
   attached. If the creature leaves, the Equipment stays on the battlefield, unattached (704.5n).
@@ -687,7 +693,10 @@ saveRun(localStorage, run);
 Everything a campaign has is data. There are two campaigns:
 - **`CAMPAIGN`** (`src/campaign/realCampaign.js`) is the one the app plays, built from real cards.
   - **Decks:** `REAL_DECKS` (`src/campaign/decks.js`), a mono-color 40-card deck per color, lighter
-    builds for the early opponents, and the boss's dragons.
+    builds for the early opponents, and the boss's dragons. Each deck has an Equipment and one or
+    two Auras, and most have another artifact or enchantment: Brawler's Plate and Oakenform in
+    green, Kitesail and Aether Tunnel in blue, Pacifism in white, Basilisk Collar and Rod of Ruin
+    in black, Sword of Vengeance in red, Fireshrieker on the Dragonlord's dragons.
   - **Planeswalkers:** the Warden plays Green Stompy and the Sage plays Blue Skies.
   - **Opponents** climb from basic-AI White, Black and Red, through searching full builds and
     the other planeswalker's color, to **the Dragonlord**.
@@ -772,9 +781,14 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
 - **Scoring** (`scoring.js`): spells and abilities are scored effect by effect, in the same points
   as creature values. Removal goes at the biggest threat, and burn goes to the face when it's
   lethal.
+- **Auras and Equipment:** a bonus Aura or Equipment goes on its best creature. A curse
+  (`isCurse`: an Aura that shrinks its creature or stops it attacking, like Weakness or
+  Pacifism) goes on the opponent's creature it takes the most from (`curseValue`: the drop in
+  creatureValue, or all of it if the curse kills). "+2/+2 and can't block" (Maniacal Rage)
+  counts as a bonus. The search AI picks its candidates the same way.
 
-`LegacyAIController` is the first version, kept unchanged as a baseline. `strategy: 'passive'`
-only passes and makes empty declarations.
+`LegacyAIController` is the first version, kept unchanged as a baseline (it puts every Aura on its
+own creatures). `strategy: 'passive'` only passes and makes empty declarations.
 
 ### Blocking plans (`blocking.js`)
 
@@ -1157,6 +1171,31 @@ the casts, and the rule changed 31 decisions, all on white.
 | basic vs basic without `doomed`, white | 600 | 52.0% |
 | the same, red | 600 | 50.2% |
 | both decks | 1200 | 51.1% (48.3–53.9%) |
+
+(Divine Verdict has since left the white deck for Pacifism; it's offered as a reward.)
+
+**Sacrificing doomed creatures** (`cashIn`, off by default; `basic:h=cashIn` turns it on): a
+creature of ours that's doomed costs nothing to sacrifice. One dying in combat costs only what the
+rest of the combat loses without it (`doomedSacrificeCost`). With "sacrifice a creature" costs
+(Witch's Cauldron, Vampiric Rites, Village Rites, Bone Splinters), the AI then uses them in
+response to removal, or in combat, so the removal fizzles and it gets something for the creature.
+Without it, the basic AI never activated Witch's Cauldron or Vampiric Rites in 162 games.
+
+The plays looked right, nearly all in response to Murder, Hero's Downfall or Bone Splinters, but
+they lost. Black Removal's mirror is a stall, about 39 turns a game, and over 80 games decking
+losses went from 21 to 29–30. The extra cards drawn early ran the libraries out. Valuing draws
+less as the library runs low (from 10 or 15 cards left) didn't help, and neither did cashing in
+only in response:
+
+| Match (black mirror) | Games | Win rate (95% CI) |
+| --- | --- | --- |
+| basic with `cashIn` vs without | 600 | 45.7% (41.7–49.7%) |
+| the same, other seeds | 600 | 45.0% (41.1–49.0%) |
+| with draws worth less near the end of the library | 600 | 46.5% (42.5–50.5%) |
+| only in response, not in combat | 600 | 45.8% (41.9–49.8%) |
+
+So the decks have no sacrifice outlets of this kind, and the rule stays off until the AI can tell
+a race from a stall.
 
 #### Mulligans (`mulligan.js`)
 

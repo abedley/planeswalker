@@ -75,7 +75,7 @@ function distributions(amount, ids) {
  * of a game can share them instead of copying them.
  */
 const IMMUTABLE_FIELDS = new Set([
-  'abilities', 'triggeredAbilities', 'spell', 'manaCost', 'types', 'subtypes', 'supertypes', 'additionalCost',
+  'abilities', 'triggeredAbilities', 'staticAbilities', 'spell', 'manaCost', 'types', 'subtypes', 'supertypes', 'additionalCost',
   'colors', 'effects',
 ]);
 
@@ -786,6 +786,8 @@ export class Game extends EventEmitter {
           target: ability.target ?? null,
         })),
       } : {}),
+      // What an Aura or Equipment does to its creature (applied in #applyContinuousEffects).
+      ...(definition.staticAbilities ? { staticAbilities: structuredClone(definition.staticAbilities) } : {}),
       abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => ({
         id,
         text,
@@ -1679,10 +1681,11 @@ export class Game extends EventEmitter {
   }
 
   #eligibleAttackers(playerId) {
-    // 508.1a: untapped creatures without summoning sickness. 702.3b: defender can't attack.
+    // 508.1a: untapped creatures without summoning sickness. 702.3b: defender can't
+    // attack, nor can a creature with "can't attack" (508.1c).
     return this.#battlefield.filter((p) => (
       p.controllerId === playerId && isCreature(p) && !p.tapped
-      && !this.#hasSummoningSickness(p) && !hasKeyword(p, KEYWORD.DEFENDER)
+      && !this.#hasSummoningSickness(p) && !hasKeyword(p, KEYWORD.DEFENDER) && !hasKeyword(p, KEYWORD.CANT_ATTACK)
     ));
   }
 

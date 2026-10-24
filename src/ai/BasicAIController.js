@@ -3,14 +3,14 @@ import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import { STEP, PHASE } from '../engine/turnStructure.js';
 import {
-  isCreature, isLand, isInstant, isAura, hasKeyword, manaValue, KEYWORD, EFFECT, isHarmfulEffect,
+  isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, isHarmfulEffect,
 } from '../cards/cards.js';
 import { manaPoolTotal, canPayMana } from '../engine/mana.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction,
 } from './manaPlanning.js';
 import {
-  creatureValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
+  creatureValue, curseValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
 } from './combat.js';
 import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
@@ -254,10 +254,11 @@ export class BasicAIController extends EventEmitter {
       const plan = knapsack(candidates, manaPoolTotal(player.manaPool) + sources.length);
       order = plan.filter((c) => c.now).sort((a, b) => manaValue(b.manaCost) - manaValue(a.manaCost) || b.score - a.score);
     }
+    const fodder = order.some((intent) => intent.cost?.sacrifice) ? this.#doomedFodder(state) : null;
     for (const intent of order) {
       const actions = mine.filter((a) => intent.matches(a));
       if (actions.length) {
-        return bestBy(actions, (a) => costScore(state, me, intent.cost, a.costChoices ?? {}, intent.sourceId)
+        return bestBy(actions, (a) => costScore(state, me, intent.cost, a.costChoices ?? {}, intent.sourceId, fodder)
           + (a.manaColor ? (neededColors(intent.manaCost, player.manaPool)[a.manaColor] ?? 0) : 0));
       }
       // Not castable yet: tap mana for it if that can work, otherwise try the next idea.
@@ -265,6 +266,22 @@ export class BasicAIController extends EventEmitter {
       return chooseManaAction(sources, neededColors(intent.manaCost, player.manaPool));
     }
     return null;
+  }
+
+  /**
+   * H8 (Forge): creatures that will die anyway aren't worth removal (`doomed: false`
+   * turns it off). Null when off.
+   */
+  #doomed(state) {
+    return this.#heuristics.doomed === false || this.#heuristics.doomed === 0 ? null : doomedCreatures(state, this.#playerId);
+  }
+
+  /**
+   * H8b, off by default (`cashIn: true` turns it on): ours that will die anyway are
+   * cheap to sacrifice, and worth sacrificing in response or in combat. Null when off.
+   */
+  #doomedFodder(state, doomed = this.#doomed(state)) {
+    return this.#heuristics.cashIn ? doomed : null;
   }
 
   /**
@@ -277,8 +294,8 @@ export class BasicAIController extends EventEmitter {
     const available = manaPoolTotal(player.manaPool) + sources.length;
     const result = [];
     const noise = this.#noise;
-    // H8 (Forge): creatures that will die anyway aren't worth removal (`doomed: false` turns it off).
-    const doomed = this.#heuristics.doomed === false || this.#heuristics.doomed === 0 ? null : doomedCreatures(state, me);
+    const doomed = this.#doomed(state);
+    const fodder = this.#doomedFodder(state, doomed);
     const add = (candidate) => {
       if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) {
         if (noise) candidate.score *= 1 + noise.amount * (2 * noise.random() - 1);
@@ -303,8 +320,10 @@ export class BasicAIController extends EventEmitter {
       const { effects, target } = card.spell;
       const best = bestTarget(state, me, effects, target, card.id, window, preCombat, doomed);
       if (best && this.#savesRemoval(state, effects, best.targetId, window)) continue;
-      if (best && windowAllows(window, effects, instant, best.targetId, state, me)) {
-        const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id);
+      const allowed = best && (windowAllows(window, effects, instant, best.targetId, state, me)
+        || (instant && cashesInDoomed(state, me, cost, card.id, window, fodder)));
+      if (allowed) {
+        const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id, fodder);
         add({ score, manaCost: card.manaCost, cost, sourceId: card.id, now: true, matches: castMatches(best.targetId) });
       } else if (instant && window === WINDOW.MAIN) {
         // Hold it: worth keeping mana up for, at a discount.
@@ -332,11 +351,12 @@ export class BasicAIController extends EventEmitter {
           continue;
         }
         // A creature that could attack shouldn't tap for an ability before combat.
-        if (ability.cost.tap && preCombat && isCreature(source) && !hasKeyword(source, KEYWORD.DEFENDER)) continue;
+        if (ability.cost.tap && preCombat && isCreature(source) && !cantAttack(source)) continue;
         const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat, doomed);
-        if (!best || !windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targetId, state, me)) continue;
+        if (!best || !(windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targetId, state, me)
+          || cashesInDoomed(state, me, ability.cost, source.id, window, fodder))) continue;
         const score = best.score + costScore(state, me, ability.cost, {}, source.id)
-          + cheapestSacrifice(state, me, ability.cost, source.id);
+          + cheapestSacrifice(state, me, ability.cost, source.id, fodder);
         add({ score, manaCost, cost: ability.cost, sourceId: source.id, now: true, matches: abilityMatches(best.targetId) });
       }
     }
@@ -488,8 +508,13 @@ function combatSwing(state, me, effects, targetId, sourceId) {
 
 /** Casting a permanent: `[{ targetId, score }]`, one per Aura target, or one for anything else. */
 function permanentSpellOptions(state, me, card, preCombat, heuristics = {}) {
+  if (isCurse(card)) {
+    // A curse goes on their creature that it hurts the most.
+    return state.battlefield.filter((p) => p.controllerId !== me && isCreature(p))
+      .map((p) => ({ targetId: p.id, score: 1 + curseValue(p, card) }));
+  }
   if (isAura(card)) {
-    // The Auras here are bonuses: on our own creatures, the better the creature the better.
+    // A bonus goes on our own creatures, the better the creature the better.
     return state.battlefield.filter((p) => p.controllerId === me && isCreature(p))
       .map((p) => ({ targetId: p.id, score: 3 + 0.2 * creatureValue(p) }));
   }
@@ -530,14 +555,26 @@ function equipOptions(state, me, equipment, preCombat) {
     }));
 }
 
+/** What a "sacrifice a ..." cost could take. */
+const sacrificeFodder = (state, me, cost, sourceId) => state.battlefield.filter((p) => p.controllerId === me
+  && p.id !== sourceId && (cost.sacrifice !== 'creature' || isCreature(p)));
+
 /** The cost of the cheapest thing a "sacrifice a ..." cost could take (zero or negative). */
-function cheapestSacrifice(state, me, cost, sourceId) {
+function cheapestSacrifice(state, me, cost, sourceId, doomed = null) {
   if (!cost.sacrifice) return 0;
-  const fodder = state.battlefield.filter((p) => p.controllerId === me && p.id !== sourceId
-    && (cost.sacrifice !== 'creature' || isCreature(p)));
+  const fodder = sacrificeFodder(state, me, cost, sourceId);
   if (fodder.length === 0) return -Infinity;
-  return Math.max(...fodder.map((p) => costScore(state, me, {}, { sacrifice: [p.id] }, sourceId)));
+  return Math.max(...fodder.map((p) => costScore(state, me, {}, { sacrifice: [p.id] }, sourceId, doomed)));
 }
+
+/**
+ * Whether a "sacrifice a creature" cost could take one of ours that's about to die
+ * anyway: then it's worth paying now, in response or in combat, rather than losing
+ * the creature for nothing (Village Rites, Witch's Cauldron).
+ */
+const cashesInDoomed = (state, me, cost, sourceId, window, doomed) => Boolean(doomed && cost.sacrifice
+  && (window === WINDOW.RESPONSE || window === WINDOW.COMBAT)
+  && sacrificeFodder(state, me, cost, sourceId).some((p) => doomed.has(p.id)));
 
 /** The most valuable set of candidates whose mana costs fit in `capacity` (each card at most once). */
 function knapsack(candidates, capacity) {

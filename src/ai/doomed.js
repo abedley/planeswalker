@@ -84,6 +84,18 @@ export function doomedCreatures(state, me) {
 }
 
 /**
+ * What sacrificing our creature `id` costs `me` if it's doomed (see doomedCreatures):
+ * nothing for one that a spell or ability will kill, and for one dying in combat,
+ * whatever the rest of the combat loses without it (the attacker it would have
+ * killed survives). Null if it isn't doomed.
+ */
+export function doomedSacrificeCost(state, me, id, doomed) {
+  const info = doomed?.get(id);
+  if (!info) return null;
+  return info.reason === 'combat' ? Math.max(0, -savedByRemoving(info.combat, me, id)) : 0;
+}
+
+/**
  * What removing a doomed creature `targetId` before combat damage is still worth
  * to `me`, in the combat `state` (see combatAhead): the rest of the combat going
  * better for us (our creatures it would have killed, damage it would have dealt).

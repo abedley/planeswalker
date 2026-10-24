@@ -16,9 +16,9 @@ import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import { PHASE } from '../engine/turnStructure.js';
 import { canPayMana } from '../engine/mana.js';
-import { isCreature, isLand, isInstant, isAura, hasKeyword, KEYWORD, EFFECT } from '../cards/cards.js';
+import { isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, KEYWORD, EFFECT } from '../cards/cards.js';
 import {
-  planAttack, planBlocks, chooseBlocks, creatureValue, BLOCKING,
+  planAttack, planBlocks, chooseBlocks, creatureValue, curseValue, BLOCKING,
 } from './combat.js';
 import { candidateTargets, scoreEffects, costScore } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
@@ -135,7 +135,10 @@ function priorityMacros(state, me, mine) {
     if (isLand(card) || !(isInstant(card) || sorceryTiming) || !affordable(card.manaCost)) continue;
     if (!canSacrifice(card.additionalCost, card.id)) continue;
     let targets = [null];
-    if (isAura(card)) {
+    if (isCurse(card)) {
+      targets = state.battlefield.filter((p) => p.controllerId !== me && isCreature(p))
+        .sort((a, b) => curseValue(b, card) - curseValue(a, card)).slice(0, 2).map((p) => p.id);
+    } else if (isAura(card)) {
       targets = state.battlefield.filter((p) => p.controllerId === me && isCreature(p))
         .sort((a, b) => creatureValue(b) - creatureValue(a)).slice(0, 2).map((p) => p.id);
     } else if (card.spell?.target) {

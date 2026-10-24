@@ -6,7 +6,7 @@
 import { DECISION } from '../../src/engine/Game.js';
 import { PHASE, STEP } from '../../src/engine/turnStructure.js';
 import { ACTION } from '../../src/engine/actions.js';
-import { isCreature, hasKeyword } from '../../src/cards/cards.js';
+import { isCreature, hasKeyword, cantAttack } from '../../src/cards/cards.js';
 
 const isMain = (state) => state.phase === PHASE.PRECOMBAT_MAIN || state.phase === PHASE.POSTCOMBAT_MAIN;
 
@@ -36,7 +36,7 @@ export function shouldAutoPass(state, me, { hasOptions, fullControl = false, end
 
 /** Creatures of `me` that look able to attack (untapped, no defender, not summoning sick). */
 export const readyAttackers = (state, me) => state.battlefield.filter((p) => p.controllerId === me && isCreature(p)
-  && !p.tapped && !hasKeyword(p, 'defender') && (!p.summoningSick || hasKeyword(p, 'haste')));
+  && !p.tapped && !cantAttack(p) && (!p.summoningSick || hasKeyword(p, 'haste')));
 
 /**
  * The main button: `{ label, action?, endTurn?, waiting?, reopen? }`. `action` is the valid

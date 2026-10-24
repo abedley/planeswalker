@@ -117,6 +117,8 @@ export const KEYWORD = Object.freeze({
   // this turn.", a PUMP that grants it).
   CANT_BLOCK: "can't block",
   CANT_BE_BLOCKED: "can't be blocked",
+  /** 508.1c: "Enchanted creature can't attack or block." (Pacifism) grants this and CANT_BLOCK. */
+  CANT_ATTACK: "can't attack",
 });
 
 export const EFFECT = Object.freeze({
@@ -183,7 +185,17 @@ export const effectAffects = (effect) => effect.affected
 /** Whether an effect hurts what it affects, e.g. damage or -2/-2 (for AI decisions). */
 export const isHarmfulEffect = (effect) => HARMFUL_EFFECTS.has(effect.type)
   || (effect.type === EFFECT.PUMP && ((effect.power ?? 0) + (effect.toughness ?? 0) < 0
-    || (effect.keywords ?? []).includes(KEYWORD.CANT_BLOCK)));
+    || (effect.keywords ?? []).some((k) => k === KEYWORD.CANT_BLOCK || k === KEYWORD.CANT_ATTACK)));
+
+/**
+ * Whether an Aura is a curse, for AI decisions: it shrinks the creature, or stops it
+ * attacking (Weakness, Pacifism). "+2/+2 and can't block" (Maniacal Rage) is a bonus.
+ */
+export const isCurse = (card) => isAura(card) && (card.staticAbilities ?? []).some((e) => {
+  const size = (e.power ?? 0) + (e.toughness ?? 0);
+  const keywords = e.keywords ?? [];
+  return size < 0 || keywords.includes(KEYWORD.CANT_ATTACK) || (size <= 0 && keywords.includes(KEYWORD.CANT_BLOCK));
+});
 
 /** An ability's effects, whether written as `effects` or a single `effect`. */
 export const abilityEffects = (ability) => ability.effects ?? (ability.effect ? [ability.effect] : []);
@@ -303,6 +315,8 @@ export const isEnchantment = (card) => card.types.includes(CARD_TYPE.ENCHANTMENT
 export const isAura = (card) => isEnchantment(card) && (card.subtypes ?? []).includes(SUBTYPE.AURA);
 export const isEquipment = (card) => isArtifact(card) && (card.subtypes ?? []).includes(SUBTYPE.EQUIPMENT);
 export const hasKeyword = (card, keyword) => (card.keywords ?? []).includes(keyword);
+/** 702.3b, 508.1c: a creature with defender or "can't attack" never attacks. */
+export const cantAttack = (card) => hasKeyword(card, KEYWORD.DEFENDER) || hasKeyword(card, KEYWORD.CANT_ATTACK);
 
 /** Mana value (202.3): the total amount of mana in a mana cost. */
 export const manaValue = (manaCost) => Object.values(manaCost ?? {}).reduce((sum, n) => sum + n, 0);

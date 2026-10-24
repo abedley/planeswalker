@@ -14,8 +14,9 @@
  *   followed by "Activate only as a sorcery."
  * - triggered abilities "When this creature enters, <effect>." and "When this creature
  *   dies, <effect>.", with the same effect sentences
- * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>."
- * - Equipment: "Equipped creature gets +N/+N and has <keywords>." and "Equip {N}"
+ * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>.",
+ *   optionally ending "and can't block" ("can't attack or block", "can't be blocked")
+ * - Equipment: "Equipped creature gets +N/+N and has <keywords>." (likewise) and "Equip {N}"
  * - Instants and sorceries made only of supported effect sentences (at most one
  *   target), optionally with "As an additional cost to cast this spell, <cost>."
  * Anything else, such as other rules text, is reported as unsupported.
@@ -112,21 +113,37 @@ function parseActivatedAbility(line, normalized, number, problems) {
   };
 }
 
+/** 508.1c, 509.1b: restrictions an Aura or Equipment can put on its creature, as keywords. */
+const ATTACHED_RESTRICTIONS = {
+  "can't attack or block": [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK],
+  "can't attack": [KEYWORD.CANT_ATTACK],
+  "can't block": [KEYWORD.CANT_BLOCK],
+  "can't be blocked": [KEYWORD.CANT_BE_BLOCKED],
+};
+
 /**
  * "Enchanted creature gets +2/+2 and has flying and trample." -> a static ability,
- * or null if the line isn't one.
+ * or null if the line isn't one. It may end in a restriction: "Enchanted creature
+ * can't attack or block." (Pacifism), "Enchanted creature gets +2/+2 and can't block."
  */
 function parseAttachedBonus(line, problems) {
-  const match = /^(Enchanted|Equipped) creature (?:gets ([+-]\d+)\/([+-]\d+))?(?: and )?(?:has (.+))?\.$/.exec(line);
-  if (!match || (!match[2] && !match[4])) return null;
-  const keywords = match[4] ? parseKeywordList(match[4], problems) : [];
-  if (!keywords) return { kind: match[1], effect: null };
+  const head = /^(Enchanted|Equipped) creature (.+)\.$/.exec(line);
+  if (!head) return null;
+  const [, kind, body] = head;
+  const restriction = /(?:^| and )(can't attack or block|can't attack|can't block|can't be blocked)$/.exec(body);
+  const match = /^(?:gets ([+-]\d+)\/([+-]\d+))?(?: and )?(?:has (.+))?$/.exec(restriction ? body.slice(0, restriction.index) : body);
+  if (!match) return null;
+  const [, power, toughness, keywordText] = match;
+  if (!power && !keywordText && !restriction) return null;
+  const keywords = keywordText ? parseKeywordList(keywordText, problems) : [];
+  if (!keywords) return { kind, effect: null };
+  if (restriction) keywords.push(...ATTACHED_RESTRICTIONS[restriction[1]]);
   return {
-    kind: match[1],
+    kind,
     effect: {
       affected: AFFECTED.ATTACHED_PERMANENT,
-      ...(match[2] && Number(match[2]) ? { power: Number(match[2]) } : {}),
-      ...(match[3] && Number(match[3]) ? { toughness: Number(match[3]) } : {}),
+      ...(power && Number(power) ? { power: Number(power) } : {}),
+      ...(toughness && Number(toughness) ? { toughness: Number(toughness) } : {}),
       ...(keywords.length ? { keywords } : {}),
     },
   };

@@ -19,6 +19,7 @@ import { planLookaheadAttack } from './attacking.js';
 import { BLOCK_PLAN } from './blocking.js';
 import { keepsHand, bottomCard, landShare } from './mulligan.js';
 import { playAroundTricks, baitWithTricks } from './tricks.js';
+import { doomedCreatures, savedByRemoving, kills } from './doomed.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -276,6 +277,8 @@ export class BasicAIController extends EventEmitter {
     const available = manaPoolTotal(player.manaPool) + sources.length;
     const result = [];
     const noise = this.#noise;
+    // H8 (Forge): creatures that will die anyway aren't worth removal (`doomed: false` turns it off).
+    const doomed = this.#heuristics.doomed === false || this.#heuristics.doomed === 0 ? null : doomedCreatures(state, me);
     const add = (candidate) => {
       if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) {
         if (noise) candidate.score *= 1 + noise.amount * (2 * noise.random() - 1);
@@ -298,7 +301,7 @@ export class BasicAIController extends EventEmitter {
         continue;
       }
       const { effects, target } = card.spell;
-      const best = bestTarget(state, me, effects, target, card.id, window, preCombat);
+      const best = bestTarget(state, me, effects, target, card.id, window, preCombat, doomed);
       if (best && this.#savesRemoval(state, effects, best.targetId, window)) continue;
       if (best && windowAllows(window, effects, instant, best.targetId, state, me)) {
         const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id);
@@ -330,7 +333,7 @@ export class BasicAIController extends EventEmitter {
         }
         // A creature that could attack shouldn't tap for an ability before combat.
         if (ability.cost.tap && preCombat && isCreature(source) && !hasKeyword(source, KEYWORD.DEFENDER)) continue;
-        const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat);
+        const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat, doomed);
         if (!best || !windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targetId, state, me)) continue;
         const score = best.score + costScore(state, me, ability.cost, {}, source.id)
           + cheapestSacrifice(state, me, ability.cost, source.id);
@@ -420,16 +423,30 @@ const isTheirs = (state, me, id) => state.battlefield.some((p) => p.id === id &&
  * null for untargeted ones), or null if there's no target. In combat, pumps and
  * removal are judged by how they change the fight.
  */
-function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat) {
+function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat, doomed = null) {
   const targets = targetKind ? candidateTargets(state, me, targetKind) : [null];
   if (targets.length === 0) return null;
   let best = null;
   for (const targetId of targets) {
     let score = scoreEffects(state, me, effects, targetId ? [targetId] : [], sourceId, { preCombat });
     if (window === WINDOW.COMBAT) score += combatSwing(state, me, effects, targetId, sourceId);
+    if (doomed?.has(targetId)) score += doomedAdjustment(state, me, effects, targetId, sourceId, doomed.get(targetId));
     if (!best || score > best.score) best = { targetId, score };
   }
   return best;
+}
+
+/**
+ * For an opponent's creature that will die anyway (see doomed.js), removal on it is
+ * worth only what removing it first saves (our blockers, our life), not its death.
+ */
+function doomedAdjustment(state, me, effects, targetId, sourceId, { reason, combat }) {
+  const target = state.battlefield.find((p) => p.id === targetId);
+  if (!target || target.controllerId === me) return 0;
+  const removal = effects.filter((e) => kills(e, target) || (e.type === EFFECT.RETURN_TO_HAND && !e.affected));
+  if (removal.length === 0) return 0;
+  const counted = scoreEffects(state, me, removal, [targetId], sourceId);
+  return -counted + (reason === 'combat' ? Math.max(0, savedByRemoving(combat, me, targetId)) : 0);
 }
 
 /**

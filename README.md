@@ -1119,6 +1119,25 @@ What the results say:
   time it gets fewer guesses of the hidden cards, and so far that has cost as much as the depth
   gained.
 
+#### Creatures that will die anyway (`doomed.js`)
+
+Forge's `AVOID_TARGETING_CREATS_THAT_WILL_DIE`, on by default (`basic:h=doomed@0` turns it off). A
+creature is doomed when one of these will kill it:
+- **The stack:** a spell or ability on the stack destroys or exiles it, or deals it lethal
+  damage.
+- **Combat:** after blocks, the fight will kill it. While the AI is being attacked, it judges
+  this by the blocks it plans to make.
+
+Removal on a doomed creature of the opponent's isn't worth that creature's death, which was
+coming anyway. It's worth only what removing it first saves: in a trade, our blocker, or the
+damage it would have dealt.
+
+It's right, but it hardly ever comes up. In 259,000 decisions in basic-AI games on every deck,
+it changed one, and the arena shows nothing: 50.0% (47.3–52.7%) over 1320 games. The basic AI
+casts its removal in its own main phase, at the biggest threat, where nothing is about to die.
+Of 643 removal spells in basic-AI games on the real and sample spell decks, 468 came in the main
+phase and 9 in combat.
+
 #### Mulligans (`mulligan.js`)
 
 With mulligans in the game (see *Rules implemented*), the basic AI decides by rules of thumb from
@@ -1183,7 +1202,7 @@ Ideas from other Magic AIs and the research on them, with what applies here:
   - attacking into open mana (now `tricks`)
   - holding combat tricks until blocks (now `bait`)
   - mulligans (now in the engine and the AI)
-  - not targeting creatures that will die anyway (not yet)
+  - not targeting creatures that will die anyway (now `doomed`)
 - **XMage** has two AIs: alpha-beta minimax with a node cap, and MCTS that keeps its tree from
   one decision to the next, as `searchPool.js` does.
 - **Hearthstone agents** treat the hidden hand as search's main weakness. They guess hands that

@@ -119,8 +119,9 @@ export class BasicAIController extends EventEmitter {
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
-    // Creatures after combat (see permanentSpellOptions) is on unless turned off (`postCombat: false`).
-    this.#heuristics = { postCombat: true, ...heuristics };
+    // Creatures after combat (see permanentSpellOptions) and attacking with tricks (see
+    // baitWithTricks) are on unless turned off (`postCombat: false`, `bait: false`).
+    this.#heuristics = { postCombat: true, bait: true, ...heuristics };
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;

@@ -8,8 +8,9 @@ So far the engine models the **turn structure** (phases and steps), **priority**
 Elves** (a 1/1 for {G} with "{T}: Add {G}."). Each player starts at 20 life with a 40-card deck
 of 20 Forests and 20 Elves, shuffles it, and draws 7 cards.
 
-Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
-blockers, divide combat damage, and discard when the cleanup step asks them to.
+Players can mulligan their opening hand, pass priority, play a land, cast creatures, activate
+abilities, declare attackers and blockers, divide combat damage, and discard when the cleanup step
+asks them to.
 
 **Artifacts, enchantments, Auras and Equipment** are implemented too, with targeting,
 attachments and "enchanted/equipped creature gets +N/+N and has …" bonuses. The debugger has an
@@ -88,6 +89,10 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
   target, or which creature to sacrifice.
+- **Mulligans:** before the first turn, a sheet shows your opening hand with *Keep 7* and
+  *Mulligan to 6* (the London mulligan). After a mulligan, you keep the hand, then tap the cards
+  to put on the bottom, one per mulligan. You can close the sheet to look at the board, and the
+  main button brings it back.
 - **Combat:** tap creatures to attack; to block, tap your creature, then an attacker.
 - **Damage assignment** is a choice of which blockers die (`app/battle/damage.js`): splits
   with the same outcome are one choice (the one trampling over the most), and outcomes that
@@ -319,6 +324,9 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | a combat damage step (`'assignCombatDamage'`), when an attacker has more than one legal split: several blockers, or trample. `assignment` maps blocker ids (and, with trample, the defending player's id) to damage. There is one entry per legal split |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
 | `{ type: 'CHOOSE_TARGETS', playerId, targets }` | a triggered ability with more than one legal target is being put on the stack (`'chooseTargets'`); its controller picks one. There is one entry per legal target |
+| `{ type: 'KEEP_HAND', playerId }` | before the first turn, in a game with `mulligans: true` (`'mulligan'`): keep the hand. With `pendingDecision.mulligans` taken, it's then `'putOnBottom'` with that `count` |
+| `{ type: 'MULLIGAN', playerId }` | the same decision, with fewer than 7 mulligans taken: shuffle the hand into the library and draw a new 7 |
+| `{ type: 'PUT_ON_BOTTOM', playerId, cardId }` | `'putOnBottom'`: put a card from the hand on the bottom of the library. There is one entry per card in their hand |
 
 An action is accepted only if it equals one of `state.validActions`.
 
@@ -375,8 +383,11 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `stackObjectResolving` / `stackObjectResolved` | `stackObject` / `stackObjectId` | the top of the stack resolves |
 | `manaPoolsEmptied` | `pools: [{ playerId, lost }]` | a step or phase ends with mana in a pool |
 | `permanentsUntapped` | `playerId`, `cardIds` | untap step, if anything was tapped |
-| `decisionRequired` | the new `pendingDecision` | a player must declare attackers or blockers, divide damage, or discard |
+| `decisionRequired` | the new `pendingDecision` | a player must keep or mulligan, put cards on the bottom, declare attackers or blockers, divide damage, or discard |
 | `cardDiscarded` | `playerId`, `cardId` | a card is discarded (to hand size, or as a cost) |
+| `mulliganTaken` | `playerId`, `mulligans` | a player mulligans (then draws a new hand) |
+| `handKept` | `playerId`, `mulligans` | a player keeps their hand |
+| `cardPutOnBottom` | `playerId` | a kept hand's card goes to the bottom of the library (which card isn't said) |
 | `damageDealt` | `sourceId`, `targetPlayerId \| targetCardId`, `amount` | a spell or ability deals damage |
 | `permanentDestroyed` / `permanentExiled` / `permanentReturnedToHand` | `cardId`, `cardName`, `sourceId`, ... | a permanent is destroyed, exiled or bounced |
 | `permanentSacrificed` | `cardId`, `cardName`, `controllerId` | a permanent is sacrificed to pay a cost |
@@ -445,8 +456,15 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
 - When all players pass in succession with an empty stack, the step or phase ends (117.4, 500.2).
 - The player who goes first skips the draw step of turn 1 (103.8a).
 - Declare blockers and combat damage are skipped when no creatures attack (508.8).
-- Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5). Mulligans aren't
-  implemented yet.
+- Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5).
+- Mulligans (103.5, the London mulligan), when the game is created with `mulligans: true` (campaign
+  and quick-match games are):
+  - Each player in turn order, the starting player first, keeps the hand or mulligans.
+  - A mulligan shuffles the hand into the library and draws a new 7.
+  - On keeping, the player puts one card on the bottom of the library for each mulligan taken.
+  - Each player decides in full before the next; in the rules, mulligans are taken together,
+    round by round.
+  - With `mulligans: false` (the default), everyone keeps the first 7, as before.
 - Turn-based actions: the active player untaps their permanents (502.3), draws in the draw step
   (504.1), and discards down to the maximum hand size of 7 in cleanup (514.1, 402.2).
 - Playing lands: a special action that doesn't use the stack (116.2a). The active player can do
@@ -1101,9 +1119,51 @@ What the results say:
   time it gets fewer guesses of the hidden cards, and so far that has cost as much as the depth
   gained.
 
-A rule from the same sources that would matter, but needs the rules engine first, is the
-mulligan: the engine keeps every opening hand, so hands with too few or too many lands are
-played out.
+#### Mulligans (`mulligan.js`)
+
+With mulligans in the game (see *Rules implemented*), the basic AI decides by rules of thumb from
+Limited (Frank Karsten's land counts) and Forge (`MULLIGAN_THRESHOLD`):
+- **Keep:** seven cards with 2–5 lands; at six or five, a hand it can cut to 2–4 (or 1–4)
+  lands by what it bottoms; four cards or fewer, whatever they hold. A deck without lands keeps
+  anything.
+- **Bottom:** extra lands first (beyond its deck's share of lands for the hand size), then its
+  most expensive spells.
+- **Search AI:** doesn't search these decisions, as a few turns' play can't judge them.
+
+Measured against the basic AI keeping every hand (`basic:mull=0`, arena `--mulligans 1`, all
+eleven decks): 51.1% (48.4–53.8%) over 1320 games. Most of the decks have 16 to 20 lands in 40
+cards, so few hands are bad enough to need it.
+
+#### Combat tricks (`tricks.js`)
+
+Two of Forge's rules about pump instants, as heuristics of the basic AI's attacks. What the
+defender might hold is judged from their deck list (their hand and library together, as the
+player view allows), not from their hand.
+- **`bait`** (on by default; `basic:h=bait@0` turns it off). Forge's
+  `TRY_TO_HOLD_COMBAT_TRICKS_UNTIL_BLOCK`. The basic AI already holds its tricks until blockers
+  are declared. Now it also attacks with them: it adds one creature a turn that the defender
+  would block well, when a trick in its hand that it can pay for wins every such block. The
+  likeliest block is worth the most.
+- **`tricks`** (opt-in, `basic:h=tricks@<chance>`). Forge's
+  `CHANCE_TO_ATKTRADE_WHEN_OPP_HAS_MANA`. It doesn't attack with a creature that a single
+  blocker would kill and survive, given the biggest trick the defender can pay for. It does so
+  only when the chance they hold one (hypergeometric, from their deck list and hand size) is at
+  least the threshold, and the attack isn't lethal anyway.
+
+| Heuristic | Games | Win rate vs basic (95% CI) |
+| --- | --- | --- |
+| `bait` | 1320, all decks | 51.0% (48.3–53.7%) |
+| `bait`, green only (two seeds) | 320 | 57.5% |
+| `bait`, green, effects and spells (new seed) | 600 | 52.2% (48.2–56.1%) |
+| `tricks@0.1` | 1320 | 49.5% (46.8–52.2%) |
+| `tricks@0.2` | 1320 | 49.8% (47.2–52.5%) |
+| `tricks@0.1` and `bait` | 1320 | 50.5% (47.8–53.2%) |
+
+- **Bait:** it wins on green, the deck with real pump tricks (Titanic Growth), and changes
+  nothing elsewhere.
+- **Tricks:** decks hold one or two tricks, so a defender rarely holds one: over 3480 attacks the
+  chance reached 30% only 45 times. Played around more often, it costs a little on green,
+  where giving up an attack gives the race away.
 
 
 #### Lessons from other MTG AIs
@@ -1119,11 +1179,11 @@ Ideas from other Magic AIs and the research on them, with what applies here:
     "interesting" deals.
 - **Forge** (`res/ai/Default.ai`) has a flat Monte Carlo layer: 5 candidates, 4 rollouts each,
   and a bonus for the heuristic's own choice, much like `DEFAULT_MARGIN`. Its profiles add rules
-  we don't have yet:
-  - attacking into open mana
-  - holding combat tricks until blocks
-  - not targeting creatures that will die anyway
-  - mulligans
+  we didn't have:
+  - attacking into open mana (now `tricks`)
+  - holding combat tricks until blocks (now `bait`)
+  - mulligans (now in the engine and the AI)
+  - not targeting creatures that will die anyway (not yet)
 - **XMage** has two AIs: alpha-beta minimax with a node cap, and MCTS that keeps its tree from
   one decision to the next, as `searchPool.js` does.
 - **Hearthstone agents** treat the hidden hand as search's main weakness. They guess hands that

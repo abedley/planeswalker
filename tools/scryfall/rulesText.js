@@ -84,6 +84,8 @@ const PERMANENT_SUBJECTS = {
   'target creature you control': [AFFECTED.TARGET, TARGET.CREATURE_YOU_CONTROL],
   'target creature an opponent controls': [AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS],
   "target creature you don't control": [AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS],
+  'target attacking creature': [AFFECTED.TARGET, TARGET.ATTACKING_CREATURE],
+  'target attacking or blocking creature': [AFFECTED.TARGET, TARGET.ATTACKING_OR_BLOCKING_CREATURE],
   'target artifact': [AFFECTED.TARGET, TARGET.ARTIFACT],
   'target enchantment': [AFFECTED.TARGET, TARGET.ENCHANTMENT],
   'target artifact or enchantment': [AFFECTED.TARGET, TARGET.ARTIFACT_OR_ENCHANTMENT],

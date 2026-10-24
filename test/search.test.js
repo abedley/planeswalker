@@ -7,7 +7,9 @@ import {
 import { playout, actingPlayerId } from '../src/ai/simulate.js';
 import { listMacros, nextAction } from '../src/ai/macroActions.js';
 import { evaluate, features, DEFAULT_WEIGHTS } from '../src/ai/evaluate.js';
-import { searchPolicy, worthSearching } from '../src/ai/search.js';
+import { searchPolicy, worthSearching, simulate, rolloutPolicies } from '../src/ai/search.js';
+import { determinize } from '../src/ai/determinize.js';
+import { seededRandom } from '../src/engine/random.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const cards = { ...SAMPLE_EFFECTS, ...SAMPLE_TRIGGERS, ...SAMPLE_CARDS };
@@ -81,13 +83,20 @@ test('the search\'s choice doesn\'t depend on anything it can\'t know', () => {
     // both libraries in a new order, and a different random number generator state.
     const snapshot = game.serialize();
     const theirs = [...snapshot.zones.p2.hand, ...snapshot.zones.p2.library].reverse();
-    snapshot.zones.p2.hand = theirs.splice(0, snapshot.zones.p2.hand.length);
+    const hand = theirs.splice(0, snapshot.zones.p2.hand.length);
+    // What p1 has seen of each hand card (see Game#getPlayerView) stays with its place in hand.
+    const notes = snapshot.zones.p2.handNotes;
+    snapshot.zones.p2.handNotes = Object.fromEntries(snapshot.zones.p2.hand
+      .map((card, i) => [hand[i].id, notes[card.id]]).filter(([, note]) => note && !note.revealed));
+    snapshot.zones.p2.hand = hand;
     snapshot.zones.p2.library = theirs;
     snapshot.zones.p1.library.reverse();
     snapshot.randomState = 12345;
     const other = Game.deserialize(snapshot, { silent: true });
-    const choose = (g) => searchPolicy('p1', { algorithm: 'greedy', determinizations: 2, seed: 9 })(g.peekState(), g);
-    assert.deepEqual(choose(other), choose(game), `decision after ${fromStep} steps`);
+    for (const options of [{}, { rolloutNoise: 0.2, inference: true }]) {
+      const choose = (g) => searchPolicy('p1', { algorithm: 'greedy', determinizations: 2, seed: 9, ...options })(g.peekState(), g);
+      assert.deepEqual(choose(other), choose(game), `decision after ${fromStep} steps, ${JSON.stringify(options)}`);
+    }
   }
 });
 
@@ -100,4 +109,23 @@ test('greedy and ismcts policies play complete games', () => {
     const final = playout(game, { p1: (s) => search(s, game), p2: (s) => ai.chooseAction(s) });
     assert.equal(final.status, GAME_STATUS.GAME_OVER, algorithm);
   }
+});
+
+test('noisy rollouts: the same noise for every candidate on a guess, and different noise on another', () => {
+  const game = new Game({ players, seed: 6, cards, decks: { p1: SAMPLE_EFFECTS_DECK, p2: SAMPLE_TRIGGERS_DECK }, silent: true });
+  game.start();
+  decisionAfter(game, 'p1', 120);
+  const state = game.peekState();
+  const view = game.getPlayerView('p1');
+  const [macro] = listMacros(state, 'p1');
+  const random = seededRandom(3);
+  const scores = (noise) => Array.from({ length: 6 }, () => {
+    const guess = determinize(view, random);
+    const once = simulate(guess, 'p1', macro, rolloutPolicies(view, noise, guess));
+    assert.equal(simulate(guess, 'p1', macro, rolloutPolicies(view, noise, guess)), once);
+    return [simulate(guess, 'p1', macro, rolloutPolicies(view)), once];
+  });
+  // With noise, at least one of the guesses plays out differently from the basic AI's own play.
+  assert.ok(scores(0.5).some(([plain, noisy]) => plain !== noisy));
+  assert.ok(scores(0).every(([plain, noisy]) => plain === noisy));
 });

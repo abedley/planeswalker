@@ -23,6 +23,10 @@ export const DECISION = Object.freeze({
   ASSIGN_COMBAT_DAMAGE: 'assignCombatDamage',
   /** A triggered ability with more than one legal target is being put on the stack (603.3d). */
   CHOOSE_TARGETS: 'chooseTargets',
+  /** 103.5: keep the opening hand or mulligan (`mulligans` taken so far). */
+  MULLIGAN: 'mulligan',
+  /** 103.5 (London mulligan): put `count` cards from the kept hand on the bottom of the library. */
+  PUT_ON_BOTTOM: 'putOnBottom',
 });
 
 export const STARTING_LIFE = 20; // 103.4
@@ -119,6 +123,7 @@ export class Game extends EventEmitter {
   #startingPlayerId;
   #random;
   #shuffleLibraries;
+  #mulligans = false;
   #status = GAME_STATUS.NOT_STARTED;
   #winnerId = null;
   #turn = 0;
@@ -162,10 +167,12 @@ export class Game extends EventEmitter {
    *   (default STARTING_LIFE), e.g. for a boss or a planeswalker's upgrades.
    * @param {{hand?: number, creatures?: number, permanents?: number}} [options.limits] See GAME_LIMITS.
    * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
+   * @param {boolean} [options.mulligans] Let players mulligan their opening hands (103.5, the
+   *   London mulligan): otherwise everyone keeps the seven cards they draw.
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
-    emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false,
+    emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false, mulligans = false,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -182,6 +189,7 @@ export class Game extends EventEmitter {
     this.#cardDefinitions = { ...CARDS, ...cards };
     this.#emblemDefinitions = { ...EMBLEMS, ...emblemDefinitions };
     this.#shuffleLibraries = shuffleLibraries;
+    this.#mulligans = mulligans;
     this.#silent = silent;
     this.#limits = { ...limits };
 
@@ -198,6 +206,8 @@ export class Game extends EventEmitter {
         emblems: (emblems[id] ?? DEFAULT_EMBLEMS).map((emblemId, i) => this.#createEmblem(emblemId, id, i + 1)),
         life: startingLife[id] ?? STARTING_LIFE,
         landsPlayedThisTurn: 0,
+        // What the other players have seen of the cards in this hand (see #noteHand).
+        handNotes: {},
         attemptedDrawFromEmptyLibrary: false,
         hasLost: false,
       });
@@ -233,8 +243,12 @@ export class Game extends EventEmitter {
         }
         this.#drawCards(id, OPENING_HAND_SIZE);
       }
-      this.#beginTurn(this.#startingPlayerId);
-      this.#advance();
+      if (this.#mulligans) {
+        // 103.5: starting with the starting player, each player in turn order decides.
+        const order = [this.#startingPlayerId];
+        while (order.length < this.#players.length) order.push(this.#nextPlayerId(order.at(-1)));
+        this.#offerMulligan(order);
+      } else this.#startFirstTurn();
       this.#emitState();
     });
   }
@@ -325,6 +339,7 @@ export class Game extends EventEmitter {
       startingPlayerId: this.#startingPlayerId,
       randomState: this.#random.getState(),
       shuffleLibraries: this.#shuffleLibraries,
+      mulligans: this.#mulligans,
       limits: this.#limits,
       status: this.#status,
       winnerId: this.#winnerId,
@@ -410,6 +425,7 @@ export class Game extends EventEmitter {
   #restore(snapshot) {
     this.#random.setState(snapshot.randomState);
     this.#shuffleLibraries = snapshot.shuffleLibraries;
+    this.#mulligans = snapshot.mulligans ?? false;
     this.#status = snapshot.status;
     this.#winnerId = snapshot.winnerId;
     this.#turn = snapshot.turn;
@@ -442,6 +458,9 @@ export class Game extends EventEmitter {
    *   opponent's hand and library together. (Knowing an opponent's deck list, but
    *   not where each card is, is the assumption.)
    * - no random number generator state, so future shuffles are unknown too.
+   * - what's public about an opponent's hand: cards it got back from the
+   *   battlefield stay in `hand`, and `handInfo` has one `{ noLand, heldWithMana }`
+   *   per hidden card (see #noteHand), sorted. `handSize` counts both.
    * Pass it to determinize() (src/ai/determinize.js) to get playable guesses.
    */
   getPlayerView(playerId) {
@@ -455,10 +474,16 @@ export class Game extends EventEmitter {
       const unknown = [...zone.library];
       zone.librarySize = zone.library.length;
       zone.library = [];
+      const notes = zone.handNotes ?? {};
+      delete zone.handNotes;
       if (id !== playerId) {
-        unknown.push(...zone.hand);
+        const hidden = zone.hand.filter((card) => !notes[card.id]?.revealed);
+        unknown.push(...hidden);
         zone.handSize = zone.hand.length;
-        zone.hand = [];
+        zone.hand = zone.hand.filter((card) => notes[card.id]?.revealed);
+        zone.handInfo = hidden
+          .map((card) => ({ noLand: notes[card.id]?.noLand ?? false, heldWithMana: notes[card.id]?.heldWithMana ?? 0 }))
+          .sort((a, b) => a.noLand - b.noLand || a.heldWithMana - b.heldWithMana);
       }
       snapshot.unknownCards[id] = unknown.map(hide).sort(byCardId);
     }
@@ -615,6 +640,15 @@ export class Game extends EventEmitter {
       case DECISION.CHOOSE_TARGETS:
         return this.#legalTargets(decision.targetKind, playerId, null)
           .map((target) => ({ type: ACTION.CHOOSE_TARGETS, playerId, targets: [target.id] }));
+      case DECISION.MULLIGAN:
+        return [
+          { type: ACTION.KEEP_HAND, playerId },
+          // Down to no cards at most.
+          ...(decision.mulligans < OPENING_HAND_SIZE ? [{ type: ACTION.MULLIGAN, playerId }] : []),
+        ];
+      case DECISION.PUT_ON_BOTTOM:
+        return this.#zones.get(playerId).hand
+          .map((card) => ({ type: ACTION.PUT_ON_BOTTOM, playerId, cardId: card.id }));
       default:
         throw new Error(`Unknown decision type: ${decision.type}`);
     }
@@ -667,6 +701,9 @@ export class Game extends EventEmitter {
       case ACTION.ASSIGN_COMBAT_DAMAGE: this.#assignCombatDamage(action.assignment); break;
       case ACTION.DISCARD: this.#discardToHandSize(playerId, cardId); break;
       case ACTION.CHOOSE_TARGETS: this.#chooseTriggerTargets(action.targets); break;
+      case ACTION.KEEP_HAND: this.#keepHand(playerId); break;
+      case ACTION.MULLIGAN: this.#mulligan(playerId); break;
+      case ACTION.PUT_ON_BOTTOM: this.#putOnBottom(playerId, cardId); break;
     }
     this.#emitState();
     return { ok: true };
@@ -999,6 +1036,57 @@ export class Game extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
+  // Mulligans (103.5, the London mulligan)
+
+  #startFirstTurn() {
+    this.#beginTurn(this.#startingPlayerId);
+    this.#advance();
+  }
+
+  /** Asks the first of `order` whether to keep; the rest decide after them. */
+  #offerMulligan([playerId, ...waiting], mulligans = 0) {
+    if (!playerId) {
+      this.#pendingDecision = null;
+      this.#startFirstTurn();
+      return;
+    }
+    this.#requireDecision({ type: DECISION.MULLIGAN, playerId, mulligans, waiting });
+  }
+
+  #mulligan(playerId) {
+    const zone = this.#zones.get(playerId);
+    const decision = this.#pendingDecision;
+    // The hand is shuffled back into the library, and a new seven drawn.
+    zone.library.push(...zone.hand.splice(0));
+    if (this.#shuffleLibraries) shuffle(zone.library, this.#random);
+    decision.mulligans += 1;
+    this.#emitEvent('mulliganTaken', { playerId, mulligans: decision.mulligans });
+    this.#drawCards(playerId, OPENING_HAND_SIZE);
+    this.#requireDecision(decision);
+  }
+
+  #keepHand(playerId) {
+    const { mulligans, waiting } = this.#pendingDecision;
+    this.#emitEvent('handKept', { playerId, mulligans });
+    if (mulligans > 0) {
+      // Then one card on the bottom for each mulligan taken.
+      this.#requireDecision({
+        type: DECISION.PUT_ON_BOTTOM, playerId, mulligans, count: Math.min(mulligans, this.#zones.get(playerId).hand.length), waiting,
+      });
+      if (this.#pendingDecision.count > 0) return;
+    }
+    this.#offerMulligan(waiting);
+  }
+
+  #putOnBottom(playerId, cardId) {
+    const zone = this.#zones.get(playerId);
+    zone.library.push(...zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1));
+    this.#emitEvent('cardPutOnBottom', { playerId });
+    this.#pendingDecision.count -= 1;
+    if (this.#pendingDecision.count === 0) this.#offerMulligan(this.#pendingDecision.waiting);
+  }
+
+  // ---------------------------------------------------------------------------
   // Spells, activated abilities and the stack (Comprehensive Rules 601, 602, 605, 608)
 
   #payMana(playerId, cost) {
@@ -1230,6 +1318,8 @@ export class Game extends EventEmitter {
       case EFFECT.RETURN_TO_HAND:
         for (const permanent of permanents()) {
           this.#moveFromBattlefield(permanent, 'hand');
+          // Everyone saw which card went back.
+          if (!permanent.token) this.#notesOf(permanent.ownerId)[permanent.id] = { revealed: true };
           this.#emitEvent('permanentReturnedToHand', {
             cardId: permanent.id, cardName: permanent.name, ownerId: permanent.ownerId, sourceId,
           });
@@ -1488,7 +1578,7 @@ export class Game extends EventEmitter {
     }
     const permanent = this.#permanent(id);
     if (!permanent || id === excludeId) return false;
-    return matchesPermanentKind(permanent, kind, controllerId);
+    return matchesPermanentKind(permanent, kind, controllerId, this.#combat);
   }
 
   /** Legal targets as `{ id }` objects: permanents, then players, then spells (top of the stack first). */
@@ -1937,7 +2027,33 @@ export class Game extends EventEmitter {
     return { nextIndex: -1, skipped };
   }
 
+  /** The notes on a player's hand, kept to the cards still in it. */
+  #notesOf(playerId) {
+    const zone = this.#zones.get(playerId);
+    const inHand = new Set(zone.hand.map((c) => c.id));
+    zone.handNotes = Object.fromEntries(Object.entries(zone.handNotes ?? {}).filter(([id]) => inHand.has(id)));
+    return zone.handNotes;
+  }
+
+  /**
+   * At the end of a player's turn, what everyone could see about each card they
+   * kept in hand: `noLand` once they've ended a turn without playing a land while
+   * holding it, and `heldWithMana`, the most untapped lands they've ended a turn
+   * with while holding it. The AI may weigh its guesses by them (see determinize).
+   */
+  #noteHand(playerId) {
+    const zone = this.#zones.get(playerId);
+    const notes = this.#notesOf(playerId);
+    const untapped = this.#battlefield.filter((p) => p.controllerId === playerId && isLand(p) && !p.tapped).length;
+    for (const card of zone.hand) {
+      const note = (notes[card.id] ??= {});
+      if (zone.landsPlayedThisTurn === 0) note.noLand = true;
+      note.heldWithMana = Math.max(note.heldWithMana ?? 0, untapped);
+    }
+  }
+
   #beginTurn(activePlayerId) {
+    if (this.#activePlayerId && this.#zones.has(this.#activePlayerId)) this.#noteHand(this.#activePlayerId);
     this.#turn += 1;
     this.#activePlayerId = activePlayerId;
     this.#segmentIndex = -1;

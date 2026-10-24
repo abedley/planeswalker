@@ -14,6 +14,10 @@ export const ACTION = Object.freeze({
   DISCARD: 'DISCARD',
   // Choosing the target of a triggered ability as it's put on the stack (603.3d).
   CHOOSE_TARGETS: 'CHOOSE_TARGETS',
+  // Mulligans (103.5): keep the opening hand or draw a new one, then put cards on the bottom.
+  KEEP_HAND: 'KEEP_HAND',
+  MULLIGAN: 'MULLIGAN',
+  PUT_ON_BOTTOM: 'PUT_ON_BOTTOM',
 });
 
 export const passPriority = (playerId) => ({ type: ACTION.PASS_PRIORITY, playerId });
@@ -56,3 +60,6 @@ export const assignCombatDamage = (playerId, attackerId, assignment) => (
 );
 export const discard = (playerId, cardId) => ({ type: ACTION.DISCARD, playerId, cardId });
 export const chooseTargets = (playerId, targets) => ({ type: ACTION.CHOOSE_TARGETS, playerId, targets });
+export const keepHand = (playerId) => ({ type: ACTION.KEEP_HAND, playerId });
+export const mulligan = (playerId) => ({ type: ACTION.MULLIGAN, playerId });
+export const putOnBottom = (playerId, cardId) => ({ type: ACTION.PUT_ON_BOTTOM, playerId, cardId });

@@ -17,6 +17,9 @@ import {
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import { BLOCK_PLAN } from './blocking.js';
+import { keepsHand, bottomCard, landShare } from './mulligan.js';
+import { playAroundTricks, baitWithTricks } from './tricks.js';
+import { doomedCreatures, savedByRemoving, kills } from './doomed.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -71,6 +74,11 @@ const WINDOW = Object.freeze({
  * `attacking` is how it attacks: 'lookahead' (the default) by planLookaheadAttack,
  * thinking for up to `attackBudgetMs` per attack if it's given (more time, deeper
  * looks), or `attackTurns` of its turns ahead (default 3); 'basic' by planAttack.
+ * `noise: { amount, random }` makes it play less predictably, for search rollouts
+ * (see rolloutPolicies): each main-phase or instant idea's score is scaled by up to
+ * ±`amount`, and with probability `amount` an attack or block declaration follows
+ * another plan (another strategy's attack, another BLOCK_PLAN's blocks).
+ * `mulligans: false` keeps every opening hand (see mulligan.js for when it mulligans).
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -85,6 +93,8 @@ export class BasicAIController extends EventEmitter {
   #attackBudgetMs;
   #attackTurns;
   #attackQuick;
+  #noise;
+  #mulligans;
   #timer = null;
   #unsubscribers;
   /**
@@ -96,6 +106,7 @@ export class BasicAIController extends EventEmitter {
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
     blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3, attackQuick = true,
+    noise = null, mulligans = true,
   }) {
     super();
     if (blocking !== BLOCKING.GREEDY && !Object.values(BLOCK_PLAN).includes(blocking)) throw new Error(`Unknown block plan: ${blocking}`);
@@ -104,11 +115,14 @@ export class BasicAIController extends EventEmitter {
     this.#attackBudgetMs = attackBudgetMs;
     this.#attackTurns = attackTurns;
     this.#attackQuick = attackQuick;
+    this.#noise = noise?.amount > 0 ? noise : null;
+    this.#mulligans = mulligans;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
-    // Creatures after combat (see permanentSpellOptions) is on unless turned off (`postCombat: false`).
-    this.#heuristics = { postCombat: true, ...heuristics };
+    // Creatures after combat (see permanentSpellOptions) and attacking with tricks (see
+    // baitWithTricks) are on unless turned off (`postCombat: false`, `bait: false`).
+    this.#heuristics = { postCombat: true, bait: true, ...heuristics };
     this.#game = game;
     this.#playerId = playerId;
     this.#delayMs = delayMs;
@@ -153,16 +167,17 @@ export class BasicAIController extends EventEmitter {
         const candidates = [...new Set([...decision.attackers, ...mine.map((a) => a.cardId).filter(Boolean)])]
           .map((id) => state.battlefield.find((p) => p.id === id));
         // Planned once per declaration: it takes an action per attacker to carry out.
-        this.#declaration.plan ??= passive ? []
-          : this.#attacking === 'lookahead' ? planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns, quick: this.#attackQuick }).attackers
-            : planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
+        this.#declaration.plan ??= passive ? [] : this.#planAttack(state, me, candidates);
         return moveTowards(decision.attackers, this.#declaration.plan, find);
       }
       case DECISION.DECLARE_BLOCKERS: {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
         // Planned once per declaration, as for attacks.
-        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, { blocking: this.#blocking, heuristics: this.#heuristics });
+        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, {
+          blocking: this.#swerves() ? this.#pick(Object.values(BLOCK_PLAN).filter((p) => p !== this.#blocking)) : this.#blocking,
+          heuristics: this.#heuristics,
+        });
         return chooseBlock(decision.blocks, this.#declaration.plan, find);
       }
       case DECISION.ASSIGN_COMBAT_DAMAGE:
@@ -170,6 +185,16 @@ export class BasicAIController extends EventEmitter {
       case DECISION.CHOOSE_TARGETS:
         // A triggered ability's target: the best one for us, even if every option is bad.
         return bestBy(mine, (a) => scoreEffects(state, me, decision.effects, a.targets, decision.sourceId));
+      case DECISION.MULLIGAN: {
+        const { hand } = state.players.find((p) => p.id === me);
+        const keeps = !this.#mulligans || keepsHand(hand, decision.mulligans, landShare(state, me));
+        return find(keeps ? ACTION.KEEP_HAND : ACTION.MULLIGAN) ?? find(ACTION.KEEP_HAND);
+      }
+      case DECISION.PUT_ON_BOTTOM: {
+        const { hand } = state.players.find((p) => p.id === me);
+        const card = bottomCard(hand, decision.count, landShare(state, me));
+        return find(ACTION.PUT_ON_BOTTOM, (a) => a.cardId === card.id);
+      }
       case DECISION.DISCARD_TO_HAND_SIZE: {
         const keep = (card) => keepValue(state, me, card);
         return bestBy(mine, (a) => -keep(state.players.find((p) => p.id === me).hand.find((c) => c.id === a.cardId)));
@@ -182,6 +207,35 @@ export class BasicAIController extends EventEmitter {
     if (passive) return find(ACTION.PASS_PRIORITY);
     return find(ACTION.PLAY_LAND) ?? this.#act(state, mine) ?? find(ACTION.PASS_PRIORITY);
   }
+
+  /**
+   * The attack, adjusted for combat tricks when those heuristics are on (see tricks.js):
+   * `tricks` (a threshold, 0.3 if true) plays around the defender's, `bait` attacks with ours.
+   */
+  #planAttack(state, me, candidates) {
+    let ids = this.#plannedAttack(state, me, candidates);
+    const { tricks, bait } = this.#heuristics;
+    if (tricks) ids = playAroundTricks(state, me, ids, tricks === true ? 0.3 : tricks);
+    if (bait) ids = baitWithTricks(state, me, ids, candidates);
+    return ids;
+  }
+
+  /** The attack: by lookahead or planAttack, or, when the noise swerves, another strategy's. */
+  #plannedAttack(state, me, candidates) {
+    if (this.#attacking !== 'lookahead') {
+      return planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
+    }
+    const plan = planLookaheadAttack(state, me, candidates, { budgetMs: this.#attackBudgetMs, turns: this.#attackTurns, quick: this.#attackQuick });
+    if (!this.#swerves()) return plan.attackers;
+    const key = (ids) => [...ids].sort().join();
+    const others = Object.values(plan.strategies).filter((ids) => key(ids) !== key(plan.attackers));
+    return others.length ? this.#pick(others) : plan.attackers;
+  }
+
+  /** Whether the noise makes this declaration follow another plan. */
+  #swerves() { return this.#noise !== null && this.#noise.random() < this.#noise.amount; }
+
+  #pick(list) { return list[Math.floor(this.#noise.random() * list.length)]; }
 
   /** What to do with priority: cast or activate the best thing for this moment, tapping mana first if needed. */
   #act(state, mine) {
@@ -222,8 +276,14 @@ export class BasicAIController extends EventEmitter {
     const preCombat = window === WINDOW.MAIN && state.phase === PHASE.PRECOMBAT_MAIN;
     const available = manaPoolTotal(player.manaPool) + sources.length;
     const result = [];
+    const noise = this.#noise;
+    // H8 (Forge): creatures that will die anyway aren't worth removal (`doomed: false` turns it off).
+    const doomed = this.#heuristics.doomed === false || this.#heuristics.doomed === 0 ? null : doomedCreatures(state, me);
     const add = (candidate) => {
-      if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) result.push(candidate);
+      if (candidate.score > 0 && manaValue(candidate.manaCost) <= available) {
+        if (noise) candidate.score *= 1 + noise.amount * (2 * noise.random() - 1);
+        result.push(candidate);
+      }
     };
 
     for (const card of player.hand) {
@@ -241,7 +301,7 @@ export class BasicAIController extends EventEmitter {
         continue;
       }
       const { effects, target } = card.spell;
-      const best = bestTarget(state, me, effects, target, card.id, window, preCombat);
+      const best = bestTarget(state, me, effects, target, card.id, window, preCombat, doomed);
       if (best && this.#savesRemoval(state, effects, best.targetId, window)) continue;
       if (best && windowAllows(window, effects, instant, best.targetId, state, me)) {
         const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id);
@@ -273,7 +333,7 @@ export class BasicAIController extends EventEmitter {
         }
         // A creature that could attack shouldn't tap for an ability before combat.
         if (ability.cost.tap && preCombat && isCreature(source) && !hasKeyword(source, KEYWORD.DEFENDER)) continue;
-        const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat);
+        const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat, doomed);
         if (!best || !windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targetId, state, me)) continue;
         const score = best.score + costScore(state, me, ability.cost, {}, source.id)
           + cheapestSacrifice(state, me, ability.cost, source.id);
@@ -363,16 +423,30 @@ const isTheirs = (state, me, id) => state.battlefield.some((p) => p.id === id &&
  * null for untargeted ones), or null if there's no target. In combat, pumps and
  * removal are judged by how they change the fight.
  */
-function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat) {
+function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat, doomed = null) {
   const targets = targetKind ? candidateTargets(state, me, targetKind) : [null];
   if (targets.length === 0) return null;
   let best = null;
   for (const targetId of targets) {
     let score = scoreEffects(state, me, effects, targetId ? [targetId] : [], sourceId, { preCombat });
     if (window === WINDOW.COMBAT) score += combatSwing(state, me, effects, targetId, sourceId);
+    if (doomed?.has(targetId)) score += doomedAdjustment(state, me, effects, targetId, sourceId, doomed.get(targetId));
     if (!best || score > best.score) best = { targetId, score };
   }
   return best;
+}
+
+/**
+ * For an opponent's creature that will die anyway (see doomed.js), removal on it is
+ * worth only what removing it first saves (our blockers, our life), not its death.
+ */
+function doomedAdjustment(state, me, effects, targetId, sourceId, { reason, combat }) {
+  const target = state.battlefield.find((p) => p.id === targetId);
+  if (!target || target.controllerId === me) return 0;
+  const removal = effects.filter((e) => kills(e, target) || (e.type === EFFECT.RETURN_TO_HAND && !e.affected));
+  if (removal.length === 0) return 0;
+  const counted = scoreEffects(state, me, removal, [targetId], sourceId);
+  return -counted + (reason === 'combat' ? Math.max(0, savedByRemoving(combat, me, targetId)) : 0);
 }
 
 /**

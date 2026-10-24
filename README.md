@@ -8,8 +8,9 @@ So far the engine models the **turn structure** (phases and steps), **priority**
 Elves** (a 1/1 for {G} with "{T}: Add {G}."). Each player starts at 20 life with a 40-card deck
 of 20 Forests and 20 Elves, shuffles it, and draws 7 cards.
 
-Players can pass priority, play a land, cast creatures, activate abilities, declare attackers and
-blockers, divide combat damage, and discard when the cleanup step asks them to.
+Players can mulligan their opening hand, pass priority, play a land, cast creatures, activate
+abilities, declare attackers and blockers, divide combat damage, and discard when the cleanup step
+asks them to.
 
 **Artifacts, enchantments, Auras and Equipment** are implemented too, with targeting,
 attachments and "enchanted/equipped creature gets +N/+N and has …" bonuses. The debugger has an
@@ -88,6 +89,10 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
   target, or which creature to sacrifice.
+- **Mulligans:** before the first turn, a sheet shows your opening hand with *Keep 7* and
+  *Mulligan to 6* (the London mulligan). After a mulligan, you keep the hand, then tap the cards
+  to put on the bottom, one per mulligan. You can close the sheet to look at the board, and the
+  main button brings it back.
 - **Combat:** tap creatures to attack; to block, tap your creature, then an attacker.
 - **Damage assignment** is a choice of which blockers die (`app/battle/damage.js`): splits
   with the same outcome are one choice (the one trampling over the most), and outcomes that
@@ -199,6 +204,8 @@ The grammar is in `tools/scryfall/rulesText.js`.
     permanent / all creatures / …"
   - "Return target creature to its owner's hand."
   - "Tap / Untap target creature."
+  - Creatures in combat can be targets: "target attacking creature" and "target attacking or
+    blocking creature" (Divine Verdict, Gideon's Reproach).
   - "Target creature / Creatures your opponents control / … can't block this turn." and "…
     [gets +N/+N and] can't be blocked this turn."
   - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
@@ -242,8 +249,9 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 114 cards from M19, M20, M21 and
-Foundations. Forest and Llanowar Elves are defined by hand, so for those the importer records only
+`cards/real-cards.txt` lists the real cards the campaign uses: 117 cards, mostly from M19, M20,
+M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach (DOM) and Prodigal Pyromancer
+(M11). Forest and Llanowar Elves are defined by hand, so for those the importer records only
 their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
@@ -319,6 +327,9 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | a combat damage step (`'assignCombatDamage'`), when an attacker has more than one legal split: several blockers, or trample. `assignment` maps blocker ids (and, with trample, the defending player's id) to damage. There is one entry per legal split |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
 | `{ type: 'CHOOSE_TARGETS', playerId, targets }` | a triggered ability with more than one legal target is being put on the stack (`'chooseTargets'`); its controller picks one. There is one entry per legal target |
+| `{ type: 'KEEP_HAND', playerId }` | before the first turn, in a game with `mulligans: true` (`'mulligan'`): keep the hand. With `pendingDecision.mulligans` taken, it's then `'putOnBottom'` with that `count` |
+| `{ type: 'MULLIGAN', playerId }` | the same decision, with fewer than 7 mulligans taken: shuffle the hand into the library and draw a new 7 |
+| `{ type: 'PUT_ON_BOTTOM', playerId, cardId }` | `'putOnBottom'`: put a card from the hand on the bottom of the library. There is one entry per card in their hand |
 
 An action is accepted only if it equals one of `state.validActions`.
 
@@ -375,8 +386,11 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `stackObjectResolving` / `stackObjectResolved` | `stackObject` / `stackObjectId` | the top of the stack resolves |
 | `manaPoolsEmptied` | `pools: [{ playerId, lost }]` | a step or phase ends with mana in a pool |
 | `permanentsUntapped` | `playerId`, `cardIds` | untap step, if anything was tapped |
-| `decisionRequired` | the new `pendingDecision` | a player must declare attackers or blockers, divide damage, or discard |
+| `decisionRequired` | the new `pendingDecision` | a player must keep or mulligan, put cards on the bottom, declare attackers or blockers, divide damage, or discard |
 | `cardDiscarded` | `playerId`, `cardId` | a card is discarded (to hand size, or as a cost) |
+| `mulliganTaken` | `playerId`, `mulligans` | a player mulligans (then draws a new hand) |
+| `handKept` | `playerId`, `mulligans` | a player keeps their hand |
+| `cardPutOnBottom` | `playerId` | a kept hand's card goes to the bottom of the library (which card isn't said) |
 | `damageDealt` | `sourceId`, `targetPlayerId \| targetCardId`, `amount` | a spell or ability deals damage |
 | `permanentDestroyed` / `permanentExiled` / `permanentReturnedToHand` | `cardId`, `cardName`, `sourceId`, ... | a permanent is destroyed, exiled or bounced |
 | `permanentSacrificed` | `cardId`, `cardName`, `controllerId` | a permanent is sacrificed to pay a cost |
@@ -445,8 +459,15 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
 - When all players pass in succession with an empty stack, the step or phase ends (117.4, 500.2).
 - The player who goes first skips the draw step of turn 1 (103.8a).
 - Declare blockers and combat damage are skipped when no creatures attack (508.8).
-- Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5). Mulligans aren't
-  implemented yet.
+- Setup: each player shuffles (103.3) and draws an opening hand of 7 (103.5).
+- Mulligans (103.5, the London mulligan), when the game is created with `mulligans: true` (campaign
+  and quick-match games are):
+  - Each player in turn order, the starting player first, keeps the hand or mulligans.
+  - A mulligan shuffles the hand into the library and draws a new 7.
+  - On keeping, the player puts one card on the bottom of the library for each mulligan taken.
+  - Each player decides in full before the next; in the rules, mulligans are taken together,
+    round by round.
+  - With `mulligans: false` (the default), everyone keeps the first 7, as before.
 - Turn-based actions: the active player untaps their permanents (502.3), draws in the draw step
   (504.1), and discards down to the maximum hand size of 7 in cleanup (514.1, 402.2).
 - Playing lands: a special action that doesn't use the stack (116.2a). The active player can do
@@ -1101,7 +1122,143 @@ What the results say:
   time it gets fewer guesses of the hidden cards, and so far that has cost as much as the depth
   gained.
 
-A rule from the same sources that would matter, but needs the rules engine first, is the
-mulligan: the engine keeps every opening hand, so hands with too few or too many lands are
-played out.
+#### Creatures that will die anyway (`doomed.js`)
 
+Forge's `AVOID_TARGETING_CREATS_THAT_WILL_DIE`, on by default (`basic:h=doomed@0` turns it off). A
+creature is doomed when one of these will kill it:
+- **The stack:** a spell or ability on the stack destroys or exiles it, or deals it lethal
+  damage.
+- **Combat:** after blocks, the fight will kill it. While the AI is being attacked, it judges
+  this by the blocks it plans to make.
+
+Removal on a doomed creature of the opponent's isn't worth that creature's death, which was
+coming anyway. It's worth only what removing it first saves: in a trade, our blocker, or the
+damage it would have dealt.
+
+At first it hardly ever came up. The basic AI casts its removal in its own main phase, at the
+biggest threat, where nothing is about to die. Of 643 removal spells in basic-AI games on the
+real and sample spell decks, 468 came in the main phase and 9 in combat. Over 259,000 decisions it
+changed one, and it scored 50.0% (47.3–52.7%) over 1320 games.
+
+So the decks got cards that act in combat:
+- **White:** Gideon's Reproach (4 damage to target attacking or blocking creature) and Divine
+  Verdict (destroy one). They can only be cast in combat, and the AI holds mana for them as it
+  does for other instants, judging them by the opponent's creatures. Gideon's Reproach replaces
+  Revitalize in the lighter white deck. In the full white deck, it and Divine Verdict replace a
+  Cavalry Drillmaster, a Raise the Alarm and Inspired Charge.
+- **Red:** Prodigal Pyromancer ("{T}: 1 damage to any target"), for Boltwave and Lava Axe in Red
+  Burn, and for Thrill of Possibility in the other red decks.
+
+The cut cards are still offered as rewards. With these cards, combat removal went from 9 to 85 of
+the casts, and the rule changed 31 decisions, all on white.
+
+| Match | Games | Win rate (95% CI) |
+| --- | --- | --- |
+| basic vs basic without `doomed`, white | 600 | 52.0% |
+| the same, red | 600 | 50.2% |
+| both decks | 1200 | 51.1% (48.3–53.9%) |
+
+#### Mulligans (`mulligan.js`)
+
+With mulligans in the game (see *Rules implemented*), the basic AI decides by rules of thumb from
+Limited (Frank Karsten's land counts) and Forge (`MULLIGAN_THRESHOLD`):
+- **Keep:** seven cards with 2–5 lands; at six or five, a hand it can cut to 2–4 (or 1–4)
+  lands by what it bottoms; four cards or fewer, whatever they hold. A deck without lands keeps
+  anything.
+- **Bottom:** extra lands first (beyond its deck's share of lands for the hand size), then its
+  most expensive spells.
+- **Search AI:** doesn't search these decisions, as a few turns' play can't judge them.
+
+Measured against the basic AI keeping every hand (`basic:mull=0`, arena `--mulligans 1`, all
+eleven decks): 51.1% (48.4–53.8%) over 1320 games. Most of the decks have 16 to 20 lands in 40
+cards, so few hands are bad enough to need it.
+
+#### Combat tricks (`tricks.js`)
+
+Two of Forge's rules about pump instants, as heuristics of the basic AI's attacks. What the
+defender might hold is judged from their deck list (their hand and library together, as the
+player view allows), not from their hand.
+- **`bait`** (on by default; `basic:h=bait@0` turns it off). Forge's
+  `TRY_TO_HOLD_COMBAT_TRICKS_UNTIL_BLOCK`. The basic AI already holds its tricks until blockers
+  are declared. Now it also attacks with them: it adds one creature a turn that the defender
+  would block well, when a trick in its hand that it can pay for wins every such block. The
+  likeliest block is worth the most.
+- **`tricks`** (opt-in, `basic:h=tricks@<chance>`). Forge's
+  `CHANCE_TO_ATKTRADE_WHEN_OPP_HAS_MANA`. It doesn't attack with a creature that a single
+  blocker would kill and survive, given the biggest trick the defender can pay for. It does so
+  only when the chance they hold one (hypergeometric, from their deck list and hand size) is at
+  least the threshold, and the attack isn't lethal anyway.
+
+| Heuristic | Games | Win rate vs basic (95% CI) |
+| --- | --- | --- |
+| `bait` | 1320, all decks | 51.0% (48.3–53.7%) |
+| `bait`, green only (two seeds) | 320 | 57.5% |
+| `bait`, green, effects and spells (new seed) | 600 | 52.2% (48.2–56.1%) |
+| `tricks@0.1` | 1320 | 49.5% (46.8–52.2%) |
+| `tricks@0.2` | 1320 | 49.8% (47.2–52.5%) |
+| `tricks@0.1` and `bait` | 1320 | 50.5% (47.8–53.2%) |
+
+- **Bait:** it wins on green, the deck with real pump tricks (Titanic Growth), and changes
+  nothing elsewhere.
+- **Tricks:** decks hold one or two tricks, so a defender rarely holds one: over 3480 attacks the
+  chance reached 30% only 45 times. Played around more often, it costs a little on green,
+  where giving up an attack gives the race away.
+
+
+#### Lessons from other MTG AIs
+
+Ideas from other Magic AIs and the research on them, with what applies here:
+- **Cowling, Ward & Powley (2012)**, [*Ensemble Determinization in Monte Carlo Tree Search for
+  Magic: The Gathering*](https://eprints.whiterose.ac.uk/75050/) (IEEE TCIAIG). Their setup is
+  close to ours: guessed deals, then rule-based rollouts.
+  - Rollouts played by their deterministic expert player did about 10% worse than rollouts by a
+    weaker, noisy one.
+  - More guesses beat deeper searches of each guess.
+  - Smaller gains came from yes/no trees for choosing subsets, pruning dominated moves, and
+    "interesting" deals.
+- **Forge** (`res/ai/Default.ai`) has a flat Monte Carlo layer: 5 candidates, 4 rollouts each,
+  and a bonus for the heuristic's own choice, much like `DEFAULT_MARGIN`. Its profiles add rules
+  we didn't have:
+  - attacking into open mana (now `tricks`)
+  - holding combat tricks until blocks (now `bait`)
+  - mulligans (now in the engine and the AI)
+  - not targeting creatures that will die anyway (now `doomed`)
+- **XMage** has two AIs: alpha-beta minimax with a node cap, and MCTS that keeps its tree from
+  one decision to the next, as `searchPool.js` does.
+- **Hearthstone agents** treat the hidden hand as search's main weakness. They guess hands that
+  fit what the opponent has done.
+
+Two of these are search options here, both off by default:
+- **`rolloutNoise`** (arena `rn=`). The basic AI plays the rollouts less predictably (its
+  `noise` option):
+  - Each main-phase or instant idea's score is scaled by up to ±`rn`.
+  - With probability `rn`, an attack follows another strategy, or blocks follow another
+    `BLOCK_PLAN`.
+  - The noise is seeded from the guess, so every candidate on a guess meets the same noise.
+- **`inference`** (arena `inf=1`). The engine notes what everyone saw of each card kept in
+  hand: whether its owner ended a turn holding it without playing a land, and how many lands
+  they left untapped. A card returned to hand from the battlefield is simply known. The view
+  shows these facts as `handInfo` (see `getPlayerView`). `determinize` then deals each hidden
+  slot with `INFERENCE_WEIGHTS`:
+  - lands are far less likely in a slot held through a turn without a land drop
+  - spells they could have cast with the lands they left untapped are less likely
+
+Measured against the default search on the real decks (200 games each, 150 ms):
+
+| Setting | Win rate (95% CI) |
+| --- | --- |
+| `rn=0.1` | 51.5% (44.6–58.3%) |
+| `rn=0.2` | 50.5% (43.6–57.4%) |
+| `rn=0.3` | 48.5% (41.7–55.4%) |
+| `inf=1` (two seeds, 400 games) | 51.0% (46.1–55.9%) |
+| `rn=0.1` and `inf=1` | 47.0% (40.2–53.9%) |
+| `rn=0.1` at 500 ms vs `rn=0.1` at 150 ms | 47.5% (40.7–54.4%) |
+
+Neither helps yet:
+- **Noise and time:** with noise, more time still doesn't help. The search uses 10–20 ms of its
+  150 ms on average, because the race between candidates is usually decided early, so the noise
+  mostly adds variance to a short race. In the paper, noise mattered because each candidate got
+  thousands of rollouts.
+- **Inference:** costs nothing in speed. But in the arena the opponent is the same AI, whose
+  hands rarely hold what the inference rules out. It should matter more against a person who
+  holds tricks.

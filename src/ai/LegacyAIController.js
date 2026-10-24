@@ -186,7 +186,7 @@ export class LegacyAIController extends EventEmitter {
     if (PLAYER_TARGETS.has(kind)) {
       return kind === TARGET.OPPONENT ? players.filter((id) => id !== this.#playerId) : players;
     }
-    return state.battlefield.filter((p) => matchesPermanentKind(p, kind, this.#playerId)).map((p) => p.id);
+    return state.battlefield.filter((p) => matchesPermanentKind(p, kind, this.#playerId, state.combat)).map((p) => p.id);
   }
 
   /**

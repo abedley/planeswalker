@@ -61,6 +61,11 @@ export function primaryAction(state, me) {
       }
       case DECISION.DISCARD_TO_HAND_SIZE:
         return { label: `Discard ${decision.count}` };
+      case DECISION.MULLIGAN:
+        // The choice is a sheet, as for damage.
+        return { label: 'Keep or mulligan', reopen: true };
+      case DECISION.PUT_ON_BOTTOM:
+        return { label: `Bottom ${decision.count}` };
       case DECISION.ASSIGN_COMBAT_DAMAGE:
         // The choice is a sheet; the button brings it back if it was dismissed.
         return { label: 'Assign damage', reopen: true };

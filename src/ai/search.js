@@ -14,7 +14,7 @@
  * by DEFAULT_MARGIN to replace it.
  */
 import { Game } from '../engine/Game.js';
-import { GAME_STATUS } from '../engine/Game.js';
+import { GAME_STATUS, DECISION } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 import { determinize } from './determinize.js';
 import { listMacros, nextAction, applyMacro } from './macroActions.js';
@@ -26,10 +26,15 @@ import { BasicAIController, windowOf } from './BasicAIController.js';
 /** The tier weights for evaluateTiered: TIERS, with any overrides in `weights.tiers`. */
 const tiersOf = (weights) => (weights?.tiers ? { ...TIERS, ...weights.tiers } : TIERS);
 
-/** Basic-AI policies for both players, for rollouts. */
-function rolloutPolicies(view) {
+/**
+ * Basic-AI policies for both players, for rollouts. With `noise` (an amount, see
+ * BasicAIController) they play less predictably, drawing on a generator seeded from
+ * the guess, so every candidate simulated on one guess meets the same noise.
+ */
+export function rolloutPolicies(view, noise = 0, snapshot = null) {
+  const random = noise > 0 ? seededRandom((snapshot?.randomState ?? 0) ^ 0x2545f491) : null;
   return Object.fromEntries(view.players.map(({ id }) => {
-    const ai = new BasicAIController({ game: null, playerId: id });
+    const ai = new BasicAIController({ game: null, playerId: id, noise: random ? { amount: noise, random } : null });
     return [id, (state) => ai.chooseAction(state)];
   }));
 }
@@ -63,13 +68,14 @@ export function simulate(snapshot, me, macro, policies, {
 
 /** Every candidate simulated `determinizations` times on the same guesses; the best average wins. */
 export function greedyChoice(view, me, macros, {
-  determinizations = 3, random = Math.random, weights, defaults, margin, horizon, evaluation,
+  determinizations = 3, random = Math.random, weights, defaults, margin, horizon, evaluation, rolloutNoise = 0, inference = false,
 } = {}) {
-  const policies = rolloutPolicies(view);
+  const shared = rolloutPolicies(view);
   const totals = new Map(macros.map((m) => [m.key, { macro: m, total: 0, visits: 0, failed: 0 }]));
   for (let d = 0; d < determinizations; d++) {
-    const snapshot = determinize(view, random);
+    const snapshot = determinize(view, random, { inference });
     for (const macro of macros) {
+      const policies = rolloutNoise > 0 ? rolloutPolicies(view, rolloutNoise, snapshot) : shared;
       const score = simulate(snapshot, me, macro, policies, { weights, horizon, evaluation });
       const entry = totals.get(macro.key);
       if (score === null) entry.failed += 1;
@@ -107,6 +113,8 @@ export class MacroSearch {
   #evaluation;
   #lookahead;
   #rootBeam;
+  #rolloutNoise;
+  #inference;
   #round = -1;
   #guess = null;
   #queue = [];
@@ -115,7 +123,7 @@ export class MacroSearch {
 
   constructor(view, me, macros, {
     random = Math.random, weights, defaults = [], margin = DEFAULT_MARGIN, horizon = DEFAULT_HORIZON, evaluation = 'weighted',
-    lookahead = null, rootBeam = 0,
+    lookahead = null, rootBeam = 0, rolloutNoise = 0, inference = false,
   } = {}) {
     this.#view = view;
     this.#me = me;
@@ -131,6 +139,13 @@ export class MacroSearch {
     this.#evaluation = evaluation;
     this.#lookahead = lookahead?.depth > 0 ? lookahead : null;
     this.#rootBeam = rootBeam;
+    this.#rolloutNoise = rolloutNoise;
+    this.#inference = inference;
+  }
+
+  /** The rollout policies for a simulation on the current guess (fresh ones when noisy). */
+  #rollouts() {
+    return this.#rolloutNoise > 0 ? rolloutPolicies(this.#view, this.#rolloutNoise, this.#guess) : this.#policies;
   }
 
   /** Simulates for about `ms` milliseconds (at least one simulation, unless the race is over). */
@@ -156,17 +171,17 @@ export class MacroSearch {
         return false;
       }
       this.#round += 1;
-      this.#guess = determinize(this.#view, this.#random);
+      this.#guess = determinize(this.#view, this.#random, { inference: this.#inference });
       if (this.#round === 0 && this.#rootBeam > 0) this.#pruneRoot();
       this.#queue = this.#entries.filter((e) => !e.dropped);
     }
     const entry = this.#queue.shift();
     entry.scores[this.#round] = this.#lookahead
-      ? simulateLookahead(this.#guess, this.#me, entry.macro, this.#policies, {
+      ? simulateLookahead(this.#guess, this.#me, entry.macro, this.#rollouts(), {
         evaluate: this.#evaluate, depth: this.#lookahead.depth, beam: this.#lookahead.beam ?? 2, horizon: this.#horizon,
         branchOpponent: this.#lookahead.branchOpponent ?? true,
       })
-      : simulate(this.#guess, this.#me, entry.macro, this.#policies, {
+      : simulate(this.#guess, this.#me, entry.macro, this.#rollouts(), {
         weights: this.#weights, horizon: this.#horizon, evaluation: this.#evaluation,
       });
     this.iterations += 1;
@@ -286,7 +301,8 @@ export function defaultMacros(state, me, macros, fallback = new BasicAIControlle
  */
 export function worthSearching(state, me) {
   if (actingPlayerId(state) !== me || state.status !== GAME_STATUS.IN_PROGRESS) return false;
-  if (state.pendingDecision) return true;
+  // Mulligans follow the rules of thumb in mulligan.js: a few turns' play can't judge them.
+  if (state.pendingDecision) return state.pendingDecision.type !== DECISION.MULLIGAN && state.pendingDecision.type !== DECISION.PUT_ON_BOTTOM;
   return windowOf(state, me) !== null;
 }
 

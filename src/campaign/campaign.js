@@ -71,6 +71,8 @@ const DEFAULT_RULES = Object.freeze({
   limits: GAME_LIMITS,
   /** Most planeswalker abilities (over all of a player's emblems) a player can have. */
   maxAbilities: 4,
+  /** Whether players may mulligan their opening hands (the London mulligan, 103.5). */
+  mulligans: true,
   rewards: Object.freeze({ cards: 2, powers: 1, removeCard: false }),
 });
 
@@ -237,6 +239,7 @@ export function matchSetup(run, content, { playerId = 'player', cpuId = 'cpu', p
       emblemDefinitions,
       startingLife: { [playerId]: run.startingLife, [cpuId]: opponent.startingLife ?? STARTING_LIFE },
       limits: { ...rulesOf(content).limits },
+      mulligans: rulesOf(content).mulligans,
     },
     cpu: {
       playerId: cpuId, opponentId, name: opponent.name, ai: { ...opponent.ai, weights: opponent.ai.weights ?? opponentId },

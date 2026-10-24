@@ -514,6 +514,8 @@ export class BoardView {
       if (changed) badge.animate([{ transform: 'scale(1.25)' }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.2,.8,.2,1)' });
     }
     toggle(badge, 'theirs', !mine);
+    // Before the first turn (while players mulligan) there's no turn to show.
+    toggle(badge, 'pending', !state.activePlayerId);
     toggle(this.el, 'my-turn', Boolean(state.activePlayerId) && mine);
     toggle(this.el, 'their-turn', Boolean(state.activePlayerId) && !mine);
     for (const el of this.#parts.pips.children) {

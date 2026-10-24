@@ -68,12 +68,13 @@ export function createOverlays(app) {
    * A list of choices. `options`: `[{ label, sub?, onPick, disabled?, primary? }]`.
    * `onCancel` runs when it closes without a pick (Cancel, or tapping the backdrop).
    */
-  function sheet({ title, text, options, cancel = 'Cancel', onCancel }) {
+  function sheet({ title, text, body = null, options, cancel = 'Cancel', onCancel }) {
     let picked = false;
     show(h('div.sheet',
       h('div.sheet-grip'),
       title ? h('h3', title) : null,
       text ? h('div.sheet-text', symbolText(text)) : null,
+      body,
       h('div.sheet-options', options.map((o) => h('button.btn.option', {
         class: o.primary ? 'primary' : '',
         disabled: o.disabled,

@@ -17,7 +17,7 @@ export function candidateTargets(state, me, kind) {
   const players = state.players.filter((p) => !p.hasLost).map((p) => p.id);
   if (kind === TARGET.ANY) return [...state.battlefield.filter(isCreature).map((p) => p.id), ...players];
   if (PLAYER_TARGETS.has(kind)) return kind === TARGET.OPPONENT ? players.filter((id) => id !== me) : players;
-  return state.battlefield.filter((p) => matchesPermanentKind(p, kind, me)).map((p) => p.id);
+  return state.battlefield.filter((p) => matchesPermanentKind(p, kind, me, state.combat)).map((p) => p.id);
 }
 
 /** The ids an effect applies to, for these targets. */
@@ -152,9 +152,14 @@ export function costScore(state, me, cost, costChoices, sourceId) {
     - (costChoices.discard?.length ?? 0) * 2;
 }
 
+const COMBAT_TARGETS = new Set([TARGET.ATTACKING_CREATURE, TARGET.ATTACKING_OR_BLOCKING_CREATURE]);
+
 /** The best score over the targets a spell or ability could have, with its cost. */
 export function bestScore(state, me, effects, targetKind, cost = {}, sourceId, options) {
-  const candidates = targetKind ? candidateTargets(state, me, targetKind) : [null];
+  // Outside combat, a spell for "target attacking (or blocking) creature" is judged on the
+  // opponent's creatures, which may attack later.
+  const laterKind = COMBAT_TARGETS.has(targetKind) && state.combat.attackers.length === 0 ? TARGET.CREATURE_OPPONENT_CONTROLS : targetKind;
+  const candidates = laterKind ? candidateTargets(state, me, laterKind) : [null];
   if (candidates.length === 0) return -Infinity;
   // A "sacrifice a ..." cost: the cheapest thing that could be sacrificed.
   let sacrifice = 0;

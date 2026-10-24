@@ -1105,3 +1105,61 @@ A rule from the same sources that would matter, but needs the rules engine first
 mulligan: the engine keeps every opening hand, so hands with too few or too many lands are
 played out.
 
+
+#### Lessons from other MTG AIs
+
+Ideas from other Magic AIs and the research on them, with what applies here:
+- **Cowling, Ward & Powley (2012)**, [*Ensemble Determinization in Monte Carlo Tree Search for
+  Magic: The Gathering*](https://eprints.whiterose.ac.uk/75050/) (IEEE TCIAIG). Their setup is
+  close to ours: guessed deals, then rule-based rollouts.
+  - Rollouts played by their deterministic expert player did about 10% worse than rollouts by a
+    weaker, noisy one.
+  - More guesses beat deeper searches of each guess.
+  - Smaller gains came from yes/no trees for choosing subsets, pruning dominated moves, and
+    "interesting" deals.
+- **Forge** (`res/ai/Default.ai`) has a flat Monte Carlo layer: 5 candidates, 4 rollouts each,
+  and a bonus for the heuristic's own choice, much like `DEFAULT_MARGIN`. Its profiles add rules
+  we don't have yet:
+  - attacking into open mana
+  - holding combat tricks until blocks
+  - not targeting creatures that will die anyway
+  - mulligans
+- **XMage** has two AIs: alpha-beta minimax with a node cap, and MCTS that keeps its tree from
+  one decision to the next, as `searchPool.js` does.
+- **Hearthstone agents** treat the hidden hand as search's main weakness. They guess hands that
+  fit what the opponent has done.
+
+Two of these are search options here, both off by default:
+- **`rolloutNoise`** (arena `rn=`). The basic AI plays the rollouts less predictably (its
+  `noise` option):
+  - Each main-phase or instant idea's score is scaled by up to ±`rn`.
+  - With probability `rn`, an attack follows another strategy, or blocks follow another
+    `BLOCK_PLAN`.
+  - The noise is seeded from the guess, so every candidate on a guess meets the same noise.
+- **`inference`** (arena `inf=1`). The engine notes what everyone saw of each card kept in
+  hand: whether its owner ended a turn holding it without playing a land, and how many lands
+  they left untapped. A card returned to hand from the battlefield is simply known. The view
+  shows these facts as `handInfo` (see `getPlayerView`). `determinize` then deals each hidden
+  slot with `INFERENCE_WEIGHTS`:
+  - lands are far less likely in a slot held through a turn without a land drop
+  - spells they could have cast with the lands they left untapped are less likely
+
+Measured against the default search on the real decks (200 games each, 150 ms):
+
+| Setting | Win rate (95% CI) |
+| --- | --- |
+| `rn=0.1` | 51.5% (44.6–58.3%) |
+| `rn=0.2` | 50.5% (43.6–57.4%) |
+| `rn=0.3` | 48.5% (41.7–55.4%) |
+| `inf=1` (two seeds, 400 games) | 51.0% (46.1–55.9%) |
+| `rn=0.1` and `inf=1` | 47.0% (40.2–53.9%) |
+| `rn=0.1` at 500 ms vs `rn=0.1` at 150 ms | 47.5% (40.7–54.4%) |
+
+Neither helps yet:
+- **Noise and time:** with noise, more time still doesn't help. The search uses 10–20 ms of its
+  150 ms on average, because the race between candidates is usually decided early, so the noise
+  mostly adds variance to a short race. In the paper, noise mattered because each candidate got
+  thousands of rollouts.
+- **Inference:** costs nothing in speed. But in the arena the opponent is the same AI, whose
+  hands rarely hold what the inference rules out. It should matter more against a person who
+  holds tricks.

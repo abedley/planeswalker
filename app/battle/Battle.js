@@ -7,7 +7,7 @@
  * is passed automatically when there's nothing sensible to do (autopass.js), and
  * every play is one tap: mana is tapped for you (play.js).
  */
-import { Game, GAME_STATUS, DECISION } from '../../src/engine/Game.js';
+import { Game, GAME_STATUS, DECISION, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
 import { ACTION } from '../../src/engine/actions.js';
 import { actingPlayerId } from '../../src/ai/simulate.js';
 import { createCpuController } from '../../src/campaign/cpu.js';
@@ -19,9 +19,10 @@ import { playOptions, variantsFor, perform } from './play.js';
 import { shouldAutoPass, primaryAction } from './autopass.js';
 import { promptFor, variantLabel, nameOf, findCard } from './describe.js';
 import { damagePlans } from './damage.js';
-import { boardCard } from '../cardView.js';
+import { boardCard, fullCard } from '../cardView.js';
 import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
+import { isLand } from '../../src/cards/cards.js';
 
 const LONG_PRESS_MS = 430;
 
@@ -170,6 +171,7 @@ export class Battle {
         return;
       }
       if (state.pendingDecision?.type === DECISION.ASSIGN_COMBAT_DAMAGE) this.#assignDamage(state);
+      if (state.pendingDecision?.type === DECISION.MULLIGAN) this.#offerMulligan(state);
     }
     this.#setInteractive(acting);
   }
@@ -232,6 +234,10 @@ export class Battle {
       }
     } else if (decision?.type === DECISION.DISCARD_TO_HAND_SIZE) {
       ctx.playable = new Set(mine.filter((a) => a.type === ACTION.DISCARD).map((a) => a.cardId));
+    } else if (decision?.type === DECISION.PUT_ON_BOTTOM) {
+      ctx.playable = new Set(mine.filter((a) => a.type === ACTION.PUT_ON_BOTTOM).map((a) => a.cardId));
+    } else if (decision?.type === DECISION.MULLIGAN) {
+      // Nothing to tap: the hand can still be inspected.
     } else if (decision?.type === DECISION.CHOOSE_TARGETS) {
       ctx.targetable = new Set(mine.filter((a) => a.type === ACTION.CHOOSE_TARGETS).map((a) => a.targets[0]));
     } else {
@@ -410,6 +416,27 @@ export class Battle {
         primary: i === 0,
         onPick: () => this.#dispatch(plan.action),
       })),
+      cancel: null,
+    });
+  }
+
+  /** Keep or mulligan (103.5): a sheet, which can be closed to look at the hand. */
+  #offerMulligan(state) {
+    const { mulligans } = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me);
+    const keep = mine.find((a) => a.type === ACTION.KEEP_HAND);
+    const again = mine.find((a) => a.type === ACTION.MULLIGAN);
+    const size = OPENING_HAND_SIZE - mulligans;
+    const { hand } = state.players.find((p) => p.id === this.#me);
+    const lands = hand.filter(isLand).length;
+    this.#app.overlays.sheet({
+      title: mulligans ? `Mulligan to ${size}` : 'Opening hand',
+      text: `${lands} land${lands === 1 ? '' : 's'}.${mulligans ? ` If you keep, you put ${mulligans} card${mulligans > 1 ? 's' : ''} on the bottom.` : ''}`,
+      body: h('div.mull-hand', hand.map((card) => h('div.mull-card', fullCard(card, this.#app.definitions)))),
+      options: [
+        { label: `Keep ${size}`, primary: true, onPick: () => this.#dispatch(keep) },
+        ...(again ? [{ label: `Mulligan to ${size - 1}`, sub: 'Shuffle, draw seven, then put one more on the bottom', onPick: () => this.#dispatch(again) }] : []),
+      ],
       cancel: null,
     });
   }
@@ -644,6 +671,12 @@ export class Battle {
       if (action) this.#dispatch(action);
       return;
     }
+    if (decision?.type === DECISION.PUT_ON_BOTTOM && target.kind === 'card' && target.zone === 'hand') {
+      const card = findCard(state, target.id);
+      const action = mine.find((a) => a.type === ACTION.PUT_ON_BOTTOM && a.cardId === target.id);
+      this.#select(target, card, [{ label: 'Put on bottom', onPick: () => this.#dispatch(action) }]);
+      return;
+    }
     if (decision?.type === DECISION.DISCARD_TO_HAND_SIZE && target.kind === 'card' && target.zone === 'hand') {
       const card = findCard(state, target.id);
       const action = mine.find((a) => a.type === ACTION.DISCARD && a.cardId === target.id);
@@ -675,7 +708,8 @@ export class Battle {
     if (!this.#interactive) return;
     const primary = primaryAction(this.#state, this.#me);
     if (primary.reopen) {
-      this.#assignDamage(this.#state);
+      if (this.#state.pendingDecision?.type === DECISION.MULLIGAN) this.#offerMulligan(this.#state);
+      else this.#assignDamage(this.#state);
       return;
     }
     if (!primary.action) {

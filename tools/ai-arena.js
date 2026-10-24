@@ -82,6 +82,8 @@ export function contestant(name) {
       else if (key === 'think') options.attackBudgetMs = Number(value);
       else if (key === 'look') options.attackTurns = Number(value);
       else if (key === 'quick') options.attackQuick = value !== '0';
+      // mull=0: keeps every opening hand (see mulligan.js).
+      else if (key === 'mull') options.mulligans = value !== '0';
       else if (key === 'h') {
         // name@value sets a heuristic's strength, e.g. danger@6.
         for (const h of value.split('+').filter(Boolean)) {
@@ -142,9 +144,9 @@ export function wilson(wins, n, z = 1.96) {
  * seat id (or null for a draw), the number of turns, and the time each seat spent
  * deciding.
  */
-export function playGame({ seats, deck, cards, seed, contestants = CONTESTANTS, maxTurns = 200 }) {
+export function playGame({ seats, deck, cards, seed, contestants = CONTESTANTS, maxTurns = 200, mulligans = false }) {
   const players = [{ id: 'p1' }, { id: 'p2' }];
-  const game = new Game({ players, seed, cards, decks: { p1: deck, p2: deck }, silent: true });
+  const game = new Game({ players, seed, cards, decks: { p1: deck, p2: deck }, silent: true, mulligans });
   game.start();
   const time = { p1: 0, p2: 0 };
   const decisions = { p1: 0, p2: 0 };
@@ -168,16 +170,16 @@ export function playGame({ seats, deck, cards, seed, contestants = CONTESTANTS, 
 }
 
 /** The games of a match: `games` seeds per deck, each twice with the seats swapped. */
-export function arenaJobs({ a, b, games = 20, decks = Object.keys(DECKS), seed = 1 }) {
+export function arenaJobs({ a, b, games = 20, decks = Object.keys(DECKS), seed = 1, mulligans = false }) {
   return decks.flatMap((deck) => Array.from({ length: games }, (_, i) => [false, true].map((swap) => ({
-    deck, seed: seed + i, seats: swap ? { p1: b, p2: a } : { p1: a, p2: b }, swap,
+    deck, seed: seed + i, seats: swap ? { p1: b, p2: a } : { p1: a, p2: b }, swap, mulligans,
   }))).flat());
 }
 
 /** Plays one job from arenaJobs(). */
 export function playJob(job, contestants = CONTESTANTS) {
   const { deck, cards } = DECKS[job.deck];
-  return { job, result: playGame({ seats: job.seats, deck, cards, seed: job.seed, contestants }) };
+  return { job, result: playGame({ seats: job.seats, deck, cards, seed: job.seed, contestants, mulligans: job.mulligans }) };
 }
 
 /** Tallies played jobs into per-deck rows, totals, the first AI's win rate and its 95% interval. */
@@ -212,9 +214,9 @@ export function tally({ a, b }, played) {
 }
 
 /** Plays a whole match on this thread. */
-export function runArena({ a, b, games = 20, decks, seed = 1, contestants = CONTESTANTS, onGame }) {
+export function runArena({ a, b, games = 20, decks, seed = 1, mulligans = false, contestants = CONTESTANTS, onGame }) {
   const played = [];
-  for (const job of arenaJobs({ a, b, games, decks, seed })) {
+  for (const job of arenaJobs({ a, b, games, decks, seed, mulligans })) {
     played.push(playJob(job, contestants));
     onGame?.(job.deck, played.length);
   }
@@ -222,9 +224,9 @@ export function runArena({ a, b, games = 20, decks, seed = 1, contestants = CONT
 }
 
 /** Plays a whole match on `workers` threads. */
-export async function runArenaParallel({ a, b, games = 20, decks, seed = 1, workers = 4, onGame }) {
+export async function runArenaParallel({ a, b, games = 20, decks, seed = 1, mulligans = false, workers = 4, onGame }) {
   const { Worker } = await import('node:worker_threads');
-  const jobs = arenaJobs({ a, b, games, decks, seed });
+  const jobs = arenaJobs({ a, b, games, decks, seed, mulligans });
   const played = [];
   await Promise.all(Array.from({ length: workers }, (_, w) => new Promise((resolve, reject) => {
     const mine = jobs.filter((_, i) => i % workers === w);
@@ -266,6 +268,8 @@ async function main() {
   const workers = Number(option('workers', 1));
   const decks = option('decks', Object.keys(DECKS).join(',')).split(',');
   const seed = Number(option('seed', 1));
+  // --mulligans 1: players may mulligan (see Game's `mulligans`).
+  const mulligans = option('mulligans', '0') !== '0';
   const [a = 'basic', b = 'legacy'] = args;
   for (const name of [a, b]) {
     if (!contestant(name)) {
@@ -282,8 +286,8 @@ async function main() {
   const total = games * 2 * decks.length;
   const onGame = process.stderr.isTTY ? (deck, done) => process.stderr.write(`\r${done}/${total} games   `) : null;
   const report = workers > 1
-    ? await runArenaParallel({ a, b, games, decks, seed, workers, onGame })
-    : runArena({ a, b, games, decks, seed, onGame });
+    ? await runArenaParallel({ a, b, games, decks, seed, mulligans, workers, onGame })
+    : runArena({ a, b, games, decks, seed, mulligans, onGame });
   if (process.stderr.isTTY) process.stderr.write('\r');
   console.log(formatReport({ a, b }, report));
 }

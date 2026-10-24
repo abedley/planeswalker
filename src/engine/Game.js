@@ -23,6 +23,10 @@ export const DECISION = Object.freeze({
   ASSIGN_COMBAT_DAMAGE: 'assignCombatDamage',
   /** A triggered ability with more than one legal target is being put on the stack (603.3d). */
   CHOOSE_TARGETS: 'chooseTargets',
+  /** 103.5: keep the opening hand or mulligan (`mulligans` taken so far). */
+  MULLIGAN: 'mulligan',
+  /** 103.5 (London mulligan): put `count` cards from the kept hand on the bottom of the library. */
+  PUT_ON_BOTTOM: 'putOnBottom',
 });
 
 export const STARTING_LIFE = 20; // 103.4
@@ -119,6 +123,7 @@ export class Game extends EventEmitter {
   #startingPlayerId;
   #random;
   #shuffleLibraries;
+  #mulligans = false;
   #status = GAME_STATUS.NOT_STARTED;
   #winnerId = null;
   #turn = 0;
@@ -162,10 +167,12 @@ export class Game extends EventEmitter {
    *   (default STARTING_LIFE), e.g. for a boss or a planeswalker's upgrades.
    * @param {{hand?: number, creatures?: number, permanents?: number}} [options.limits] See GAME_LIMITS.
    * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
+   * @param {boolean} [options.mulligans] Let players mulligan their opening hands (103.5, the
+   *   London mulligan): otherwise everyone keeps the seven cards they draw.
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
-    emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false,
+    emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false, mulligans = false,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -182,6 +189,7 @@ export class Game extends EventEmitter {
     this.#cardDefinitions = { ...CARDS, ...cards };
     this.#emblemDefinitions = { ...EMBLEMS, ...emblemDefinitions };
     this.#shuffleLibraries = shuffleLibraries;
+    this.#mulligans = mulligans;
     this.#silent = silent;
     this.#limits = { ...limits };
 
@@ -235,8 +243,12 @@ export class Game extends EventEmitter {
         }
         this.#drawCards(id, OPENING_HAND_SIZE);
       }
-      this.#beginTurn(this.#startingPlayerId);
-      this.#advance();
+      if (this.#mulligans) {
+        // 103.5: starting with the starting player, each player in turn order decides.
+        const order = [this.#startingPlayerId];
+        while (order.length < this.#players.length) order.push(this.#nextPlayerId(order.at(-1)));
+        this.#offerMulligan(order);
+      } else this.#startFirstTurn();
       this.#emitState();
     });
   }
@@ -327,6 +339,7 @@ export class Game extends EventEmitter {
       startingPlayerId: this.#startingPlayerId,
       randomState: this.#random.getState(),
       shuffleLibraries: this.#shuffleLibraries,
+      mulligans: this.#mulligans,
       limits: this.#limits,
       status: this.#status,
       winnerId: this.#winnerId,
@@ -412,6 +425,7 @@ export class Game extends EventEmitter {
   #restore(snapshot) {
     this.#random.setState(snapshot.randomState);
     this.#shuffleLibraries = snapshot.shuffleLibraries;
+    this.#mulligans = snapshot.mulligans ?? false;
     this.#status = snapshot.status;
     this.#winnerId = snapshot.winnerId;
     this.#turn = snapshot.turn;
@@ -626,6 +640,15 @@ export class Game extends EventEmitter {
       case DECISION.CHOOSE_TARGETS:
         return this.#legalTargets(decision.targetKind, playerId, null)
           .map((target) => ({ type: ACTION.CHOOSE_TARGETS, playerId, targets: [target.id] }));
+      case DECISION.MULLIGAN:
+        return [
+          { type: ACTION.KEEP_HAND, playerId },
+          // Down to no cards at most.
+          ...(decision.mulligans < OPENING_HAND_SIZE ? [{ type: ACTION.MULLIGAN, playerId }] : []),
+        ];
+      case DECISION.PUT_ON_BOTTOM:
+        return this.#zones.get(playerId).hand
+          .map((card) => ({ type: ACTION.PUT_ON_BOTTOM, playerId, cardId: card.id }));
       default:
         throw new Error(`Unknown decision type: ${decision.type}`);
     }
@@ -678,6 +701,9 @@ export class Game extends EventEmitter {
       case ACTION.ASSIGN_COMBAT_DAMAGE: this.#assignCombatDamage(action.assignment); break;
       case ACTION.DISCARD: this.#discardToHandSize(playerId, cardId); break;
       case ACTION.CHOOSE_TARGETS: this.#chooseTriggerTargets(action.targets); break;
+      case ACTION.KEEP_HAND: this.#keepHand(playerId); break;
+      case ACTION.MULLIGAN: this.#mulligan(playerId); break;
+      case ACTION.PUT_ON_BOTTOM: this.#putOnBottom(playerId, cardId); break;
     }
     this.#emitState();
     return { ok: true };
@@ -1007,6 +1033,57 @@ export class Game extends EventEmitter {
     if (this.#pendingDecision.count > 0) return;
     this.#pendingDecision = null;
     this.#advance();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mulligans (103.5, the London mulligan)
+
+  #startFirstTurn() {
+    this.#beginTurn(this.#startingPlayerId);
+    this.#advance();
+  }
+
+  /** Asks the first of `order` whether to keep; the rest decide after them. */
+  #offerMulligan([playerId, ...waiting], mulligans = 0) {
+    if (!playerId) {
+      this.#pendingDecision = null;
+      this.#startFirstTurn();
+      return;
+    }
+    this.#requireDecision({ type: DECISION.MULLIGAN, playerId, mulligans, waiting });
+  }
+
+  #mulligan(playerId) {
+    const zone = this.#zones.get(playerId);
+    const decision = this.#pendingDecision;
+    // The hand is shuffled back into the library, and a new seven drawn.
+    zone.library.push(...zone.hand.splice(0));
+    if (this.#shuffleLibraries) shuffle(zone.library, this.#random);
+    decision.mulligans += 1;
+    this.#emitEvent('mulliganTaken', { playerId, mulligans: decision.mulligans });
+    this.#drawCards(playerId, OPENING_HAND_SIZE);
+    this.#requireDecision(decision);
+  }
+
+  #keepHand(playerId) {
+    const { mulligans, waiting } = this.#pendingDecision;
+    this.#emitEvent('handKept', { playerId, mulligans });
+    if (mulligans > 0) {
+      // Then one card on the bottom for each mulligan taken.
+      this.#requireDecision({
+        type: DECISION.PUT_ON_BOTTOM, playerId, mulligans, count: Math.min(mulligans, this.#zones.get(playerId).hand.length), waiting,
+      });
+      if (this.#pendingDecision.count > 0) return;
+    }
+    this.#offerMulligan(waiting);
+  }
+
+  #putOnBottom(playerId, cardId) {
+    const zone = this.#zones.get(playerId);
+    zone.library.push(...zone.hand.splice(zone.hand.findIndex((c) => c.id === cardId), 1));
+    this.#emitEvent('cardPutOnBottom', { playerId });
+    this.#pendingDecision.count -= 1;
+    if (this.#pendingDecision.count === 0) this.#offerMulligan(this.#pendingDecision.waiting);
   }
 
   // ---------------------------------------------------------------------------

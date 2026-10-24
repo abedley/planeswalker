@@ -4,7 +4,7 @@ export {
 } from './engine/Game.js';
 export {
   ACTION, passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
-  setBlocker, confirmBlockers, assignCombatDamage, discard, chooseTargets,
+  setBlocker, confirmBlockers, assignCombatDamage, discard, chooseTargets, keepHand, mulligan, putOnBottom,
 } from './engine/actions.js';
 export { PHASE, STEP, PHASE_NAMES, STEP_NAMES, TURN_STRUCTURE } from './engine/turnStructure.js';
 export {

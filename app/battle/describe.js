@@ -1,5 +1,5 @@
 /** Words for things on the battlefield: names, choices, phases and prompts. */
-import { DECISION } from '../../src/engine/Game.js';
+import { DECISION, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
 import { PHASE } from '../../src/engine/turnStructure.js';
 import { formatMana } from '../../src/engine/mana.js';
 
@@ -63,8 +63,13 @@ export function promptFor(state, me) {
       case DECISION.DISCARD_TO_HAND_SIZE: return `Discard ${decision.count} card${decision.count > 1 ? 's' : ''}`;
       case DECISION.ASSIGN_COMBAT_DAMAGE: return 'Assign combat damage';
       case DECISION.CHOOSE_TARGETS: return `Choose a target: ${decision.sourceName}`;
+      case DECISION.MULLIGAN: return 'Keep this hand?';
+      case DECISION.PUT_ON_BOTTOM: return `Tap ${decision.count} card${decision.count > 1 ? 's' : ''} to put on the bottom`;
       default: return '';
     }
+  }
+  if (decision?.type === DECISION.MULLIGAN || decision?.type === DECISION.PUT_ON_BOTTOM) {
+    return decision.mulligans ? `Opponent mulligans to ${OPENING_HAND_SIZE - decision.mulligans}…` : 'Opponent is looking at their hand…';
   }
   if (decision) return decision.type === DECISION.DECLARE_BLOCKERS ? 'Opponent is blocking…' : 'Opponent is deciding…';
   // Only once the opponent has actually declared attackers (combat.attackers).

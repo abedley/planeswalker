@@ -689,3 +689,8 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* The opening hand in the mulligan sheet. */
+.mull-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0 12px; }
+.mull-card { width: 74px; height: 104px; flex: none; }
+.turn-badge.pending { visibility: hidden; }

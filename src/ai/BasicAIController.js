@@ -17,6 +17,8 @@ import {
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import { BLOCK_PLAN } from './blocking.js';
+import { keepsHand, bottomCard, landShare } from './mulligan.js';
+import { playAroundTricks, baitWithTricks } from './tricks.js';
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
@@ -75,6 +77,7 @@ const WINDOW = Object.freeze({
  * (see rolloutPolicies): each main-phase or instant idea's score is scaled by up to
  * ±`amount`, and with probability `amount` an attack or block declaration follows
  * another plan (another strategy's attack, another BLOCK_PLAN's blocks).
+ * `mulligans: false` keeps every opening hand (see mulligan.js for when it mulligans).
  */
 export class BasicAIController extends EventEmitter {
   #game;
@@ -90,6 +93,7 @@ export class BasicAIController extends EventEmitter {
   #attackTurns;
   #attackQuick;
   #noise;
+  #mulligans;
   #timer = null;
   #unsubscribers;
   /**
@@ -101,7 +105,7 @@ export class BasicAIController extends EventEmitter {
   constructor({
     game, playerId, delayMs = 0, strategy = AI_STRATEGY.BASIC, swarm = true, heuristics = {},
     blocking = BLOCKING.VALUE, predictBlocking = BLOCKING.VALUE, attacking = 'lookahead', attackBudgetMs = null, attackTurns = 3, attackQuick = true,
-    noise = null,
+    noise = null, mulligans = true,
   }) {
     super();
     if (blocking !== BLOCKING.GREEDY && !Object.values(BLOCK_PLAN).includes(blocking)) throw new Error(`Unknown block plan: ${blocking}`);
@@ -111,6 +115,7 @@ export class BasicAIController extends EventEmitter {
     this.#attackTurns = attackTurns;
     this.#attackQuick = attackQuick;
     this.#noise = noise?.amount > 0 ? noise : null;
+    this.#mulligans = mulligans;
     this.#swarm = swarm;
     this.#blocking = blocking;
     this.#predictBlocking = predictBlocking;
@@ -178,6 +183,16 @@ export class BasicAIController extends EventEmitter {
       case DECISION.CHOOSE_TARGETS:
         // A triggered ability's target: the best one for us, even if every option is bad.
         return bestBy(mine, (a) => scoreEffects(state, me, decision.effects, a.targets, decision.sourceId));
+      case DECISION.MULLIGAN: {
+        const { hand } = state.players.find((p) => p.id === me);
+        const keeps = !this.#mulligans || keepsHand(hand, decision.mulligans, landShare(state, me));
+        return find(keeps ? ACTION.KEEP_HAND : ACTION.MULLIGAN) ?? find(ACTION.KEEP_HAND);
+      }
+      case DECISION.PUT_ON_BOTTOM: {
+        const { hand } = state.players.find((p) => p.id === me);
+        const card = bottomCard(hand, decision.count, landShare(state, me));
+        return find(ACTION.PUT_ON_BOTTOM, (a) => a.cardId === card.id);
+      }
       case DECISION.DISCARD_TO_HAND_SIZE: {
         const keep = (card) => keepValue(state, me, card);
         return bestBy(mine, (a) => -keep(state.players.find((p) => p.id === me).hand.find((c) => c.id === a.cardId)));
@@ -191,8 +206,20 @@ export class BasicAIController extends EventEmitter {
     return find(ACTION.PLAY_LAND) ?? this.#act(state, mine) ?? find(ACTION.PASS_PRIORITY);
   }
 
-  /** The attack: by lookahead or planAttack, or, when the noise swerves, another strategy's. */
+  /**
+   * The attack, adjusted for combat tricks when those heuristics are on (see tricks.js):
+   * `tricks` (a threshold, 0.3 if true) plays around the defender's, `bait` attacks with ours.
+   */
   #planAttack(state, me, candidates) {
+    let ids = this.#plannedAttack(state, me, candidates);
+    const { tricks, bait } = this.#heuristics;
+    if (tricks) ids = playAroundTricks(state, me, ids, tricks === true ? 0.3 : tricks);
+    if (bait) ids = baitWithTricks(state, me, ids, candidates);
+    return ids;
+  }
+
+  /** The attack: by lookahead or planAttack, or, when the noise swerves, another strategy's. */
+  #plannedAttack(state, me, candidates) {
     if (this.#attacking !== 'lookahead') {
       return planAttack(state, me, candidates, { swarm: this.#swarm, heuristics: this.#heuristics, blocking: this.#predictBlocking });
     }

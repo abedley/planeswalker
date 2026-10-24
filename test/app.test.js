@@ -176,3 +176,19 @@ test('promptFor only reports an attack once the opponent has declared attackers'
   assert.equal(promptFor({ ...base, combat: { attackers: [{ cardId: 'a' }, { cardId: 'b' }] } }, 'p1'), '2 attacking');
   assert.equal(promptFor({ ...base, activePlayerId: 'p1', combat: { attackers: [{ cardId: 'a' }] } }, 'p1'), '');
 });
+
+test('mulligans: the main button opens the choice, and the prompt says what to do', () => {
+  const game = new Game({ players, cards, seed: 2, mulligans: true });
+  game.start();
+  assert.deepEqual(primaryAction(state(game), 'p1'), { label: 'Keep or mulligan', reopen: true });
+  assert.equal(promptFor(state(game), 'p1'), 'Keep this hand?');
+  assert.equal(promptFor(state(game), 'p2'), 'Opponent is looking at their hand…');
+  game.dispatch({ type: ACTION.MULLIGAN, playerId: 'p1' });
+  assert.equal(promptFor(state(game), 'p2'), 'Opponent mulligans to 6…');
+  game.dispatch({ type: ACTION.KEEP_HAND, playerId: 'p1' });
+  assert.equal(state(game).pendingDecision.type, DECISION.PUT_ON_BOTTOM);
+  assert.equal(primaryAction(state(game), 'p1').label, 'Bottom 1');
+  assert.equal(promptFor(state(game), 'p1'), 'Tap 1 card to put on the bottom');
+  // No auto-passing through a decision.
+  assert.equal(shouldAutoPass(state(game), 'p1', { hasOptions: false }), false);
+});

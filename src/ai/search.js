@@ -14,7 +14,7 @@
  * by DEFAULT_MARGIN to replace it.
  */
 import { Game } from '../engine/Game.js';
-import { GAME_STATUS } from '../engine/Game.js';
+import { GAME_STATUS, DECISION } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
 import { determinize } from './determinize.js';
 import { listMacros, nextAction, applyMacro } from './macroActions.js';
@@ -301,7 +301,8 @@ export function defaultMacros(state, me, macros, fallback = new BasicAIControlle
  */
 export function worthSearching(state, me) {
   if (actingPlayerId(state) !== me || state.status !== GAME_STATUS.IN_PROGRESS) return false;
-  if (state.pendingDecision) return true;
+  // Mulligans follow the rules of thumb in mulligan.js: a few turns' play can't judge them.
+  if (state.pendingDecision) return state.pendingDecision.type !== DECISION.MULLIGAN && state.pendingDecision.type !== DECISION.PUT_ON_BOTTOM;
   return windowOf(state, me) !== null;
 }
 

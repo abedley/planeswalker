@@ -299,6 +299,47 @@ export const IMPORTED_CARDS = {
     "scryfallId": "7b36fba7-71f7-4b7f-bde5-b3a9752ad21c",
     "scryfallUri": "https://scryfall.com/card/fdn/669/basilisk-collar?utm_source=api"
   },
+  "benalishMarshal": {
+    "id": "benalishMarshal",
+    "name": "Benalish Marshal",
+    "manaCost": {
+      "W": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Knight"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "other": true
+      }
+    ],
+    "text": "Other creatures you control get +1/+1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/d/6dd1a7fc-5dbd-4ed2-9b02-9fd5c55bb629.jpg?1783935052",
+      "card": "https://cards.scryfall.io/normal/front/6/d/6dd1a7fc-5dbd-4ed2-9b02-9fd5c55bb629.jpg?1783935052"
+    },
+    "artist": "Mark Zug",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "dom",
+    "collectorNumber": "6",
+    "typeLine": "Creature — Human Knight",
+    "oracleText": "Other creatures you control get +1/+1.",
+    "scryfallId": "6dd1a7fc-5dbd-4ed2-9b02-9fd5c55bb629",
+    "scryfallUri": "https://scryfall.com/card/dom/6/benalish-marshal?utm_source=api"
+  },
   "bigfinBouncer": {
     "id": "bigfinBouncer",
     "name": "Bigfin Bouncer",
@@ -1903,6 +1944,42 @@ export const IMPORTED_CARDS = {
     "scryfallId": "c1db84d8-d426-4c0d-b44e-5be7b0f5f5bf",
     "scryfallUri": "https://scryfall.com/card/m19/185/gigantosaurus?utm_source=api"
   },
+  "gloriousAnthem": {
+    "id": "gloriousAnthem",
+    "name": "Glorious Anthem",
+    "manaCost": {
+      "generic": 1,
+      "W": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1
+      }
+    ],
+    "text": "Creatures you control get +1/+1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/1/7/17d154d3-7ae5-43ff-9978-d974285e2c89.jpg?1783930741",
+      "card": "https://cards.scryfall.io/normal/front/1/7/17d154d3-7ae5-43ff-9978-d974285e2c89.jpg?1783930741"
+    },
+    "artist": "Raymond Swanland",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "m21",
+    "collectorNumber": "21",
+    "typeLine": "Enchantment",
+    "oracleText": "Creatures you control get +1/+1.",
+    "scryfallId": "17d154d3-7ae5-43ff-9978-d974285e2c89",
+    "scryfallUri": "https://scryfall.com/card/m21/21/glorious-anthem?utm_source=api"
+  },
   "goblinWarPaint": {
     "id": "goblinWarPaint",
     "name": "Goblin War Paint",
@@ -2217,6 +2294,45 @@ export const IMPORTED_CARDS = {
     "oracleText": "Enchant creature\nEnchanted creature gets +1/+2.",
     "scryfallId": "ac0987b8-755e-42f1-bd6d-1401fecd4171",
     "scryfallUri": "https://scryfall.com/card/m11/16/holy-strength?utm_source=api"
+  },
+  "honorOfThePure": {
+    "id": "honorOfThePure",
+    "name": "Honor of the Pure",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "colors": [
+          "W"
+        ]
+      }
+    ],
+    "text": "White creatures you control get +1/+1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/5/650a6831-c352-4ca7-9f8f-43ea99a1cf33.jpg?1783941102",
+      "card": "https://cards.scryfall.io/normal/front/6/5/650a6831-c352-4ca7-9f8f-43ea99a1cf33.jpg?1783941102"
+    },
+    "artist": "Greg Staples",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "m12",
+    "collectorNumber": "23",
+    "typeLine": "Enchantment",
+    "oracleText": "White creatures you control get +1/+1.",
+    "scryfallId": "650a6831-c352-4ca7-9f8f-43ea99a1cf33",
+    "scryfallUri": "https://scryfall.com/card/m12/23/honor-of-the-pure?utm_source=api"
   },
   "hostileMinotaur": {
     "id": "hostileMinotaur",

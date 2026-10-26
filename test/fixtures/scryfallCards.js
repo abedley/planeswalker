@@ -121,6 +121,17 @@ export const FIXTURES = {
   gloriousAnthem: card({
     name: 'Glorious Anthem', mana_cost: '{1}{W}{W}', type_line: 'Enchantment', oracle_text: 'Creatures you control get +1/+1.',
   }),
+  honorOfThePure: card({
+    name: 'Honor of the Pure', mana_cost: '{1}{W}', type_line: 'Enchantment', oracle_text: 'White creatures you control get +1/+1.',
+  }),
+  captainOfTheWatch: card({
+    name: 'Captain of the Watch', mana_cost: '{4}{W}{W}', type_line: 'Creature — Human Soldier', power: '3', toughness: '3',
+    oracle_text: 'Vigilance (Attacking doesn\'t cause this creature to tap.)\nOther Soldier creatures you control get +1/+1 and have vigilance.\nWhen this creature enters, create three 1/1 white Soldier creature tokens.',
+    keywords: ['Vigilance'],
+  }),
+  crusade: card({
+    name: 'Crusade', mana_cost: '{W}{W}', type_line: 'Enchantment', oracle_text: 'White creatures get +1/+1.',
+  }),
   giantGrowth: card({
     name: 'Giant Growth', mana_cost: '{G}', type_line: 'Instant', oracle_text: 'Target creature gets +3/+3 until end of turn.',
   }),

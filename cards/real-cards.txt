@@ -151,6 +151,11 @@ Lightning Talons (M14)
 Fireshrieker (FDN)
 Meteorite (M21)
 
+# Anthems and lords: White Weenie's, and Honor of the Pure as a reward
+Glorious Anthem (M21)
+Honor of the Pure (M12)
+Benalish Marshal (DOM)
+
 # Rewards only
 Gigantosaurus (M19)
 Pelakka Wurm (M19)

@@ -205,7 +205,8 @@ test('reports Aura and Equipment text the engine can\'t do', () => {
     'Unsupported rules text: "Enchanted creature doesn\'t untap during its controller\'s untap step."',
   ]);
   assert.deepEqual(problems('lightningGreaves'), ['Unsupported keyword granted: shroud.']);
-  assert.deepEqual(problems('gloriousAnthem'), ['Unsupported rules text: "Creatures you control get +1/+1."']);
+  // Both players' creatures: not an anthem the game has.
+  assert.deepEqual(problems('crusade'), ['Unsupported rules text: "White creatures get +1/+1."']);
 });
 
 test('converts Auras that restrict attacking and blocking', () => {
@@ -213,6 +214,18 @@ test('converts Auras that restrict attacking and blocking', () => {
   assert.deepEqual(restriction('pacifism'), [{ affected: AFFECTED.ATTACHED_PERMANENT, keywords: [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK] }]);
   assert.deepEqual(restriction('maniacalRage'), [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, toughness: 2, keywords: [KEYWORD.CANT_BLOCK] }]);
   assert.deepEqual(restriction('aetherTunnel'), [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 1, keywords: [KEYWORD.CANT_BE_BLOCKED] }]);
+});
+
+test('converts anthems and lords', () => {
+  const anthem = (key) => convert(key).definition.staticAbilities;
+  const each = AFFECTED.EACH_CREATURE_YOU_CONTROL;
+  assert.deepEqual(anthem('gloriousAnthem'), [{ affected: each, power: 1, toughness: 1 }]);
+  assert.deepEqual(anthem('honorOfThePure'), [{ affected: each, power: 1, toughness: 1, colors: ['W'] }]);
+  const captain = convert('captainOfTheWatch').definition;
+  assert.deepEqual(captain.staticAbilities, [{
+    affected: each, power: 1, toughness: 1, keywords: ['vigilance'], other: true, subtypes: ['Soldier'],
+  }]);
+  assert.deepEqual([captain.keywords, captain.triggeredAbilities[0].effect.count], [['vigilance'], 3]);
 });
 
 test('converts an Aura\'s "When this Aura enters" trigger', () => {

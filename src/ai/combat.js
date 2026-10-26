@@ -9,7 +9,9 @@
  * rather than run through a game copy because the AI's rollouts call them
  * thousands of times a second.
  */
-import { isCreature, isLand, hasKeyword, cantAttack, manaValue, KEYWORD } from '../cards/cards.js';
+import {
+  isCreature, isLand, hasKeyword, cantAttack, manaValue, anthemApplies, KEYWORD, AFFECTED,
+} from '../cards/cards.js';
 // blocking.js imports this module too, so neither may use the other's exports while
 // loading (here, only inside functions).
 import { blockingPlansFor } from './blocking.js';
@@ -42,18 +44,33 @@ export function creatureValue(creature) {
  * creatureValue with the Aura's bonus applied, or all of it if that kills it.
  */
 export function curseValue(creature, aura) {
-  let cursed = creature;
-  for (const e of aura.staticAbilities ?? []) {
-    cursed = {
-      ...cursed,
-      power: cursed.power + (e.power ?? 0),
-      toughness: cursed.toughness + (e.toughness ?? 0),
-      keywords: [...new Set([...(cursed.keywords ?? []), ...(e.keywords ?? [])])],
-    };
-  }
+  const cursed = (aura.staticAbilities ?? []).reduce(withBonus, creature);
   const value = creatureValue(creature);
   return cursed.toughness <= (creature.damage ?? 0) ? value : value - creatureValue(cursed);
 }
+
+/**
+ * What an anthem or lord (`card`, a static ability for creatures you control) adds
+ * to `me`'s creatures on the battlefield now: the rise in their creatureValue.
+ */
+export function anthemValue(state, me, card) {
+  const source = { ...card, controllerId: me };
+  const anthems = (card.staticAbilities ?? []).filter((e) => e.affected === AFFECTED.EACH_CREATURE_YOU_CONTROL);
+  // Most permanents aren't anthems, and the AI asks often (the search AI's rollouts).
+  if (anthems.length === 0) return 0;
+  return state.battlefield.reduce((sum, creature) => {
+    const boosted = anthems.filter((e) => anthemApplies(e, source, creature)).reduce(withBonus, creature);
+    return sum + creatureValue(boosted) - creatureValue(creature);
+  }, 0);
+}
+
+/** A creature with a static bonus `{ power?, toughness?, keywords? }` applied. */
+const withBonus = (creature, bonus) => ({
+  ...creature,
+  power: creature.power + (bonus.power ?? 0),
+  toughness: creature.toughness + (bonus.toughness ?? 0),
+  keywords: [...new Set([...(creature.keywords ?? []), ...(bonus.keywords ?? [])])],
+});
 
 /** Whether `blocker` may block `attacker` (702.9b, 702.17b); menace is a rule about the whole block. */
 export function canBlock(blocker, attacker) {

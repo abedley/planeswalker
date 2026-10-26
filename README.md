@@ -194,6 +194,10 @@ A card is only imported if the engine supports everything it does:
     has …", optionally ending "… and can't block" ("can't attack or block", "can't attack",
     "can't be blocked"), and "Equip {N}". Pacifism, Maniacal Rage, Crippling Blight and Aether
     Tunnel import. "When this Aura enters, …" works like any other enters trigger (Divine Favor).
+  - anthems and lords, on any permanent: "[Other] [white | <creature type>] creatures you control
+    get +N/+N [and have …]." Glorious Anthem, Honor of the Pure, Benalish Marshal ("Other
+    creatures …"), Captain of the Watch and Veteran Swordsmith ("Other Soldier creatures …")
+    import. Crusade ("White creatures get +1/+1.", everyone's) doesn't.
 - For instants and sorceries, every sentence must be a supported effect, with at most one
   target in total, plus optionally "As an additional cost to cast this spell, <cost>."
 
@@ -252,9 +256,9 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 144 cards, mostly from M19, M20,
-M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach (DOM), Prodigal Pyromancer
-(M11) and some older core-set Auras and Equipment (M10–M15, ORI). Forest and Llanowar Elves
+`cards/real-cards.txt` lists the real cards the campaign uses: 147 cards, mostly from M19, M20,
+M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach and Benalish Marshal (DOM),
+Prodigal Pyromancer (M11) and some older core-set Auras, Equipment and anthems (M10–M15, ORI). Forest and Llanowar Elves
 are defined by hand, so for those the importer records only their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
@@ -599,6 +603,11 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   keywords. The current values are recalculated whenever something enters, leaves, or is
   attached. The effects so far are:
   - static abilities on attached Auras and Equipment (`affected: 'attachedPermanent'`)
+  - anthems and lords (`affected: 'eachCreatureYouControl'`, optionally `other: true`,
+    `colors: ['W']` or `subtypes: ['Soldier']`): every creature its controller controls that
+    matches, including ones that arrive later. When the source leaves, the bonus goes, so a
+    damaged creature can die with its lord (704.5g). Colors come from `colorsOf`: a card's
+    `colors`, or its mana cost.
   - +1/+1 counters
   - "until end of turn" pumps
 
@@ -696,7 +705,8 @@ Everything a campaign has is data. There are two campaigns:
     builds for the early opponents, and the boss's dragons. Each deck has an Equipment and one or
     two Auras, and most have another artifact or enchantment: Brawler's Plate and Oakenform in
     green, Kitesail and Aether Tunnel in blue, Pacifism in white, Basilisk Collar and Rod of Ruin
-    in black, Sword of Vengeance in red, Fireshrieker on the Dragonlord's dragons.
+    in black, Sword of Vengeance in red, Fireshrieker on the Dragonlord's dragons. White Weenie
+    also has Glorious Anthem and Benalish Marshal; Honor of the Pure is a reward.
   - **Planeswalkers:** the Warden plays Green Stompy and the Sage plays Blue Skies.
   - **Opponents** climb from basic-AI White, Black and Red, through searching full builds and
     the other planeswalker's color, to **the Dragonlord**.
@@ -780,7 +790,9 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
   - everything else at the end of the opponent's turn
 - **Scoring** (`scoring.js`): spells and abilities are scored effect by effect, in the same points
   as creature values. Removal goes at the biggest threat, and burn goes to the face when it's
-  lethal.
+  lethal. An anthem or lord counts for what it adds to its controller's creatures
+  (`anthemValue`), both when casting it and when removing it, so removal can go at a lord before
+  a bigger creature.
 - **Auras and Equipment:** a bonus Aura or Equipment goes on its best creature. A curse
   (`isCurse`: an Aura that shrinks its creature or stops it attacking, like Weakness or
   Pacifism) goes on the opponent's creature it takes the most from (`curseValue`: the drop in

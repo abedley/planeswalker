@@ -3,14 +3,14 @@ import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import { STEP, PHASE } from '../engine/turnStructure.js';
 import {
-  isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, isHarmfulEffect,
+  isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, isHarmfulEffect,
 } from '../cards/cards.js';
 import { manaPoolTotal, canPayMana } from '../engine/mana.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction,
 } from './manaPlanning.js';
 import {
-  creatureValue, curseValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
+  creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
 } from './combat.js';
 import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
@@ -521,14 +521,17 @@ function permanentSpellOptions(state, me, card, preCombat, heuristics = {}) {
   // H6 (Limited wisdom): creatures that don't change this combat wait for the second
   // main phase, keeping mana up through combat and the hand hidden.
   const entersWithEffect = (card.triggeredAbilities ?? []).some((t) => t.trigger === 'entersBattlefield');
+  // An anthem or lord: worth what it adds to our creatures (and a lord pumps this combat's attackers).
+  const anthem = anthemValue(state, me, card);
   // Only when lands alone can pay for it: mana creatures may attack (and be tapped) meanwhile.
   const untappedLands = state.battlefield.filter((p) => p.controllerId === me && isLand(p) && !p.tapped).length;
-  if (heuristics.postCombat && preCombat && isCreature(card) && !hasKeyword(card, KEYWORD.HASTE) && !entersWithEffect
+  if (heuristics.postCombat && preCombat && isCreature(card) && !hasKeyword(card, KEYWORD.HASTE) && !entersWithEffect && !anthem
     && manaValue(card.manaCost ?? {}) <= untappedLands
     && state.battlefield.some((p) => p.controllerId === me && isCreature(p) && !p.summoningSick)) {
     return [];
   }
-  let score = isCreature(card) ? permanentValue(card) + (hasKeyword(card, KEYWORD.HASTE) && preCombat ? 1 : 0) : 4;
+  const isAnthem = (card.staticAbilities ?? []).some((e) => e.affected === AFFECTED.EACH_CREATURE_YOU_CONTROL);
+  let score = anthem + (isCreature(card) ? permanentValue(card) + (hasKeyword(card, KEYWORD.HASTE) && preCombat ? 1 : 0) : isAnthem ? 1 : 4);
   for (const trigger of card.triggeredAbilities ?? []) {
     if (trigger.trigger === 'entersBattlefield') {
       score += Math.max(0, bestScore(state, me, trigger.effects, trigger.target, {}, card.id));

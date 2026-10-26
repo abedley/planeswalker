@@ -6,7 +6,7 @@ import {
   isCreature, hasKeyword, cantAttack, KEYWORD, EFFECT, AFFECTED, TARGET, PLAYER_TARGETS, SPELL_TARGETS,
   effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
-import { creatureValue } from './combat.js';
+import { creatureValue, anthemValue } from './combat.js';
 import { doomedSacrificeCost } from './doomed.js';
 
 /** A permanent's worth: creatures by creatureValue, other permanents a flat amount. */
@@ -55,6 +55,8 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
     if (amount >= life) return side(id) > 0 ? -1000 : 1000;
     return -side(id) * amount * (life - amount <= 5 ? 1.5 : life - amount <= 10 ? 0.8 : 0.5) * (side(id) > 0 ? 1.5 : 1);
   };
+  // Removing a permanent loses its controller the permanent, and what it gives their creatures (an anthem or lord).
+  const worth = (p) => permanentValue(p) + anthemValue(state, p.controllerId, p);
   let score = 0;
   for (const effect of effects) {
     for (const id of affectedIds(state, me, effect, targets, sourceId)) {
@@ -70,15 +72,15 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
         case EFFECT.DEAL_DAMAGE:
           if (isPlayer) score += lifeScore(id, effect.amount);
           else if (isCreature(permanent) && permanent.toughness - permanent.damage <= effect.amount) {
-            score -= side(id) * permanentValue(permanent);
+            score -= side(id) * worth(permanent);
           }
           break;
         case EFFECT.DESTROY:
         case EFFECT.EXILE:
-          score -= side(id) * permanentValue(permanent);
+          score -= side(id) * worth(permanent);
           break;
         case EFFECT.RETURN_TO_HAND:
-          score -= side(id) * (permanent.token ? permanentValue(permanent) : permanentValue(permanent) / 2);
+          score -= side(id) * (permanent.token ? worth(permanent) : worth(permanent) / 2);
           break;
         case EFFECT.TAP:
           // Tapping a would-be blocker before attacking.

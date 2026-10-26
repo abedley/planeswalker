@@ -88,6 +88,12 @@ export const AFFECTED = Object.freeze({
   EACH_OPPONENT: 'eachOpponent',
   EACH_PLAYER: 'eachPlayer',
   EACH_CREATURE: 'eachCreature',
+  /**
+   * For spells and abilities, each creature you control. As a static ability (an
+   * anthem: "Creatures you control get +1/+1.", 613.1), it can be narrowed with
+   * `other: true` ("Other creatures"), `colors: ['W']` ("White creatures") and
+   * `subtypes: ['Soldier']` ("Soldier creatures").
+   */
   EACH_CREATURE_YOU_CONTROL: 'eachCreatureYouControl',
   EACH_CREATURE_OPPONENTS_CONTROL: 'eachCreatureOpponentsControl',
   /** The ability's source, the permanent itself ("this creature"). */
@@ -291,6 +297,25 @@ export const TOKENS = deepFreeze({
     text: '{2}, Sacrifice this artifact: Draw a card.',
   },
 });
+
+const COLOR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
+
+/**
+ * A card's colors as W/U/B/R/G (105.1): its `colors` (letters, or words for creature
+ * tokens), else those of the mana symbols in its cost (202.2).
+ */
+export const colorsOf = (card) => (card.colors
+  ? card.colors.map((c) => COLOR_LETTERS[c] ?? c)
+  : COLORS_OF_MANA.filter((c) => card.manaCost?.[c]));
+
+/** Whether an anthem (a static ability affecting creatures you control) applies to `creature`. */
+export function anthemApplies(effect, source, creature) {
+  return effect.affected === AFFECTED.EACH_CREATURE_YOU_CONTROL && isCreature(creature)
+    && creature.controllerId === source.controllerId
+    && !(effect.other && creature.id === source.id)
+    && (!effect.colors || effect.colors.some((c) => colorsOf(creature).includes(c)))
+    && (!effect.subtypes || effect.subtypes.some((t) => (creature.subtypes ?? []).includes(t)));
+}
 
 /** The colors "one mana of any color" can be (105.1). */
 export const COLORS_OF_MANA = Object.freeze(['W', 'U', 'B', 'R', 'G']);

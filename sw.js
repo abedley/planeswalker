@@ -3,7 +3,7 @@
  * cache and refreshed in the background (so a new version shows on the next
  * visit); card images from Scryfall's CDN and fonts are cached once and kept.
  */
-const VERSION = 'planeswalker-v12';
+const VERSION = 'planeswalker-v13';
 const SHELL = [
   './', 'index.html', 'app/app.css', 'app/main.js', 'manifest.webmanifest', 'app/icons/icon.svg',
   'app/vendor/symbols.css', 'app/vendor/mana.woff2', 'app/vendor/keyrune.woff2',

@@ -4,7 +4,7 @@ import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStru
 import { seededRandom, shuffle } from './random.js';
 import {
   CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS, TRIGGER,
-  isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword,
+  isLand, isCreature, isAura, isEquipment, isInstant, isPermanentCard, isManaAbility, hasKeyword, anthemApplies,
   abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor,
 } from '../cards/cards.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
@@ -786,6 +786,8 @@ export class Game extends EventEmitter {
           target: ability.target ?? null,
         })),
       } : {}),
+      // 105.2: its colors, when the definition says (otherwise colorsOf reads the mana cost).
+      ...(definition.colors ? { colors: [...definition.colors] } : {}),
       // What an Aura or Equipment does to its creature (applied in #applyContinuousEffects).
       ...(definition.staticAbilities ? { staticAbilities: structuredClone(definition.staticAbilities) } : {}),
       abilities: (definition.abilities ?? []).map(({ id, text, ...ability }) => ({
@@ -1631,17 +1633,23 @@ export class Game extends EventEmitter {
         permanent.toughness = permanent.base.toughness;
       }
     }
+    const grant = (permanent, effect) => {
+      if (isCreature(permanent)) {
+        permanent.power += effect.power ?? 0;
+        permanent.toughness += effect.toughness ?? 0;
+      }
+      for (const keyword of effect.keywords ?? []) {
+        if (!permanent.keywords.includes(keyword)) permanent.keywords.push(keyword);
+      }
+    };
     for (const source of this.#battlefield) {
       for (const effect of this.#cardDefinitions[source.cardId].staticAbilities ?? []) {
-        if (effect.affected !== AFFECTED.ATTACHED_PERMANENT || !source.attachedTo) continue;
-        const host = this.#permanent(source.attachedTo);
-        if (!host) continue;
-        if (isCreature(host)) {
-          host.power += effect.power ?? 0;
-          host.toughness += effect.toughness ?? 0;
-        }
-        for (const keyword of effect.keywords ?? []) {
-          if (!host.keywords.includes(keyword)) host.keywords.push(keyword);
+        if (effect.affected === AFFECTED.ATTACHED_PERMANENT) {
+          const host = source.attachedTo && this.#permanent(source.attachedTo);
+          if (host) grant(host, effect);
+        } else if (effect.affected === AFFECTED.EACH_CREATURE_YOU_CONTROL) {
+          // Anthems and lords (613.1): every creature they apply to, as it is now.
+          for (const creature of this.#battlefield) if (anthemApplies(effect, source, creature)) grant(creature, effect);
         }
       }
     }

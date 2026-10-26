@@ -37,6 +37,27 @@ const CARDS = {
     enchant: TARGET.CREATURE,
     staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, keywords: [KEYWORD.CANT_ATTACK, KEYWORD.CANT_BLOCK] }],
   },
+  Anthem: {
+    id: 'Anthem', name: 'Anthem', manaCost: {}, types: [CARD_TYPE.ENCHANTMENT],
+    staticAbilities: [{ affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, power: 1, toughness: 1 }],
+  },
+  Lord: {
+    ...creature('Lord', 2, 2),
+    staticAbilities: [{ affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, power: 1, toughness: 1, keywords: [KEYWORD.VIGILANCE], other: true }],
+  },
+  Banner: {
+    id: 'Banner', name: 'Banner', manaCost: {}, types: [CARD_TYPE.ENCHANTMENT],
+    staticAbilities: [{ affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, power: 1, colors: ['W'] }],
+  },
+  Squire: { ...creature('Squire', 1, 1), colors: ['W'] },
+  Zap: {
+    id: 'Zap', name: 'Zap', manaCost: {}, types: [CARD_TYPE.INSTANT], target: TARGET.CREATURE,
+    effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 2 }],
+  },
+  Smash: {
+    id: 'Smash', name: 'Smash', manaCost: {}, types: [CARD_TYPE.INSTANT], target: TARGET.CREATURE,
+    effects: [{ type: EFFECT.DESTROY }],
+  },
   Blade: {
     id: 'Blade', name: 'Blade', manaCost: {}, types: [CARD_TYPE.ARTIFACT], subtypes: [SUBTYPE.EQUIPMENT],
     staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, keywords: [KEYWORD.FIRST_STRIKE] }],
@@ -269,6 +290,58 @@ test('Equipment enters unattached; equip is a sorcery-speed ability that targets
   passRound(game);
   assert.equal(state(game).phase, PHASE.COMBAT);
   assert.deepEqual(equips(), []);
+});
+
+// Anthems and lords
+
+test('an anthem pumps only its controller\'s creatures, including ones that arrive later', () => {
+  const { game } = setup({ p1: ['Bear', 'Anthem', 'Mouse'], p2: ['Mouse'] });
+  const bear = cast(game, 'p1', 'Bear');
+  cast(game, 'p1', 'Anthem');
+  const mouse = cast(game, 'p1', 'Mouse');
+  assert.deepEqual([permanent(game, bear).power, permanent(game, bear).toughness], [3, 3]);
+  assert.deepEqual([permanent(game, mouse).power, permanent(game, mouse).base.power], [2, 1]);
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  const theirs = cast(game, 'p2', 'Mouse');
+  assert.equal(permanent(game, theirs).power, 1);
+});
+
+test('a lord pumps the others, not itself; when it dies, a damaged creature can die with it', () => {
+  const { game } = setup({ p1: ['Lord', 'Bear'], p2: ['Zap', 'Smash'] });
+  const lord = cast(game, 'p1', 'Lord');
+  const bear = cast(game, 'p1', 'Bear');
+  assert.deepEqual([permanent(game, lord).power, permanent(game, bear).toughness, permanent(game, bear).keywords], [2, 3, ['vigilance']]);
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  // The 3/3 Bear takes 2 and lives; without the Lord, it's a 2/2 with 2 damage.
+  cast(game, 'p2', 'Zap', [bear]);
+  assert.equal(permanent(game, bear).damage, 2);
+  cast(game, 'p2', 'Smash', [lord]);
+  assert.ok(!permanent(game, lord));
+  assert.ok(!permanent(game, bear));
+});
+
+test('the basic AI aims removal at a lord worth more than the biggest body', async () => {
+  const { BasicAIController } = await import('../src/index.js');
+  const { game } = setup({ p1: ['Lord', 'Bear', 'Mouse'], p2: ['Smash'] });
+  const lord = cast(game, 'p1', 'Lord');
+  cast(game, 'p1', 'Bear'); // a 3/3 with the Lord
+  cast(game, 'p1', 'Mouse');
+  advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
+  const ai = new BasicAIController({ playerId: 'p2' });
+  let action = ai.chooseAction(state(game));
+  for (let i = 0; i < 5 && action.type !== ACTION.CAST_SPELL; i++) {
+    game.dispatch(action); // a land first
+    action = ai.chooseAction(state(game));
+  }
+  assert.deepEqual([action.type, action.targets], [ACTION.CAST_SPELL, [lord]]);
+});
+
+test('a color anthem pumps only creatures of that color', () => {
+  const { game } = setup({ p1: ['Banner', 'Squire', 'Mouse'] });
+  cast(game, 'p1', 'Banner');
+  const squire = cast(game, 'p1', 'Squire');
+  const mouse = cast(game, 'p1', 'Mouse');
+  assert.deepEqual([permanent(game, squire).power, permanent(game, mouse).power], [2, 1]);
 });
 
 test('equipping uses the stack, attaches, and grants the bonus; re-equipping moves it', () => {

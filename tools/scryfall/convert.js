@@ -17,6 +17,8 @@
  * - Auras: "Enchant creature" and "Enchanted creature gets +N/+N and has <keywords>.",
  *   optionally ending "and can't block" ("can't attack or block", "can't be blocked")
  * - Equipment: "Equipped creature gets +N/+N and has <keywords>." (likewise) and "Equip {N}"
+ * - anthems and lords on any permanent: "[Other] [white | <Subtype>] creatures you control
+ *   get +N/+N [and have <keywords>]."
  * - Instants and sorceries made only of supported effect sentences (at most one
  *   target), optionally with "As an additional cost to cast this spell, <cost>."
  * Anything else, such as other rules text, is reported as unsupported.
@@ -149,6 +151,36 @@ function parseAttachedBonus(line, problems) {
   };
 }
 
+const COLOR_WORDS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
+
+/**
+ * An anthem or lord (613.1): "Creatures you control get +1/+1." (Glorious Anthem),
+ * "Other white creatures you control get +1/+1." or "Other Soldier creatures you
+ * control get +1/+1 and have vigilance." -> a static ability, `{ effect: null }`
+ * if it grants unsupported keywords, or null if the line isn't one.
+ */
+function parseAnthem(line, problems) {
+  const match = /^(Other )?(?:(\w+) )?creatures you control get ([+-]\d+)\/([+-]\d+)(?: and have (.+))?\.$/i.exec(line);
+  if (!match) return null;
+  const [, other, kind, power, toughness, keywordText] = match;
+  const color = kind && COLOR_WORDS[kind.toLowerCase()];
+  // A creature type is capitalized ("Soldier"); anything else isn't an anthem we know.
+  if (kind && !color && !/^[A-Z][a-z]+$/.test(kind)) return null;
+  const keywords = keywordText ? parseKeywordList(keywordText, problems) : [];
+  if (!keywords) return { effect: null };
+  return {
+    effect: {
+      affected: AFFECTED.EACH_CREATURE_YOU_CONTROL,
+      ...(Number(power) ? { power: Number(power) } : {}),
+      ...(Number(toughness) ? { toughness: Number(toughness) } : {}),
+      ...(keywords.length ? { keywords } : {}),
+      ...(other ? { other: true } : {}),
+      ...(color ? { colors: [color] } : {}),
+      ...(kind && !color ? { subtypes: [kind] } : {}),
+    },
+  };
+}
+
 /**
  * Splits rules text into keywords and abilities, reporting any line that isn't
  * a supported keyword list, mana ability, or Aura/Equipment line.
@@ -236,6 +268,12 @@ function parseOracleText(card, typeInfo, problems) {
       const mana = parseManaSymbols(equip[1], problems, `"${withoutReminder}"`);
       if (isEquipmentCard) abilities.push(equipAbility(mana, withoutReminder));
       else problems.push(`Unsupported rules text: "${line}"`);
+      continue;
+    }
+
+    const anthem = parseAnthem(withoutReminder, problems);
+    if (anthem) {
+      if (anthem.effect) staticAbilities.push(anthem.effect);
       continue;
     }
 

@@ -23,12 +23,12 @@ export const REAL_DECKS = Object.freeze({
     bigfinBouncer: 1, airElemental: 2, essenceScatter: 2, unsummon: 1, divination: 1,
     aetherTunnel: 1, sensoryDeprivation: 1, kitesail: 1, arcaneEncyclopedia: 1,
   }),
-  /** White Weenie: cheap creatures, tokens and team pumps, Pacifism and removal for creatures in combat. */
+  /** White Weenie: cheap creatures and tokens, team pumps and anthems, Pacifism and removal for creatures in combat. */
   whiteWeenie: deck({
     plains: 17,
-    savannahLions: 3, dawnwingMarshal: 2, daybreakChaplain: 1, griffinSentinel: 2, inspiringCaptain: 2,
-    gallantCavalry: 2, cavalryDrillmaster: 1, serraAngel: 2, angelOfTheDawn: 1, concordiaPegasus: 1,
-    raiseTheAlarm: 1, momentOfHeroism: 1, gideonsReproach: 1,
+    savannahLions: 3, dawnwingMarshal: 2, griffinSentinel: 2, inspiringCaptain: 2, benalishMarshal: 1,
+    gallantCavalry: 2, serraAngel: 2, angelOfTheDawn: 1, concordiaPegasus: 1,
+    raiseTheAlarm: 1, momentOfHeroism: 1, gideonsReproach: 1, gloriousAnthem: 1,
     pacifism: 1, divineFavor: 1, veteransSidearm: 1,
   }),
   /** White Recruits: the lighter white build. */
@@ -88,5 +88,5 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   'skymarchBloodletter', 'spiritOfMalevolence', 'vampireNeonate', 'vampireOpportunist', 'agonizingSyphon', 'sorinsThirst',
   // Out of the decks, but still worth offering.
   'bloodDivination', 'giantSpider', 'tolarianScholar', 'revitalize', 'inspiredCharge', 'boltwave', 'thrillOfPossibility',
-  'giantGrowth', 'divineVerdict',
+  'giantGrowth', 'divineVerdict', 'cavalryDrillmaster', 'honorOfThePure',
 ]);

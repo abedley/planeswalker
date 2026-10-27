@@ -22,6 +22,7 @@ import { CARDS } from '../cards/cards.js';
 import { EMBLEMS } from '../cards/emblems.js';
 import { STARTING_LIFE, GAME_LIMITS } from '../engine/Game.js';
 import { seededRandom } from '../engine/random.js';
+import { banterProblems } from './banter.js';
 
 /** Bumped when the shape of a run changes, so old saves are dropped (save.js). */
 export const RUN_VERSION = 1;
@@ -210,8 +211,9 @@ export function startingDecks(content, planeswalkerId) {
 /**
  * Everything needed to play the current fight:
  * - `game`: options for `new Game(game)`;
- * - `cpu`: `{ playerId, opponentId, name, ai }` for createCpuController (cpu.js),
- *   where `ai.weights` defaults to the opponent's id (see weightsFor);
+ * - `cpu`: `{ playerId, opponentId, name, ai, banter }` for createCpuController (cpu.js),
+ *   where `ai.weights` defaults to the opponent's id (see weightsFor), and `banter`
+ *   is what the opponent says (banter.js), or null;
  * - `encounter`: `{ tierId, tierName, boss, opponentId, opponentName }` to show.
  * The starting player alternates with the encounter's seed.
  */
@@ -246,6 +248,7 @@ export function matchSetup(run, content, { playerId = 'player', cpuId = 'cpu', p
     },
     cpu: {
       playerId: cpuId, opponentId, name: opponent.name, ai: { ...opponent.ai, weights: opponent.ai.weights ?? opponentId },
+      banter: opponent.banter ?? null,
     },
     encounter: {
       tierId: tier.id, tierName: tier.name, boss: Boolean(tier.boss), opponentId, opponentName: opponent.name,
@@ -448,6 +451,7 @@ export function validateCampaign(content) {
     checkEmblems(`opponent ${id}`, opponent.emblems);
     checkAbilities(`opponent ${id}`, opponent.emblems);
     if (!Object.values(AI_KIND).includes(opponent.ai?.kind)) problems.push(`opponent ${id}: unknown AI kind "${opponent.ai?.kind}"`);
+    problems.push(...banterProblems(`opponent ${id}`, opponent.banter));
   }
 
   for (const [id, pool] of Object.entries(content.cardPools ?? {})) checkCards(`card pool ${id}`, pool);

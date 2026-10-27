@@ -847,7 +847,7 @@ A campaign contains:
 | `planeswalkers` | `{ name, text, color?, art?, colors?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use. With `colors` (e.g. `['G']`), card rewards are only cards in those colors or colorless (`poolFor`). With `cardPool`, its card rewards come from that pool in every tier, instead of the tier's |
 | `starterDecks` | `{ name, cards }` |
 | `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`), `upgrade` (`emblemId`, `to`: swaps an emblem the run has for a better one, keeping its extra uses) |
-| `opponents` | `{ name, color?, art?, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
+| `opponents` | `{ name, color?, art?, deck, emblems?, startingLife?, ai, banter? }`, where `banter` is what it says (see *Banter*), and `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
 | `cardPools` | lists of card ids that rewards are drawn from |
 | `ladder` | tiers `{ id, name, fights, opponents, cardPool, rewards?, boss? }`, from easiest to the boss |
 
@@ -857,6 +857,16 @@ emblems and starting life. The example ladder has four tiers:
 - **Deep Wilds:** search AIs with 500 ms to think.
 - **Citadel:** 1.5 s search, plus an emblem.
 - **Throne:** a boss with 25 life, two emblems and 2.5 s of search.
+
+**Banter:** each opponent talks, in its own voice, in a speech bubble under its portrait.
+Its `banter` lists lines (one picked at random, none repeated until all are said) for each
+moment: `start` (the match begins), `win` and `lose` (the match ends, conceding included), and
+the big swings, `comeback` (it was losing and now it's winning) and `collapse` (the other way).
+Swings come from `src/campaign/banter.js`: once a turn the app scores the board from the CPU's
+side with `evaluate` (seeing the player's hand only as a count), averages the last two scores so
+it doesn't bounce with whose turn it is, and calls it winning at +15 or more and losing at -15 or
+less. A swing is reaching the opposite of the last such mood; in basic-AI games about one game
+in five has one.
 
 To add a planeswalker, deck, opponent, power or tier, add it to the content. Then
 `validateCampaign(content)` lists anything inconsistent: unknown cards, emblems, powers or

@@ -11,6 +11,9 @@ import { Game, GAME_STATUS, DECISION, OPENING_HAND_SIZE } from '../../src/engine
 import { ACTION } from '../../src/engine/actions.js';
 import { actingPlayerId } from '../../src/ai/simulate.js';
 import { createCpuController } from '../../src/campaign/cpu.js';
+import {
+  BANTER, SwingWatch, outlook, pickLine,
+} from '../../src/campaign/banter.js';
 import { h, wait } from '../dom.js';
 import { icon } from '../icons.js';
 import { crest, preloadImages } from '../art.js';
@@ -61,6 +64,11 @@ export class Battle {
   #gesture = null;
   #finished = false;
   #unsubscribe = [];
+  /** What the opponent says (banter.js): its lines, those said, and swings in its outlook. */
+  #banter = null;
+  #said = new Set();
+  #swing = new SwingWatch();
+  #outlookTurn = 0;
 
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
@@ -75,6 +83,7 @@ export class Battle {
     this.#game = new Game(setup.game);
     this.#view = new BoardView(app, { me: this.#me, opp: this.#opp, meInfo, oppInfo });
     this.el = this.#view.el;
+    this.#banter = setup.cpu.banter ?? null;
     this.#cpu = createCpuController(this.#game, setup.cpu, { delayMs: Math.round(650 * app.settings.speed) });
     if (this.#cpu.on) this.#unsubscribe.push(this.#cpu.on('thinking', ({ active }) => this.#view.setThinking(active)));
     this.#unsubscribe.push(this.#game.onAny((name, payload) => this.#onEvent(name, payload)));
@@ -123,6 +132,7 @@ export class Battle {
     performance.mark('game:start');
     this.#game.start();
     performance.mark('game:started');
+    this.#say(BANTER.START);
   }
 
   destroy() {
@@ -162,6 +172,7 @@ export class Battle {
       const speed = this.#app.settings.speed * (this.#queue.length > 3 ? 0.5 : 1);
       this.#state = batch.state;
       await timed('render', () => this.#view.render(batch.state, { events: batch.events, speed, animate }));
+      this.#watchSwing(batch.state);
     }
     this.#presenting = false;
     if (!this.#finished) this.#settle();
@@ -279,9 +290,30 @@ export class Battle {
     this.#setInteractive(false);
     this.#view.showPreview(null);
     const won = state.winnerId === this.#me;
+    await this.#lastWord(won);
     await this.#view.finale(won, this.#app.settings.speed);
     this.#cpu.detach();
     this.#onEnd?.({ won, turns: state.turn });
+  }
+
+  /** The opponent says a line of `kind`, if it has one. Returns whether it spoke. */
+  #say(kind) {
+    const line = pickLine(this.#banter, kind, { used: this.#said });
+    if (line) this.#view.say(line);
+    return Boolean(line);
+  }
+
+  /** Once a turn, as the board shows it: a big swing in the opponent's outlook gets a line. */
+  #watchSwing(state) {
+    if (!this.#banter || state.status !== GAME_STATUS.IN_PROGRESS || state.turn === this.#outlookTurn) return;
+    this.#outlookTurn = state.turn;
+    const swing = this.#swing.observe(outlook(state, this.#opp));
+    if (swing) this.#say(swing);
+  }
+
+  /** The opponent's word on the result, with a moment to read it before the banner. */
+  async #lastWord(won) {
+    if (this.#say(won ? BANTER.LOSE : BANTER.WIN)) await wait(700 * this.#app.settings.speed + 300);
   }
 
   #setInteractive(on) {
@@ -566,6 +598,7 @@ export class Battle {
     if (!yes || this.#finished) return;
     this.#finished = true;
     clearTimeout(this.#autoTimer);
+    await this.#lastWord(false);
     await this.#view.finale(false, this.#app.settings.speed);
     this.#cpu.detach();
     this.#onEnd?.({ won: false, turns: this.#state?.turn ?? 0, conceded: true });

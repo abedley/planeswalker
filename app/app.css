@@ -370,6 +370,11 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .zone-me .card.blocking { translate: 0 -6px; }
 .zone-opp .card.blocking { translate: 0 6px; }
 .card.z-creatures.tapped { rotate: 12deg; }
+/* an Aura or Equipment tucked against the right edge of the creature it's on */
+.card.z-attached { width: 26px; height: 26px; margin-left: -16px; align-self: center; z-index: 2; transition: translate .22s var(--ease); }
+.card.z-attached + .card.z-attached { margin-left: -14px; }
+.card.z-attached .chip-face { width: 26px; height: 26px; box-shadow: 0 0 0 1px var(--gold2), 0 2px 4px rgba(0, 0, 0, .6); }
+.card.z-attached.tapped { opacity: .65; }
 .board-face {
   position: relative;
   width: 100%;

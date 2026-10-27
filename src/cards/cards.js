@@ -339,6 +339,22 @@ export const TOKENS = deepFreeze({
   },
 });
 
+/** A creature token's name: its own, or its subtypes ("Elf Warrior Token"). */
+export function creatureTokenName(token) {
+  return token.name ?? `${(token.subtypes ?? []).join(' ')} Token`.trim();
+}
+
+/**
+ * The card id the game gives a token, from a `createToken` effect's `token`: a TOKEN
+ * name (`'token:treasure'`) or a creature token's description. Tokens alike share it.
+ */
+export function tokenCardId(token) {
+  if (typeof token === 'string') return `token:${token}`;
+  const colors = token.colors ?? [];
+  const keywords = token.keywords ?? [];
+  return `token:${creatureTokenName(token)}:${token.power}/${token.toughness}:${colors.join(',')}:${keywords.join(',')}`;
+}
+
 const COLOR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
 
 /**

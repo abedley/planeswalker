@@ -9,6 +9,7 @@
     "test": "node --test",
     "serve": "python3 -m http.server 8000",
     "import-cards": "node tools/import-cards.js",
+    "import-tokens": "node tools/import-tokens.js",
     "arena": "node tools/ai-arena.js",
     "benchmark": "node tools/benchmark.js",
     "tune-ai": "node tools/tune-ai.js",

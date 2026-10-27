@@ -141,10 +141,16 @@ export class BoardView {
     const zones = new Map();
     const put = (zone, cards) => cards.forEach((card) => zones.set(card.id, { zone, card }));
     put('hand', me.hand);
+    // Auras and Equipment on a creature sit beside it, on its controller's side.
+    const creatures = state.battlefield.filter(isCreature);
+    const hosted = (p) => !isCreature(p) && creatures.some((c) => c.id === p.attachedTo);
     for (const pid of [this.#me, this.#opp]) {
       const mine = state.battlefield.filter((p) => p.controllerId === pid);
-      put(`creatures-${pid}`, mine.filter(isCreature));
-      put(`perms-${pid}`, mine.filter((p) => !isCreature(p) && !isLand(p)));
+      for (const creature of mine.filter(isCreature)) {
+        put(`creatures-${pid}`, [creature]);
+        put(`attached-${pid}`, state.battlefield.filter((p) => p.attachedTo === creature.id && !isCreature(p)));
+      }
+      put(`perms-${pid}`, mine.filter((p) => !isCreature(p) && !isLand(p) && !hosted(p)));
     }
     state.stack.slice(-4).forEach((object) => {
       if (object.kind === 'spell') zones.set(object.card.id, { zone: 'stack', card: object.card, object });
@@ -158,7 +164,7 @@ export class BoardView {
     if (zone === 'stack') return this.#parts.stack;
     const [kind, pid] = zone.split('-');
     const side = pid === this.#me ? 'me' : 'opp';
-    return kind === 'creatures' ? this.#parts[`${side}Creatures`] : this.#parts[`${side}Strip`].perms;
+    return kind === 'creatures' || kind === 'attached' ? this.#parts[`${side}Creatures`] : this.#parts[`${side}Strip`].perms;
   }
 
   #face(zone, entry, state) {
@@ -365,6 +371,13 @@ export class BoardView {
       toggle(record.el, 'attacking', attacking.has(id));
       toggle(record.el, 'blocking', blocking.has(id));
     }
+    // An attached chip steps forward with its creature.
+    for (const record of this.#cards.values()) {
+      if (!record.zone.startsWith('attached')) continue;
+      const host = state.battlefield.find((p) => p.id === record.el.dataset.id)?.attachedTo;
+      toggle(record.el, 'attacking', attacking.has(host));
+      toggle(record.el, 'blocking', blocking.has(host));
+    }
   }
 
   /** Tapped, summoning sick, and similar per-card states. */
@@ -414,7 +427,7 @@ export class BoardView {
 
   /** Two rows of smaller cards once a side has more than five creatures. */
   #updateBoardDensity() {
-    for (const zone of [this.#parts.meCreatures, this.#parts.oppCreatures]) toggle(zone, 'dense', zone.children.length > 5);
+    for (const zone of [this.#parts.meCreatures, this.#parts.oppCreatures]) toggle(zone, 'dense', zone.querySelectorAll(':scope > .z-creatures').length > 5);
   }
 
   #renderLands(state, previous) {

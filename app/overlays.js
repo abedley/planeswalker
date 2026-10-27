@@ -48,8 +48,11 @@ export function createOverlays(app) {
     return el;
   }
 
-  /** A big view of a card (real cards show their full image, artist included). Tap anywhere to close it. */
-  function inspect(card, { actions = [] } = {}) {
+  /**
+   * A big view of a card (real cards show their full image, artist included). Tap anywhere to close it.
+   * `onClose` runs when it closes, whether by a tap or an action.
+   */
+  function inspect(card, { actions = [], onClose } = {}) {
     app.sound('select');
     const view = h('div.inspect',
       fullCard(card, app.definitions, { big: true }),
@@ -61,7 +64,7 @@ export function createOverlays(app) {
     view.addEventListener('click', (event) => {
       if (!event.target.closest('button')) close();
     });
-    show(view, { kind: 'inspect' });
+    show(view, { kind: 'inspect', onClose });
   }
 
   /**
@@ -103,22 +106,32 @@ export function createOverlays(app) {
 
   /**
    * A deck as a grid of cards, sorted by mana value. With `onPick`, tapping a card
-   * picks it (e.g. to remove it); otherwise it inspects it.
+   * picks it (e.g. to remove it); otherwise it inspects it, and closing the card
+   * comes back to the deck where it was.
    */
-  function deck(cardIds, { title = 'Deck', onPick, pickLabel } = {}) {
+  function deck(cardIds, { title = 'Deck', onPick, pickLabel, scrollTop = 0 } = {}) {
     const counts = new Map();
     for (const id of cardIds) counts.set(id, (counts.get(id) ?? 0) + 1);
     const entries = [...counts].map(([cardId, n]) => ({ card: { ...app.definitions[cardId], cardId, id: cardId }, n }))
       .sort((a, b) => manaValue(a.card.manaCost ?? {}) - manaValue(b.card.manaCost ?? {}) || a.card.name.localeCompare(b.card.name));
+    const grid = h('div.deck-grid', entries.map(({ card, n }) => h('button.deck-card', {
+      onclick: () => {
+        if (onPick) {
+          close();
+          onPick(card.cardId);
+          return;
+        }
+        const back = { title, scrollTop: grid.scrollTop };
+        // Unless something else opened in its place.
+        inspect(card, { onClose: () => queueMicrotask(() => { if (!open) deck(cardIds, back); }) });
+      },
+    }, fullCard(card, app.definitions), n > 1 ? h('span.qty', `×${n}`) : null)));
     show(h('div.deck-view',
       h('div.deck-head', h('h3', title), h('span.count', `${cardIds.length} cards`),
         h('button.icon-btn', { onclick: close, 'aria-label': 'Close' }, icon('close'))),
       pickLabel ? h('p.sheet-text', pickLabel) : null,
-      h('div.deck-grid', entries.map(({ card, n }) => h('button.deck-card', {
-        onclick: () => {
-          if (onPick) { close(); onPick(card.cardId); } else inspect(card);
-        },
-      }, fullCard(card, app.definitions), n > 1 ? h('span.qty', `×${n}`) : null)))), { kind: 'deck' });
+      grid), { kind: 'deck' });
+    grid.scrollTop = scrollTop;
   }
 
   /** Sound, speed and auto-pass; plus `extra` buttons (e.g. concede, abandon run). */

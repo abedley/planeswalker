@@ -75,6 +75,10 @@ export const TARGET = Object.freeze({
   SPELL: 'spell',
   CREATURE_SPELL: 'creatureSpell',
   NONCREATURE_SPELL: 'noncreatureSpell',
+  /** "target Elf you control". */
+  ELF_YOU_CONTROL: 'elfYouControl',
+  /** A card in a graveyard (115.1): "target permanent card from your graveyard". */
+  PERMANENT_CARD_IN_YOUR_GRAVEYARD: 'permanentCardInYourGraveyard',
 });
 
 /** Who or what a static ability or an effect applies to. */
@@ -125,6 +129,18 @@ export const KEYWORD = Object.freeze({
   CANT_BE_BLOCKED: "can't be blocked",
   /** 508.1c: "Enchanted creature can't attack or block." (Pacifism) grants this and CANT_BLOCK. */
   CANT_ATTACK: "can't attack",
+  /** "This creature can't be blocked except by creatures with flying." (509.1b) */
+  BLOCKED_ONLY_BY_FLYERS: "can't be blocked except by flyers",
+  /** "This creature can't be blocked by creatures with power 2 or less." (509.1b) */
+  CANT_BE_BLOCKED_BY_POWER_2_OR_LESS: "can't be blocked by power 2 or less",
+  /** "This creature can't be blocked by more than one creature." (509.1b) */
+  MAX_ONE_BLOCKER: "can't be blocked by more than one creature",
+  /** Blocking requirements (509.1c): "This creature must be blocked if able." */
+  MUST_BE_BLOCKED: 'must be blocked',
+  /** "All creatures able to block this creature do so." (509.1c) */
+  LURE: 'all creatures able to block it do so',
+  /** 702.8: the spell can be cast any time its controller could cast an instant. */
+  FLASH: 'flash',
 });
 
 export const EFFECT = Object.freeze({
@@ -168,6 +184,14 @@ export const EFFECT = Object.freeze({
   PUMP: 'pump',
   /** `{ counter, count }`: put counters on a permanent (122). */
   ADD_COUNTERS: 'addCounters',
+  /**
+   * 701.14: the first target fights the second: each deals damage equal to its power to
+   * the other. Uses the spell's two `targets`.
+   */
+  FIGHT: 'fight',
+  // Cards in graveyards
+  /** Return the target card from a graveyard to its owner's hand. */
+  RETURN_FROM_GRAVEYARD: 'returnFromGraveyard',
   // Spells
   /** Counter a spell (701.6). */
   COUNTER_SPELL: 'counterSpell',
@@ -176,7 +200,7 @@ export const EFFECT = Object.freeze({
 /** Effects that apply to the spell's or ability's target (unless `affected` says otherwise). */
 export const TARGETED_EFFECTS = Object.freeze(new Set([
   EFFECT.ATTACH, EFFECT.DEAL_DAMAGE, EFFECT.DESTROY, EFFECT.EXILE, EFFECT.RETURN_TO_HAND, EFFECT.TAP,
-  EFFECT.UNTAP, EFFECT.PUMP, EFFECT.ADD_COUNTERS, EFFECT.COUNTER_SPELL,
+  EFFECT.UNTAP, EFFECT.PUMP, EFFECT.ADD_COUNTERS, EFFECT.COUNTER_SPELL, EFFECT.FIGHT, EFFECT.RETURN_FROM_GRAVEYARD,
 ]));
 /** Effects that hurt whatever they affect, for AI decisions. */
 export const HARMFUL_EFFECTS = Object.freeze(new Set([
@@ -206,12 +230,29 @@ export const isCurse = (card) => isAura(card) && (card.staticAbilities ?? []).so
 /** An ability's effects, whether written as `effects` or a single `effect`. */
 export const abilityEffects = (ability) => ability.effects ?? (ability.effect ? [ability.effect] : []);
 
-/** What a triggered ability triggers on (603.1), always about the permanent itself. */
+/**
+ * What a triggered ability triggers on (603.1). The first five are about the
+ * permanent itself; the others watch other objects, narrowed by the ability's
+ * `filter`: `{ other?: true, controller?: 'you' | 'any', subtypes?, colors? }`
+ * (`controller` defaults to 'you').
+ */
 export const TRIGGER = Object.freeze({
   /** "When this permanent enters" (603.6a). */
   ENTERS_BATTLEFIELD: 'entersBattlefield',
   /** "When this creature dies": put into a graveyard from the battlefield (700.4, 603.10a). */
   DIES: 'dies',
+  /** "When this Aura is put into a graveyard from the battlefield" (any permanent, 603.10a). */
+  PUT_INTO_GRAVEYARD: 'putIntoGraveyard',
+  /** "Whenever this creature attacks" (508.3a). */
+  ATTACKS: 'attacks',
+  /** "Whenever this creature attacks or blocks" (508.3a, 509.3c). */
+  ATTACKS_OR_BLOCKS: 'attacksOrBlocks',
+  /** "Whenever another creature you control enters", "Whenever another Elf enters". */
+  CREATURE_ENTERS: 'creatureEnters',
+  /** Landfall: "Whenever a land you control enters". */
+  LAND_ENTERS: 'landEnters',
+  /** "Whenever a player casts a green spell" (603.2, 601.2i). */
+  SPELL_CAST: 'spellCast',
 });
 
 export const ACTIVATION_TIMING = Object.freeze({
@@ -340,6 +381,10 @@ export const isEnchantment = (card) => card.types.includes(CARD_TYPE.ENCHANTMENT
 export const isAura = (card) => isEnchantment(card) && (card.subtypes ?? []).includes(SUBTYPE.AURA);
 export const isEquipment = (card) => isArtifact(card) && (card.subtypes ?? []).includes(SUBTYPE.EQUIPMENT);
 export const hasKeyword = (card, keyword) => (card.keywords ?? []).includes(keyword);
+export const hasSubtype = (card, subtype) => (card.subtypes ?? []).includes(subtype);
+export const isLegendary = (card) => (card.supertypes ?? []).includes('Legendary');
+/** 304.1, 702.8a: instants, and spells with flash, can be cast any time their controller has priority. */
+export const castsAtInstantSpeed = (card) => isInstant(card) || hasKeyword(card, KEYWORD.FLASH);
 /** 702.3b, 508.1c: a creature with defender or "can't attack" never attacks. */
 export const cantAttack = (card) => hasKeyword(card, KEYWORD.DEFENDER) || hasKeyword(card, KEYWORD.CANT_ATTACK);
 
@@ -384,6 +429,7 @@ export function matchesPermanentKind(permanent, kind, controllerId, combat = nul
       return isCreature(permanent);
     case TARGET.CREATURE_YOU_CONTROL: return isCreature(permanent) && permanent.controllerId === controllerId;
     case TARGET.CREATURE_OPPONENT_CONTROLS: return isCreature(permanent) && permanent.controllerId !== controllerId;
+    case TARGET.ELF_YOU_CONTROL: return permanent.controllerId === controllerId && hasSubtype(permanent, 'Elf');
     case TARGET.ARTIFACT: return isArtifact(permanent);
     case TARGET.ENCHANTMENT: return isEnchantment(permanent);
     case TARGET.ARTIFACT_OR_ENCHANTMENT: return isArtifact(permanent) || isEnchantment(permanent);
@@ -392,4 +438,76 @@ export function matchesPermanentKind(permanent, kind, controllerId, combat = nul
     case TARGET.PERMANENT: return true;
     default: return false;
   }
+}
+
+/**
+ * Whether an object matches a filter: `{ other?, controller?, subtypes?, colors?,
+ * enteredThisTurn? }`, from the point of view of `controllerId` and the source
+ * `sourceId` ("another", "you control"). `controller` is 'you' (the default) or 'any'.
+ */
+export function matchesFilter(object, filter = {}, { controllerId, sourceId } = {}) {
+  if (filter.other && object.id === sourceId) return false;
+  if ((filter.controller ?? 'you') === 'you' && object.controllerId !== controllerId) return false;
+  if (filter.subtypes && !filter.subtypes.some((t) => hasSubtype(object, t))) return false;
+  if (filter.colors && !filter.colors.some((c) => colorsOf(object).includes(c))) return false;
+  if (filter.enteredThisTurn && !object.enteredThisTurn) return false;
+  return true;
+}
+
+/** Whether two creatures share a creature type (205.3m): any subtype in common. */
+const sharesCreatureType = (a, b) => (a.subtypes ?? []).some((t) => hasSubtype(b, t));
+
+/**
+ * A number on the battlefield, for effects that say "for each" or "where X is"
+ * (`per` on an effect, a static ability or a cost reduction):
+ * `{ of: 'creatures' | 'power', controller?: 'you' | 'any', subtypes?, other?, attacking?, sharesTypeWith? }`
+ * counts creatures (or adds up their power) that `controllerId` controls (or any
+ * player, with 'any'). `other` leaves out `sourceId`; `attacking` keeps attacking
+ * creatures (`combat` is the game's); `sharesTypeWith: true` keeps those that share a
+ * creature type with `subject` (and leaves it out), for "each other creature that
+ * shares a creature type with it".
+ */
+export function countOf(spec, { battlefield, controllerId, sourceId = null, subject = null, combat = null }) {
+  let creatures = battlefield.filter((p) => isCreature(p)
+    && matchesFilter(p, { other: spec.other, controller: spec.controller, subtypes: spec.subtypes }, { controllerId, sourceId }));
+  if (spec.attacking) creatures = creatures.filter((p) => combat?.attackers.some((a) => a.cardId === p.id));
+  if (spec.sharesTypeWith) creatures = creatures.filter((p) => p.id !== subject?.id && subject && sharesCreatureType(p, subject));
+  return spec.of === 'power' ? creatures.reduce((sum, p) => sum + Math.max(0, p.power ?? 0), 0) : creatures.length;
+}
+
+/** An effect's amounts multiplied by `n` ("for each", 608.2h), without its `per`. */
+export function scaleEffect(effect, n) {
+  const { per, ...scaled } = effect;
+  for (const field of ['amount', 'count', 'power', 'toughness']) {
+    if (typeof scaled[field] === 'number') scaled[field] *= n;
+  }
+  if (scaled.mana) scaled.mana = Object.fromEntries(Object.entries(scaled.mana).map(([type, k]) => [type, k * n]));
+  return scaled;
+}
+
+/**
+ * What a spell costs to cast now (601.2f): its mana cost, less any cost reduction
+ * (`costReduction: { per }`, "This spell costs {X} less to cast, where X is ...",
+ * which only reduces the generic part).
+ */
+export function spellCost(card, { battlefield, controllerId, combat = null }) {
+  if (!card.costReduction || !card.manaCost) return card.manaCost;
+  const reduction = countOf(card.costReduction.per, { battlefield, controllerId, combat });
+  const generic = Math.max(0, (card.manaCost.generic ?? 0) - reduction);
+  const { generic: _, ...colored } = card.manaCost;
+  return generic ? { ...colored, generic } : colored;
+}
+
+/**
+ * Whether `blocker` may block `attacker` as far as each creature's own restrictions go
+ * (509.1b): "can't block", "can't be blocked", flying (702.9b, reach 702.17b),
+ * "except by creatures with flying" and "by creatures with power 2 or less". Restrictions
+ * on the whole block (menace, "more than one creature") are checked separately.
+ */
+export function canBlockCreature(blocker, attacker) {
+  if (hasKeyword(blocker, KEYWORD.CANT_BLOCK) || hasKeyword(attacker, KEYWORD.CANT_BE_BLOCKED)) return false;
+  if (hasKeyword(attacker, KEYWORD.FLYING) && !hasKeyword(blocker, KEYWORD.FLYING) && !hasKeyword(blocker, KEYWORD.REACH)) return false;
+  if (hasKeyword(attacker, KEYWORD.BLOCKED_ONLY_BY_FLYERS) && !hasKeyword(blocker, KEYWORD.FLYING)) return false;
+  if (hasKeyword(attacker, KEYWORD.CANT_BE_BLOCKED_BY_POWER_2_OR_LESS) && (blocker.power ?? 0) <= 2) return false;
+  return true;
 }

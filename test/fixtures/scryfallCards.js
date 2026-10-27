@@ -254,4 +254,116 @@ export const FIXTURES = {
     oracle_text: '+2: Each player draws a card.\n−1: Target player draws a card.\n−10: Target player mills twenty cards.',
     keywords: ['Mill'], loyalty: '3',
   }),
+  // The Pathfinder's Elves: the mechanics they brought.
+  beastKinRanger: card({
+    name: 'Beast-Kin Ranger', mana_cost: '{2}{G}', type_line: 'Creature — Elf Ranger', power: '3', toughness: '3', keywords: ['Trample'],
+    oracle_text: "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever another creature you control enters, this creature gets +1/+0 until end of turn.",
+  }),
+  dawnsLightArcher: card({
+    name: "Dawn's Light Archer", mana_cost: '{2}{G}', type_line: 'Creature — Elf Archer', power: '4', toughness: '2', keywords: ['Flash', 'Reach'],
+    oracle_text: 'Flash\nReach',
+  }),
+  feralInvocation: card({
+    name: 'Feral Invocation', mana_cost: '{2}{G}', type_line: 'Enchantment — Aura', keywords: ['Flash', 'Enchant'],
+    oracle_text: 'Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature gets +2/+2.',
+  }),
+  elfswornGiant: card({
+    name: 'Elfsworn Giant', mana_cost: '{3}{G}{G}', type_line: 'Creature — Giant', power: '5', toughness: '3', keywords: ['Landfall', 'Reach'],
+    oracle_text: 'Reach (This creature can block creatures with flying.)\nLandfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.',
+  }),
+  elvishRegrower: card({
+    name: 'Elvish Regrower', mana_cost: '{2}{G}{G}', type_line: 'Creature — Elf Druid', power: '4', toughness: '3',
+    oracle_text: 'When this creature enters, return target permanent card from your graveyard to your hand.',
+  }),
+  elvishVanguard: card({
+    name: 'Elvish Vanguard', mana_cost: '{1}{G}', type_line: 'Creature — Elf Warrior', power: '1', toughness: '1',
+    oracle_text: 'Whenever another Elf enters, put a +1/+1 counter on this creature.',
+  }),
+  inspiringBard: card({
+    name: 'Inspiring Bard', mana_cost: '{3}{G}', type_line: 'Creature — Elf Bard', power: '3', toughness: '3',
+    oracle_text: 'When this creature enters, choose one —\n• Bardic Inspiration — Target creature gets +2/+2 until end of turn.\n• Song of Rest — You gain 3 life.',
+  }),
+  reclamationSage: card({
+    name: 'Reclamation Sage', mana_cost: '{2}{G}', type_line: 'Creature — Elf Shaman', power: '2', toughness: '1',
+    oracle_text: 'When this creature enters, you may destroy target artifact or enchantment.',
+  }),
+  safewrightCavalry: card({
+    name: 'Safewright Cavalry', mana_cost: '{3}{G}', type_line: 'Creature — Elf Warrior', power: '4', toughness: '4',
+    oracle_text: "This creature can't be blocked by more than one creature.\n{5}: Target Elf you control gets +2/+2 until end of turn.",
+  }),
+  titaniasChosen: card({
+    name: "Titania's Chosen", mana_cost: '{2}{G}', type_line: 'Creature — Elf Archer', power: '1', toughness: '1',
+    oracle_text: 'Whenever a player casts a green spell, put a +1/+1 counter on this creature.',
+  }),
+  tranquilThicket: card({
+    name: 'Tranquil Thicket', mana_cost: '', type_line: 'Land', keywords: ['Cycling'],
+    oracle_text: 'This land enters tapped.\n{T}: Add {G}.\nCycling {G} ({G}, Discard this card: Draw a card.)',
+  }),
+  treetopScout: card({
+    name: 'Treetop Scout', mana_cost: '{G}', type_line: 'Creature — Elf Scout', power: '1', toughness: '1',
+    oracle_text: "This creature can't be blocked except by creatures with flying.",
+  }),
+  vinebredBrawler: card({
+    name: 'Vinebred Brawler', mana_cost: '{2}{G}', type_line: 'Creature — Elf Berserker', power: '4', toughness: '2',
+    oracle_text: 'This creature must be blocked if able.\nWhenever this creature attacks, another target Elf you control gets +2/+1 until end of turn.',
+  }),
+  alphaStatus: card({
+    name: 'Alpha Status', mana_cost: '{2}{G}', type_line: 'Enchantment — Aura', keywords: ['Enchant'],
+    oracle_text: 'Enchant creature\nEnchanted creature gets +2/+2 for each other creature on the battlefield that shares a creature type with it.',
+  }),
+  audacity: card({
+    name: 'Audacity', mana_cost: '{G}', type_line: 'Enchantment — Aura', keywords: ['Enchant'],
+    oracle_text: "Enchant creature\nEnchanted creature gets +2/+0 and has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)\nWhen this Aura is put into a graveyard from the battlefield, draw a card.",
+  }),
+  canopyTactician: card({
+    name: 'Canopy Tactician', mana_cost: '{3}{G}', type_line: 'Creature — Elf Warrior', power: '3', toughness: '3',
+    oracle_text: 'Other Elves you control get +1/+1.\n{T}: Add {G}{G}{G}.',
+  }),
+  coliseumBehemoth: card({
+    name: 'Coliseum Behemoth', mana_cost: '{5}{G}{G}', type_line: 'Creature — Beast', power: '7', toughness: '7', keywords: ['Trample'],
+    oracle_text: 'Trample\nWhen this creature enters, choose one —\n• Destroy target artifact or enchantment.\n• Draw a card.',
+  }),
+  dwynen: card({
+    name: 'Dwynen, Gilt-Leaf Daen', mana_cost: '{2}{G}{G}', type_line: 'Legendary Creature — Elf Warrior', power: '3', toughness: '4', keywords: ['Reach'],
+    oracle_text: 'Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.',
+  }),
+  elderGargaroth: card({
+    name: 'Elder Gargaroth', mana_cost: '{3}{G}{G}', type_line: 'Creature — Beast', power: '6', toughness: '6', keywords: ['Reach', 'Vigilance', 'Trample'],
+    oracle_text: 'Reach, vigilance, trample\nWhenever this creature attacks or blocks, choose one —\n• Create a 3/3 green Beast creature token.\n• You gain 3 life.\n• Draw a card.',
+  }),
+  elvishArchdruid: card({
+    name: 'Elvish Archdruid', mana_cost: '{1}{G}{G}', type_line: 'Creature — Elf Druid', power: '2', toughness: '2',
+    oracle_text: 'Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.',
+  }),
+  gaeasCradle: card({
+    name: "Gaea's Cradle", mana_cost: '', type_line: 'Legendary Land', oracle_text: '{T}: Add {G} for each creature you control.',
+  }),
+  ghalta: card({
+    name: 'Ghalta, Primal Hunger', mana_cost: '{10}{G}{G}', type_line: 'Legendary Creature — Elder Dinosaur', power: '12', toughness: '12', keywords: ['Trample'],
+    oracle_text: "This spell costs {X} less to cast, where X is the total power of creatures you control.\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+  }),
+  oranRief: card({
+    name: 'Oran-Rief, the Vastwood', mana_cost: '', type_line: 'Land',
+    oracle_text: 'This land enters tapped.\n{T}: Add {G}.\n{T}: Put a +1/+1 counter on each green creature that entered this turn.',
+  }),
+  pounce: card({
+    name: 'Pounce', mana_cost: '{1}{G}', type_line: 'Instant', keywords: ['Fight'],
+    oracle_text: "Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)",
+  }),
+  priestOfTitania: card({
+    name: 'Priest of Titania', mana_cost: '{1}{G}', type_line: 'Creature — Elf Druid', power: '1', toughness: '1',
+    oracle_text: '{T}: Add {G} for each Elf on the battlefield.',
+  }),
+  steelLeafChampion: card({
+    name: 'Steel Leaf Champion', mana_cost: '{G}{G}{G}', type_line: 'Creature — Elf Knight', power: '5', toughness: '4',
+    oracle_text: "This creature can't be blocked by creatures with power 2 or less.",
+  }),
+  tauntingElf: card({
+    name: 'Taunting Elf', mana_cost: '{G}', type_line: 'Creature — Elf', power: '0', toughness: '1',
+    oracle_text: 'All creatures able to block this creature do so.',
+  }),
+  timberwatchElf: card({
+    name: 'Timberwatch Elf', mana_cost: '{2}{G}', type_line: 'Creature — Elf', power: '1', toughness: '2',
+    oracle_text: '{T}: Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield.',
+  }),
 };

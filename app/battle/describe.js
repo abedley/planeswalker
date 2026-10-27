@@ -62,7 +62,10 @@ export function promptFor(state, me) {
       case DECISION.DECLARE_BLOCKERS: return 'Tap your creature, then an attacker';
       case DECISION.DISCARD_TO_HAND_SIZE: return `Discard ${decision.count} card${decision.count > 1 ? 's' : ''}`;
       case DECISION.ASSIGN_COMBAT_DAMAGE: return 'Assign combat damage';
-      case DECISION.CHOOSE_TARGETS: return `Choose a target: ${decision.sourceName}`;
+      case DECISION.CHOOSE_TARGETS:
+        return `${decision.optional ? 'You may choose' : 'Choose'} a target: ${decision.sourceName}`;
+      case DECISION.CHOOSE_MODE: return `Choose one: ${decision.sourceName}`;
+      case DECISION.LEGEND_RULE: return `Keep one ${decision.name}`;
       case DECISION.MULLIGAN: return 'Keep this hand?';
       case DECISION.PUT_ON_BOTTOM: return `Tap ${decision.count} card${decision.count > 1 ? 's' : ''} to put on the bottom`;
       default: return '';

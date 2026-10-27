@@ -31,9 +31,15 @@ export function playOptions(game, me) {
   }
   const player = state.players.find((p) => p.id === me);
   for (const card of player.hand) {
-    if (isLand(card)) continue;
-    const option = prepare(game, state, me, { kind: 'cast', cardId: card.id, targetId: null });
-    if (option) options.push(option);
+    if (!isLand(card)) {
+      const option = prepare(game, state, me, { kind: 'cast', cardId: card.id, targetId: null });
+      if (option) options.push(option);
+    }
+    // Abilities that work from the hand: cycling.
+    for (const ability of card.handAbilities ?? []) {
+      const option = prepare(game, state, me, { kind: 'activate', cardId: card.id, abilityId: ability.id, targetId: null });
+      if (option) options.push({ ...option, fromHand: true, text: ability.text });
+    }
   }
   const sources = [...state.battlefield.filter((p) => p.controllerId === me), ...player.emblems];
   for (const source of sources) {
@@ -76,6 +82,12 @@ function prepare(game, state, me, macro) {
 /** The variants of an option for one target (`null` for an untargeted one). */
 export const variantsFor = (option, targetId = null) => option.variants
   .filter((v) => (targetId === null ? !v.targets?.length : v.targets?.[0] === targetId));
+
+/**
+ * For a spell with two targets (a fight), the second targets that go with `variants`
+ * (those for one first target), or an empty list for one with a single target.
+ */
+export const secondTargets = (variants) => [...new Set(variants.map((v) => v.targets?.[1]).filter((t) => t !== undefined))];
 
 /**
  * Carries out an option for real: taps mana as the dry run did, then dispatches

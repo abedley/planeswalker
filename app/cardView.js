@@ -57,6 +57,12 @@ export function fullCard(cardIn, definitions, { big = false } = {}) {
 const RESTRICTIONS = [
   ["can't attack", "Can't attack", 'no-attack'], ["can't block", "Can't block", 'no-block'],
   ["can't be blocked", 'Unblockable', 'unblockable'],
+  ["can't be blocked except by flyers", 'Flyers only', 'unblockable'],
+  ["can't be blocked by power 2 or less", 'Power 3+ only', 'unblockable'],
+  ["can't be blocked by more than one creature", 'One blocker', 'unblockable'],
+  // Blocking requirements (509.1c).
+  ['must be blocked', 'Block me', 'lure'],
+  ['all creatures able to block it do so', 'Lure', 'lure'],
 ];
 
 /**

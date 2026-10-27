@@ -1,6 +1,6 @@
 import { Game, copyGameData } from '../engine/Game.js';
 import { shuffle } from '../engine/random.js';
-import { isLand, isInstant, manaValue } from '../cards/cards.js';
+import { isLand, castsAtInstantSpeed, manaValue } from '../cards/cards.js';
 
 /**
  * How much less likely a card is in a hidden hand slot, given what the opponent
@@ -74,7 +74,7 @@ function dealWeighted(cards, info, weights, random) {
 
 function weightOf(card, { noLand, heldWithMana }, weights) {
   if (isLand(card)) return noLand ? weights.noLand : 1;
-  if (!isInstant(card) && manaValue(card.manaCost ?? {}) <= heldWithMana) return weights.heldCastable;
+  if (!castsAtInstantSpeed(card) && manaValue(card.manaCost ?? {}) <= heldWithMana) return weights.heldCastable;
   return 1;
 }
 

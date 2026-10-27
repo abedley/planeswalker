@@ -36,7 +36,7 @@ export function groupsAllowed(attackers, blocks) {
  * attacker with a requirement, each blocking one of those or keeping its preferred
  * block. Counts per attacker only matter up to 2, which keeps the search small.
  */
-function bestRequiredBlocks(required, blockers, canBlock, preferred) {
+function bestRequiredBlocks(required, blockers, canBlock, preferred, worth = () => 0) {
   const requiredIds = new Set(required.map((a) => a.id));
   const relevant = blockers
     .map((b) => ({ blocker: b, options: required.map((a, i) => (canBlock(b, a) ? i : -1)).filter((i) => i >= 0) }))
@@ -51,6 +51,8 @@ function bestRequiredBlocks(required, blockers, canBlock, preferred) {
     if (memo.has(key)) return memo.get(key);
     const { blocker, options } = relevant[index];
     const wanted = preferred[blocker.id];
+    // Changing a cheaper blocker's block costs less.
+    const change = 1 + worth(blocker) / 1000;
     let best = null;
     const consider = (choice, gain, cost, nextCounts) => {
       const rest = search(index + 1, nextCounts);
@@ -59,13 +61,13 @@ function bestRequiredBlocks(required, blockers, canBlock, preferred) {
       if (!best || candidate[0] > best[0] || (candidate[0] === best[0] && candidate[1] > best[1])) best = candidate;
     };
     // Not blocking an attacker with a requirement: its preferred block, unless that was one.
-    consider(null, 0, requiredIds.has(wanted) ? 1 : 0, counts);
+    consider(null, 0, requiredIds.has(wanted) ? change : 0, counts);
     for (const i of options) {
       const attacker = required[i];
       const gain = (isLure(attacker) ? 1 : 0) + (mustBeBlocked(attacker) && counts[i] === 0 ? 1 : 0);
       const next = [...counts];
       next[i] = Math.min(2, next[i] + 1);
-      consider(attacker.id, gain, wanted === attacker.id ? 0 : 1, next);
+      consider(attacker.id, gain, wanted === attacker.id ? 0 : change, next);
     }
     memo.set(key, best);
     return best;
@@ -99,15 +101,16 @@ export function blocksLegal(attackers, blockers, blocks, canBlock) {
 
 /**
  * `blocks` changed as little as possible to be legal: the requirements met (for the
- * AI, whose block plans don't know them), then any group left too small for menace
- * or too big for "more than one creature" broken up.
+ * AI, whose block plans don't know them), moving the blockers with the least `worth`,
+ * then any group left too small for menace or too big for "more than one creature"
+ * broken up.
  */
-export function legalizeBlocks(attackers, blockers, blocks, canBlock) {
+export function legalizeBlocks(attackers, blockers, blocks, canBlock, worth) {
   const result = { ...blocks };
   const required = attackers.filter(isRequired);
   if (required.length > 0) {
     const requiredIds = new Set(required.map((a) => a.id));
-    const { relevant, choices } = bestRequiredBlocks(required, blockers, canBlock, blocks);
+    const { relevant, choices } = bestRequiredBlocks(required, blockers, canBlock, blocks, worth);
     relevant.forEach((blocker, i) => {
       if (choices[i]) result[blocker.id] = choices[i];
       else if (requiredIds.has(result[blocker.id])) delete result[blocker.id];

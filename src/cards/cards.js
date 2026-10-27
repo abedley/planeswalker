@@ -205,7 +205,7 @@ export const TARGETED_EFFECTS = Object.freeze(new Set([
 /** Effects that hurt whatever they affect, for AI decisions. */
 export const HARMFUL_EFFECTS = Object.freeze(new Set([
   EFFECT.DEAL_DAMAGE, EFFECT.DESTROY, EFFECT.EXILE, EFFECT.RETURN_TO_HAND, EFFECT.TAP, EFFECT.LOSE_LIFE,
-  EFFECT.MILL, EFFECT.COUNTER_SPELL,
+  EFFECT.MILL, EFFECT.COUNTER_SPELL, EFFECT.FIGHT,
 ]));
 
 /** What an effect applies to: its `affected` field, or the default for its type. */

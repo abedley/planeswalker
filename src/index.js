@@ -40,5 +40,5 @@ export { SAVE_KEY, saveRun, loadRun, clearRun } from './campaign/save.js';
 export { createCpuController } from './campaign/cpu.js';
 export { SAMPLE_CAMPAIGN } from './campaign/sampleCampaign.js';
 export { CAMPAIGN } from './campaign/realCampaign.js';
-export { REAL_DECKS, REWARD_ONLY_CARDS } from './campaign/decks.js';
+export { REAL_DECKS, REWARD_ONLY_CARDS, PATHFINDER_DECK, PATHFINDER_REWARDS } from './campaign/decks.js';
 export { CARD_PRESENTATION } from './cards/importedCards.js';

@@ -49,6 +49,8 @@ export const POWER = Object.freeze({
   STARTING_LIFE: 'startingLife',
   /** `amount` (default 1) more lives for the run. */
   EXTRA_LIFE: 'extraLife',
+  /** Replace emblem `emblemId`, which the run has, with a better one, `to`. */
+  UPGRADE: 'upgrade',
 });
 
 /** Kinds of reward offer. */
@@ -89,10 +91,11 @@ const colorsOfCard = (card) => (card?.colors ?? Object.keys(card?.manaCost ?? {}
 
 /**
  * The cards of a pool a planeswalker can be offered: those within its `colors`
- * (colorless cards always fit). Without `colors`, the whole pool.
+ * (colorless cards always fit). Without `colors`, the whole pool. A planeswalker
+ * with its own `cardPool` is offered that one instead, in every tier.
  */
 export function poolFor(content, planeswalkerId, poolId) {
-  const pool = content.cardPools?.[poolId] ?? [];
+  const pool = content.cardPools?.[content.planeswalkers[planeswalkerId]?.cardPool ?? poolId] ?? [];
   const colors = content.planeswalkers[planeswalkerId]?.colors;
   if (!colors) return pool;
   const cards = cardsOf(content);
@@ -258,7 +261,7 @@ function powerAvailable(run, content, powerId) {
       && abilityCount(content, [...run.emblems, power.emblemId]) <= rulesOf(content).maxAbilities;
   }
   if (power.repeatable) return true;
-  if (power.kind === POWER.ACTIVATIONS && !run.emblems.includes(power.emblemId)) return false;
+  if ((power.kind === POWER.ACTIVATIONS || power.kind === POWER.UPGRADE) && !run.emblems.includes(power.emblemId)) return false;
   return !run.powers.includes(powerId);
 }
 
@@ -310,6 +313,16 @@ function applyPower(draft, power) {
       break;
     case POWER.STARTING_LIFE: draft.startingLife += power.amount; break;
     case POWER.EXTRA_LIFE: draft.lives += power.amount ?? 1; break;
+    case POWER.UPGRADE: {
+      draft.emblems = draft.emblems.map((id) => (id === power.emblemId ? power.to : id));
+      // Extra uses already gained carry over to the better emblem.
+      const bonus = draft.emblemBonuses[power.emblemId];
+      if (bonus) {
+        draft.emblemBonuses[power.to] = (draft.emblemBonuses[power.to] ?? 0) + bonus;
+        delete draft.emblemBonuses[power.emblemId];
+      }
+      break;
+    }
     default: throw new Error(`Unknown power kind: ${power.kind}`);
   }
 }
@@ -410,6 +423,7 @@ export function validateCampaign(content) {
     for (const deckId of walker.decks ?? []) {
       if (!content.starterDecks?.[deckId]) problems.push(`planeswalker ${id}: unknown starter deck "${deckId}"`);
     }
+    if (walker.cardPool && !content.cardPools?.[walker.cardPool]) problems.push(`planeswalker ${id}: unknown card pool "${walker.cardPool}"`);
     // Every tier should have card rewards in the planeswalker's colors.
     for (const tier of content.ladder ?? []) {
       if (!tier.cardPool || !content.cardPools?.[tier.cardPool]) continue;
@@ -425,6 +439,7 @@ export function validateCampaign(content) {
   for (const [id, power] of Object.entries(content.powers ?? {})) {
     if (!Object.values(POWER).includes(power.kind)) problems.push(`power ${id}: unknown kind "${power.kind}"`);
     if (power.kind === POWER.EMBLEM || power.kind === POWER.ACTIVATIONS) checkEmblems(`power ${id}`, [power.emblemId]);
+    if (power.kind === POWER.UPGRADE) checkEmblems(`power ${id}`, [power.emblemId, power.to]);
     if (power.kind === POWER.STARTING_LIFE && !(power.amount > 0)) problems.push(`power ${id}: needs a positive amount`);
   }
 

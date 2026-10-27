@@ -3,8 +3,8 @@
  * "points" as creatureValue (src/ai/combat.js). Shared by the AIs.
  */
 import {
-  isCreature, hasKeyword, cantAttack, KEYWORD, EFFECT, AFFECTED, TARGET, PLAYER_TARGETS, SPELL_TARGETS,
-  effectAffects, matchesPermanentKind,
+  isCreature, isPermanentCard, hasKeyword, cantAttack, KEYWORD, EFFECT, AFFECTED, TARGET, PLAYER_TARGETS, SPELL_TARGETS,
+  effectAffects, matchesPermanentKind, matchesFilter, countOf, scaleEffect,
 } from '../cards/cards.js';
 import { creatureValue, anthemValue } from './combat.js';
 import { doomedSacrificeCost } from './doomed.js';
@@ -14,6 +14,9 @@ export const permanentValue = (p) => (isCreature(p) ? 2 + creatureValue(p) : 4);
 
 /** The ids a spell or ability of `kind` could target (an estimate: the engine decides legality). */
 export function candidateTargets(state, me, kind) {
+  if (kind === TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD) {
+    return state.players.find((p) => p.id === me).graveyard.filter(isPermanentCard).map((c) => c.id);
+  }
   if (SPELL_TARGETS.has(kind)) return state.stack.filter((s) => s.kind === 'spell').map((s) => s.id);
   const players = state.players.filter((p) => !p.hasLost).map((p) => p.id);
   if (kind === TARGET.ANY) return [...state.battlefield.filter(isCreature).map((p) => p.id), ...players];
@@ -24,9 +27,10 @@ export function candidateTargets(state, me, kind) {
 /** The ids an effect applies to, for these targets. */
 export function affectedIds(state, me, effect, targets, sourceId) {
   const opponentId = state.players.find((p) => p.id !== me).id;
-  const creatures = state.battlefield.filter(isCreature);
+  const creatures = state.battlefield.filter((p) => isCreature(p)
+    && (!effect.filter || matchesFilter(p, { controller: 'any', ...effect.filter }, { controllerId: me, sourceId })));
   switch (effectAffects(effect)) {
-    case AFFECTED.TARGET: return targets;
+    case AFFECTED.TARGET: return targets.filter(Boolean);
     case AFFECTED.YOU: return [me];
     case AFFECTED.EACH_OPPONENT: return [opponentId];
     case AFFECTED.EACH_PLAYER: return [me, opponentId];
@@ -57,8 +61,31 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
   };
   // Removing a permanent loses its controller the permanent, and what it gives their creatures (an anthem or lord).
   const worth = (p) => permanentValue(p) + anthemValue(state, p.controllerId, p);
+  // Dying: lethal damage, counting damage already marked and deathtouch.
+  const dies = (creature, amount, source) => amount > 0
+    && (creature.toughness - creature.damage <= amount || hasKeyword(source, KEYWORD.DEATHTOUCH));
   let score = 0;
-  for (const effect of effects) {
+  for (const given of effects) {
+    // "For each" amounts, as they'd be now.
+    const effect = given.per
+      ? scaleEffect(given, countOf(given.per, { battlefield: state.battlefield, controllerId: me, sourceId, combat: state.combat }))
+      : given;
+    if (effect.type === EFFECT.FIGHT) {
+      // 701.14: each deals damage equal to its power to the other.
+      const [first, second] = targets.map(byId);
+      if (!first || !second || !isCreature(first) || !isCreature(second)) continue;
+      if (dies(second, first.power, first)) score -= side(second.id) * worth(second);
+      if (dies(first, second.power, second)) score -= side(first.id) * worth(first);
+      continue;
+    }
+    if (effect.type === EFFECT.RETURN_FROM_GRAVEYARD) {
+      // A card back in hand: about as good as drawing one, better for a creature worth more.
+      for (const id of targets) {
+        const card = state.players.flatMap((p) => p.graveyard).find((c) => c.id === id);
+        if (card) score += 2 + (isCreature(card) ? 0.2 * creatureValue(card) : 1);
+      }
+      continue;
+    }
     for (const id of affectedIds(state, me, effect, targets, sourceId)) {
       const spell = state.stack.find((s) => s.id === id);
       if (spell) {
@@ -86,9 +113,13 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
           // Tapping a would-be blocker before attacking.
           if (!permanent.tapped && isCreature(permanent) && preCombat) score -= side(id) * 2;
           break;
-        case EFFECT.UNTAP:
-          if (permanent.tapped && side(id) > 0) score += 1;
+        case EFFECT.UNTAP: {
+          if (!permanent.tapped) break;
+          // An untapped creature can block (or attack again); one with a {T} ability can use it again.
+          const reuse = (permanent.abilities ?? []).some((a) => a.cost?.tap) ? 2 : 0;
+          score += side(id) * (1 + reuse + (isCreature(permanent) ? 0.2 * creatureValue(permanent) : 0));
           break;
+        }
         case EFFECT.PUMP: {
           if (!isCreature(permanent)) break;
           const toughness = permanent.toughness + (effect.toughness ?? 0);

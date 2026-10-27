@@ -90,3 +90,24 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   'bloodDivination', 'giantSpider', 'tolarianScholar', 'revitalize', 'inspiredCharge', 'boltwave', 'thrillOfPossibility',
   'giantGrowth', 'divineVerdict', 'cavalryDrillmaster', 'honorOfThePure',
 ]);
+
+/**
+ * The Pathfinder's Elves (https://moxfield.com/decks/OI7KqguvQECVPrOhlSQjvw): 16 Forests
+ * and Tranquil Thicket, mana Elves, Elves that grow with each other, and a few big
+ * green creatures. Kept apart from REAL_DECKS, so its cards aren't offered to the
+ * other planeswalkers.
+ */
+export const PATHFINDER_DECK = deck({
+  forest: 16, tranquilThicket: 1,
+  llanowarElves: 2, druidOfTheCowl: 1, treetopScout: 1, elvishArchers: 1, elvishVanguard: 1, elvishWarrior: 1,
+  beastKinRanger: 1, dawnsLightArcher: 1, reclamationSage: 1, titaniasChosen: 1, vinebredBrawler: 1,
+  elderleafMentor: 1, inspiringBard: 1, safewrightCavalry: 1, elvishRegrower: 1, elfswornGiant: 1, tajuruPathwarden: 1,
+  galewindMoose: 1, giantGrowth: 1, overcome: 1, feralInvocation: 1, shortBow: 1,
+});
+
+/** The Pathfinder's rewards: the deck's sideboard. */
+export const PATHFINDER_REWARDS = Object.freeze([
+  'alphaStatus', 'audacity', 'canopyTactician', 'coliseumBehemoth', 'dwynenGiltLeafDaen', 'elderGargaroth',
+  'elvishArchdruid', 'gaeasCradle', 'ghaltaPrimalHunger', 'gigantosaurus', 'imperiousPerfect', 'oranRiefTheVastwood',
+  'overrun', 'pounce', 'priestOfTitania', 'steelLeafChampion', 'tauntingElf', 'timberwatchElf',
+]);

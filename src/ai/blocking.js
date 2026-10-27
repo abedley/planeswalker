@@ -52,10 +52,12 @@ const DT = 4;
 const TR = 8;
 const LL = 16;
 const MENACE = 32;
+/** "Can't be blocked by more than one creature." */
+const MAX_ONE = 64;
 
 /** The flags of combatFlags(). */
 export const COMBAT_FLAG = Object.freeze({
-  FIRST_STRIKE: FS, DOUBLE_STRIKE: DS, DEATHTOUCH: DT, TRAMPLE: TR, LIFELINK: LL, MENACE,
+  FIRST_STRIKE: FS, DOUBLE_STRIKE: DS, DEATHTOUCH: DT, TRAMPLE: TR, LIFELINK: LL, MENACE, MAX_ONE,
 });
 
 /** A creature's combat keywords, as flags. */
@@ -63,7 +65,8 @@ export function combatFlags(creature) {
   const has = (k) => hasKeyword(creature, k);
   return (has(KEYWORD.FIRST_STRIKE) ? FS : 0) | (has(KEYWORD.DOUBLE_STRIKE) ? DS : 0)
     | (has(KEYWORD.DEATHTOUCH) ? DT : 0) | (has(KEYWORD.TRAMPLE) ? TR : 0)
-    | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0);
+    | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0)
+    | (has(KEYWORD.MAX_ONE_BLOCKER) ? MAX_ONE : 0);
 }
 
 /**
@@ -403,8 +406,9 @@ function attackerOptions(a, legal, groupMax, safe, radix, lifeWeight) {
     || (option.lost > 0 && ((a.flags & (FS | DS)) !== 0 || rescueFrom[start] === 1))
     || option.through > 0 // trample damage still getting through
     || gainFrom[start] === 1; // a lifelinker could join
+  const largest = a.flags & MAX_ONE ? 1 : groupMax;
   const grow = (start, option, dealt) => {
-    if (members.length === groupMax || !worthGrowing(option, start, dealt)) return;
+    if (members.length >= largest || !worthGrowing(option, start, dealt)) return;
     for (let i = start; i < count; i++) {
       // Of identical blockers, only the first ones: skip one whose twin before it is out.
       if (i > 0 && legal[i - 1].cls === legal[i].cls && members[members.length - 1] !== legal[i - 1]) continue;

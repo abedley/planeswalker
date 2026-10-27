@@ -166,6 +166,27 @@ export function scoreEffects(state, me, effects, targets, sourceId, { preCombat 
   return score;
 }
 
+/**
+ * Whether these effects are only damage to the target and these targets wouldn't
+ * die of it: burn (a Shock) is kept for a kill, a creature or the player, rather
+ * than chipped in for a little damage.
+ */
+export function wastedDamage(state, me, effects, targets, sourceId) {
+  if (!effects?.length || !effects.every((e) => e.type === EFFECT.DEAL_DAMAGE && effectAffects(e) === AFFECTED.TARGET)) return false;
+  const source = state.battlefield.find((p) => p.id === sourceId);
+  const amount = effects.reduce((sum, e) => sum + (e.per
+    ? scaleEffect(e, countOf(e.per, { battlefield: state.battlefield, controllerId: me, sourceId, combat: state.combat })).amount
+    : e.amount), 0);
+  return targets.filter(Boolean).every((id) => {
+    const player = state.players.find((p) => p.id === id);
+    if (player) return amount < player.life;
+    const permanent = state.battlefield.find((p) => p.id === id);
+    if (!permanent || !isCreature(permanent)) return true;
+    if (amount > 0 && source && hasKeyword(source, KEYWORD.DEATHTOUCH)) return false;
+    return permanent.toughness - (permanent.damage ?? 0) > amount;
+  });
+}
+
 /** How bad a spell on the stack is for `me` if it resolves (used for counterspells). */
 export function spellThreat(state, me, spell) {
   const { card } = spell;
@@ -194,7 +215,7 @@ export function costScore(state, me, cost, costChoices, sourceId, doomed = null)
 
 const COMBAT_TARGETS = new Set([TARGET.ATTACKING_CREATURE, TARGET.ATTACKING_OR_BLOCKING_CREATURE]);
 
-/** The best score over the targets a spell or ability could have, with its cost. */
+/** The best score over the targets a spell or ability could have, with its cost (`options`: see scoreEffects, and `killsOnly`). */
 export function bestScore(state, me, effects, targetKind, cost = {}, sourceId, options) {
   // Outside combat, a spell for "target attacking (or blocking) creature" is judged on the
   // opponent's creatures, which may attack later.
@@ -208,6 +229,9 @@ export function bestScore(state, me, effects, targetKind, cost = {}, sourceId, o
     if (fodder.length === 0) return -Infinity;
     sacrifice = Math.min(...fodder.map((p) => -costScore(state, me, {}, { sacrifice: [p.id] }, sourceId)));
   }
-  return Math.max(...candidates.map((id) => scoreEffects(state, me, effects, id ? [id] : [], sourceId, options)))
+  // `options.killsOnly`: burn counts only on targets it kills (wastedDamage).
+  const useful = options?.killsOnly ? candidates.filter((id) => !wastedDamage(state, me, effects, id ? [id] : [], sourceId)) : candidates;
+  if (useful.length === 0) return -Infinity;
+  return Math.max(...useful.map((id) => scoreEffects(state, me, effects, id ? [id] : [], sourceId, options)))
     + costScore(state, me, cost, { discard: Array(cost.discard ?? 0) }, sourceId) - sacrifice;
 }

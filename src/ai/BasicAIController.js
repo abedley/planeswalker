@@ -14,7 +14,7 @@ import {
   creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING, legalBlocks,
 } from './combat.js';
 import {
-  scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
+  scoreEffects, bestScore, costScore, candidateTargets, permanentValue, wastedDamage,
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import { BLOCK_PLAN } from './blocking.js';
@@ -347,7 +347,8 @@ export class BasicAIController extends EventEmitter {
         continue;
       }
       const { effects, target } = card.spell;
-      const best = bestTarget(state, me, effects, target, card.id, window, preCombat, doomed);
+      // Burn spells are kept for kills (wastedDamage).
+      const best = bestTarget(state, me, effects, target, card.id, window, preCombat, doomed, true);
       if (best && this.#savesRemoval(state, effects, best.targetId, window)) continue;
       const allowed = best && (windowAllows(window, effects, instant, best.targetId, state, me)
         || (instant && cashesInDoomed(state, me, cost, card.id, window, fodder)));
@@ -356,7 +357,7 @@ export class BasicAIController extends EventEmitter {
         add({ score, manaCost, cost, sourceId: card.id, now: true, matches: castMatches(best.targetId) });
       } else if (instant && window === WINDOW.MAIN) {
         // Hold it: worth keeping mana up for, at a discount.
-        const later = bestScore(state, me, effects, target, cost, card.id);
+        const later = bestScore(state, me, effects, target, cost, card.id, { killsOnly: true });
         if (later > 0) add({ score: 0.6 * later, manaCost, cost, sourceId: card.id, now: false, matches: () => false });
       }
     }
@@ -511,10 +512,12 @@ const isTheirs = (state, me, id) => state.battlefield.some((p) => p.id === id &&
 /**
  * The best target for these effects in this window, `{ targetId, score }` (targetId
  * null for untargeted ones), or null if there's no target. In combat, pumps and
- * removal are judged by how they change the fight.
+ * removal are judged by how they change the fight. `killsOnly`: burn only on
+ * targets it kills (wastedDamage).
  */
-function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat, doomed = null) {
-  const targets = targetKind ? candidateTargets(state, me, targetKind) : [null];
+function bestTarget(state, me, effects, targetKind, sourceId, window, preCombat, doomed = null, killsOnly = false) {
+  const targets = (targetKind ? candidateTargets(state, me, targetKind) : [null])
+    .filter((id) => !killsOnly || !wastedDamage(state, me, effects, id ? [id] : [], sourceId));
   if (targets.length === 0) return null;
   let best = null;
   for (const targetId of targets) {

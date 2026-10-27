@@ -4,10 +4,11 @@ import { Game, CARD_TYPE, EFFECT, TARGET, ACTION, passPriority } from '../src/in
 import { SearchAIController } from '../src/ai/SearchAIController.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
+// Lethal, so it's always worth casting (the AIs keep burn for kills).
 const CARDS = {
   Shock: {
     id: 'Shock', name: 'Shock', manaCost: {}, types: [CARD_TYPE.INSTANT],
-    target: TARGET.ANY, effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 2 }],
+    target: TARGET.ANY, effects: [{ type: EFFECT.DEAL_DAMAGE, amount: 20 }],
   },
 };
 

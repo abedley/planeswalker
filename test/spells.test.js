@@ -16,6 +16,7 @@ const CARDS = {
   Bear: { id: 'Bear', name: 'Bear', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 2, toughness: 2 },
   Ox: { id: 'Ox', name: 'Ox', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 4, toughness: 4 },
   Shock: spell('Shock', CARD_TYPE.INSTANT, [{ type: EFFECT.DEAL_DAMAGE, amount: 2 }], TARGET.ANY),
+  Blaze: spell('Blaze', CARD_TYPE.SORCERY, [{ type: EFFECT.DEAL_DAMAGE, amount: 18 }], TARGET.ANY),
   Growth: spell('Growth', CARD_TYPE.INSTANT, [{ type: EFFECT.PUMP, power: 3, toughness: 3, keywords: [KEYWORD.TRAMPLE] }], TARGET.CREATURE),
   Remedy: spell('Remedy', CARD_TYPE.INSTANT, [{ type: EFFECT.GAIN_LIFE, amount: 3 }]),
   Doom: spell('Doom', CARD_TYPE.SORCERY, [{ type: EFFECT.DESTROY }], TARGET.CREATURE),
@@ -260,6 +261,30 @@ test('two basic AIs play a full game with instants and sorceries', async () => {
     }
     assert.ok(cast.some((e) => e.cardName.startsWith('Sample ')), `seed ${seed}: the AI casts sample spells`);
   }
+});
+
+test('the AIs only cast a Shock that kills: a creature or the player', async () => {
+  const { listMacros } = await import('../src/ai/macroActions.js');
+  const shocks = (game) => listMacros(game.getState(), 'p1').filter((m) => m.kind === 'cast').map((m) => m.targetId);
+  // The basic AI burns at the end of the opponent's turn.
+  const basicCast = (game) => {
+    advanceTo(game, { turn: 4, phase: PHASE.ENDING });
+    game.dispatch(passPriority('p2'));
+    const action = new BasicAIController({ game: null, playerId: 'p1' }).chooseAction(game.getState());
+    return action.type === ACTION.CAST_SPELL ? action.targets : null;
+  };
+  // Neither a 4/4 nor 20 life dies to it.
+  let { game } = withCreatures({ p2: ['Ox'], p1Hand: ['Shock'] });
+  assert.deepEqual(shocks(game), []);
+  assert.equal(basicCast(game), null);
+  // A 2/2 does.
+  const bear = withCreatures({ p2: ['Bear'], p1Hand: ['Shock'] });
+  assert.deepEqual(shocks(bear.game), [bear.theirs[0]]);
+  // And so does an opponent at 2 life.
+  ({ game } = withCreatures({ p2: ['Ox'], p1Hand: ['Blaze', 'Shock'] }));
+  cast(game, 'p1', 'Blaze', ['p2']);
+  assert.equal(player(game, 'p2').life, 2);
+  assert.deepEqual(shocks(game), ['p2']);
 });
 
 test('"target attacking or blocking creature" means a creature in combat', () => {

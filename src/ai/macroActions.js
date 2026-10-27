@@ -23,7 +23,7 @@ import {
 import {
   planAttack, planBlocks, chooseBlocks, creatureValue, curseValue, BLOCKING,
 } from './combat.js';
-import { candidateTargets, scoreEffects, costScore } from './scoring.js';
+import { candidateTargets, scoreEffects, costScore, wastedDamage } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost,
@@ -125,7 +125,9 @@ function priorityMacros(state, me, mine) {
   const affordable = (cost) => canPayMana(player.manaPool, cost) || canReach(cost ?? {}, player.manaPool, sources);
   const sorceryTiming = state.activePlayerId === me && state.stack.length === 0
     && (state.phase === PHASE.PRECOMBAT_MAIN || state.phase === PHASE.POSTCOMBAT_MAIN);
-  const topTargets = (kind, effects, sourceId) => candidateTargets(state, me, kind)
+  // `killsOnly`: burn only on targets it kills (wastedDamage).
+  const topTargets = (kind, effects, sourceId, killsOnly = false) => candidateTargets(state, me, kind)
+    .filter((id) => !killsOnly || !wastedDamage(state, me, effects, [id], sourceId))
     .map((id) => ({ id, score: scoreEffects(state, me, effects, [id], sourceId) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, TARGETS_PER_SPELL)
@@ -162,7 +164,8 @@ function priorityMacros(state, me, mine) {
       targets = state.battlefield.filter((p) => p.controllerId === me && isCreature(p))
         .sort((a, b) => creatureValue(b) - creatureValue(a)).slice(0, 2).map((p) => p.id);
     } else if (card.spell?.target) {
-      targets = topTargets(card.spell.target, card.spell.effects, card.id);
+      // Burn spells are kept for kills.
+      targets = topTargets(card.spell.target, card.spell.effects, card.id, true);
     }
     for (const targetId of targets) macros.push(keyed({ kind: 'cast', cardId: card.id, targetId }));
   }

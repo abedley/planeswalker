@@ -98,7 +98,9 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
   up to play it, or, for a spell with a target, drag out an arrow and release on the target.
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
-  target, or which creature to sacrifice.
+  target, or which creature to sacrifice. You can still tap a creature (or other permanent) for
+  mana by hand: tap it and pick its mana ability, to float mana, say before untapping it to tap
+  it again.
 - **Mulligans:** before the first turn, a sheet shows your opening hand with *Keep 7* and
   *Mulligan to 6* (the London mulligan). After a mulligan, you keep the hand, then tap the cards
   to put on the bottom, one per mulligan. You can close the sheet to look at the board, and the
@@ -898,7 +900,8 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
   - everything else at the end of the opponent's turn
 - **Scoring** (`scoring.js`): spells and abilities are scored effect by effect, in the same points
   as creature values. Removal goes at the biggest threat, and burn goes to the face when it's
-  lethal. An anthem or lord counts for what it adds to its controller's creatures
+  lethal. A burn spell (one that only deals damage to its target, like Shock) is cast only
+  where it kills, a creature or the player (`wastedDamage`), by both AIs. An anthem or lord counts for what it adds to its controller's creatures
   (`anthemValue`), both when casting it and when removing it, so removal can go at a lord before
   a bigger creature.
 - **The Elves' mechanics:**

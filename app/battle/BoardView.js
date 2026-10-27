@@ -792,6 +792,9 @@ export class BoardView {
 
   /** Re-measures after a resize or rotation. */
   relayout() {
+    // A rotation can leave the page, or the screen holding the board, scrolled.
+    for (let el = this.el.parentElement; el; el = el.parentElement) if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
+    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
     this.#handWidth = 0;
     this.#layoutHand();
     this.#drawLines(this.#state);

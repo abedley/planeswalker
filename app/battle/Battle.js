@@ -81,9 +81,26 @@ export class Battle {
     this.#bindInput();
     this.el.append(h('button.menu-btn', { 'aria-label': 'Menu', onclick: () => this.#menu() }, icon('gear')));
     this.#intro = { meInfo, oppInfo, subtitle, setup };
-    const onResize = () => this.#view.relayout();
-    window.addEventListener('resize', onResize);
-    this.#unsubscribe.push(() => window.removeEventListener('resize', onResize));
+    // Re-measure whenever the board changes size. iOS fires `resize` on rotation before
+    // the new layout settles, so the board's own size (ResizeObserver) is what counts;
+    // the events, with a late second look, are a fallback.
+    let settle = null;
+    const onResize = () => {
+      this.#view.relayout();
+      clearTimeout(settle);
+      settle = setTimeout(() => this.#view.relayout(), 350);
+    };
+    const targets = [window, window.visualViewport].filter(Boolean);
+    for (const target of targets) target.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this.#view.relayout()) : null;
+    observer?.observe(this.el);
+    this.#unsubscribe.push(() => {
+      for (const target of targets) target.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      observer?.disconnect();
+      clearTimeout(settle);
+    });
   }
 
   /** Shows the "versus" intro while card art loads, then starts the game. */
@@ -858,13 +875,25 @@ export class Battle {
       this.#inspectHand(target);
       return;
     }
-    if (!card.abilities?.some((a) => !a.isManaAbility)) {
+    // Mana abilities are paid automatically, but our own can be activated by hand too:
+    // to float mana, e.g. before untapping the creature to tap it again.
+    const abilities = (card.abilities ?? []).filter((a) => !a.isManaAbility || card.controllerId === this.#me);
+    if (!abilities.length) {
       this.#app.overlays.inspect(card);
       return;
     }
-    const actions = card.abilities.filter((a) => !a.isManaAbility).map((ability) => {
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.ACTIVATE_ABILITY && a.cardId === card.id);
+    const actions = abilities.flatMap((ability) => {
+      if (ability.isManaAbility) {
+        const activations = mine.filter((a) => a.abilityId === ability.id);
+        if (activations.length <= 1) {
+          return [{ label: inlineSymbols(ability.text), disabled: !activations.length, onPick: () => this.#dispatch(activations[0]) }];
+        }
+        // "Add one mana of any color": one button per color.
+        return activations.map((a) => ({ label: inlineSymbols(`Add {${a.manaColor}}`), onPick: () => this.#dispatch(a) }));
+      }
       const option = options.find((o) => o.abilityId === ability.id);
-      return { label: inlineSymbols(ability.text), disabled: !option, onPick: () => option && this.#begin(option) };
+      return [{ label: inlineSymbols(ability.text), disabled: !option, onPick: () => option && this.#begin(option) }];
     });
     this.#select(target, card, actions);
   }

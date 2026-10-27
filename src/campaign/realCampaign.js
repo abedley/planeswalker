@@ -90,28 +90,104 @@ export const CAMPAIGN = deepFreeze({
     elfTribe: { name: 'Elf Tribe', cards: PATHFINDER_DECK },
   },
 
+  // Each opponent's `banter` is what it says (see banter.js), in its own voice.
   opponents: {
     // Outskirts: lighter builds, basic AI.
-    shieldMaiden: { name: 'Shield-Maiden', color: 'white', deck: REAL_DECKS.whiteRecruits, ai: { kind: AI_KIND.BASIC } },
-    graveRobber: { name: 'Grave Robber', color: 'black', deck: REAL_DECKS.blackRabble, ai: { kind: AI_KIND.BASIC } },
-    raider: { name: 'Goblin Raider', color: 'red', deck: REAL_DECKS.redRaiders, ai: { kind: AI_KIND.BASIC } },
+    shieldMaiden: {
+      name: 'Shield-Maiden', color: 'white', deck: REAL_DECKS.whiteRecruits, ai: { kind: AI_KIND.BASIC },
+      banter: {
+        start: ['Shields up! I\'ve trained my whole life for this.', 'For the village! Um, and for honor!', 'Stand and fight, walker. I won\'t run.'],
+        win: ['We held the line! Wait until the captain hears.', 'Ha! The recruits aren\'t so green after all.'],
+        lose: ['I yield... but I\'ll train harder.', 'Well fought. My shield arm needs rest anyway.'],
+        comeback: ['Rally! We\'re not beaten yet!', 'Hold fast, everyone, the tide is turning!'],
+        collapse: ['That\'s... not how the drills went.', 'Steady... steady... oh no.'],
+      },
+    },
+    graveRobber: {
+      name: 'Grave Robber', color: 'black', deck: REAL_DECKS.blackRabble, ai: { kind: AI_KIND.BASIC },
+      banter: {
+        start: ['Nice boots. You won\'t be needing them much longer.', 'Shh. The dead don\'t like a racket.', 'Every grave\'s a treasure chest, if you dig deep enough.'],
+        win: ['Mind if I go through your pockets? Too late.', 'Another one for the collection. Heh heh.'],
+        lose: ['Fine, fine! Keep your trinkets.', 'Bah. I\'ll dig up better friends next time.'],
+        comeback: ['Up you get, lads. Night shift isn\'t over.', 'Thought I was finished? I\'m only just digging in.'],
+        collapse: ['Uh oh. That\'s my shovel you\'re standing on.', 'Wait, wait, we can split the loot!'],
+      },
+    },
+    raider: {
+      name: 'Goblin Raider', color: 'red', deck: REAL_DECKS.redRaiders, ai: { kind: AI_KIND.BASIC },
+      banter: {
+        start: ['SMASH TIME! Wait, is it smash time? IT\'S SMASH TIME!', 'Me raid! You cry! Good deal!', 'Ooh, shiny planeswalker. Me take it.'],
+        win: ['Hahaha! Me best raider! Me tell EVERYONE!', 'You go boom. Me keep your stuff.'],
+        lose: ['Ow ow ow. Me go home now.', 'Not fair! You smash better!'],
+        comeback: ['Hehe, me not dead yet! MORE SMASH!', 'Goblins never give up! Mostly!'],
+        collapse: ['Uh. Where my goblins go?', 'Too much smash coming wrong way!'],
+      },
+    },
     // Deep Wilds: full builds, searching.
-    knightCaptain: { name: 'Knight-Captain', color: 'white', deck: REAL_DECKS.whiteWeenie, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' } },
-    nightStalker: { name: 'Night Stalker', color: 'black', deck: REAL_DECKS.blackRemoval, ai: { kind: AI_KIND.SEARCH, budgetMs: 500 } },
-    pyromancer: { name: 'Pyromancer', color: 'red', deck: REAL_DECKS.redBurn, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' } },
+    knightCaptain: {
+      name: 'Knight-Captain', color: 'white', deck: REAL_DECKS.whiteWeenie, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' },
+      banter: {
+        start: ['Company, form ranks! We ride at my word.', 'You face the Order now, walker. Kneel, or be ridden down.', 'Banners high. Let this be an honest fight.'],
+        win: ['The field is ours. Give my regards to your next master.', 'Discipline beats talent. Every time.'],
+        lose: ['Sound the retreat. You have earned this field.', 'A fine victory. The Order will remember your name.'],
+        comeback: ['Reform the line! Now we advance!', 'The charge holds! Press them, knights!'],
+        collapse: ['Close the gaps! Hold, curse you, hold!', 'Our flank is broken. Rally to me!'],
+      },
+    },
+    nightStalker: {
+      name: 'Night Stalker', color: 'black', deck: REAL_DECKS.blackRemoval, ai: { kind: AI_KIND.SEARCH, budgetMs: 500 },
+      banter: {
+        start: ['How kind of you to come to me. I do hate hunting on an empty stomach.', 'The moon is up. You should have stayed indoors.', 'Every heartbeat is so loud from here.'],
+        win: ['Shh. It only hurts until it doesn\'t.', 'Exquisite. Your vintage was worth the wait.'],
+        lose: ['The sun will set again. And I will find you.', 'Enjoy the dawn, little warmblood.'],
+        comeback: ['There it is. That flutter of panic in your pulse.', 'Did you think me dead? How charming.'],
+        collapse: ['Insolent thing. You draw too close to the light.', 'You bite back. How... unexpected.'],
+      },
+    },
+    pyromancer: {
+      name: 'Pyromancer', color: 'red', deck: REAL_DECKS.redBurn, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' },
+      banter: {
+        start: ['Ooh, you look flammable!', 'Let\'s keep this quick. I\'m on a tight burn schedule.', 'Mind the sparks. Actually, don\'t.'],
+        win: ['Look at that glow! You\'re beautiful when you smolder.', 'Burned to a crisp. My favorite doneness.'],
+        lose: ['Okay, okay, I\'ll put it out. This time.', 'Fizzled. Ugh. I hate fizzling.'],
+        comeback: ['Oh, now we\'re cooking!', 'Fan the flames! It\'s spreading!'],
+        collapse: ['Who turned down the heat?!', 'Wait, I\'m running low on kindling!'],
+      },
+    },
     // Citadel: the other planeswalkers' colors, thinking harder, with an emblem.
     beastLord: {
       name: 'Beast Lord', color: 'green', deck: REAL_DECKS.greenStompy, emblems: ['planeswalker'],
       ai: { kind: AI_KIND.SEARCH, budgetMs: 1500 },
+      banter: {
+        start: ['The wild has woken. It is hungry.', 'Small one. You smell of cities.', 'Hear the ground shake? That is my herd.'],
+        win: ['The herd tramples. The forest grows back. You do not.', 'The strong eat. That is the oldest law.'],
+        lose: ['You are a worthy predator. The wild will remember.', 'The herd scatters. For now.'],
+        comeback: ['The beasts stir again. ROAR with me!', 'Wounded beasts fight hardest.'],
+        collapse: ['My herd falls? Impossible!', 'The pack grows thin. Stand, my beasts!'],
+      },
     },
     stormCaller: {
       name: 'Storm Caller', color: 'blue', deck: REAL_DECKS.blueSkies, emblems: ['planeswalker'],
       ai: { kind: AI_KIND.SEARCH, budgetMs: 1500, weights: 'control' },
+      banter: {
+        start: ['I have already counted every move you can make.', 'Look up. The forecast calls for your defeat.', 'Patience. The storm always arrives on time.'],
+        win: ['As calculated. Do try to be less predictable.', 'Clear skies, now. How peaceful.'],
+        lose: ['An outlier. I shall revise my models.', 'Hm. The barometer lied.'],
+        comeback: ['And now the pressure drops. Can you feel it?', 'The clouds part. Precisely on schedule.'],
+        collapse: ['A miscalculation. A small one. Surely.', 'This front was not in my forecast.'],
+      },
     },
     // Throne: the boss.
     dragonlord: {
       name: 'The Dragonlord', color: 'red', deck: REAL_DECKS.dragonlord, emblems: ['bossDominion', 'planeswalker'], startingLife: 25,
       ai: { kind: AI_KIND.SEARCH, budgetMs: 2500 },
+      banter: {
+        start: ['So, you climbed my mountain. Few do. Fewer leave.', 'Kneel, and I may let you burn quickly.', 'All of this realm is my hoard. You are just one more coin.'],
+        win: ['Ash to ash. Another walker for the hoard.', 'Did you truly think the sky would bow to you?'],
+        lose: ['Impossible... the mountain... falls?', 'Remember this day, walker. My brood will not forget it.'],
+        comeback: ['There it is. The moment hope leaves your eyes.', 'You merely woke the dragon. Now it is angry.'],
+        collapse: ['You dare wound me? I will raze your homeland for this!', 'Enough! The skies burn at my command!'],
+      },
     },
   },
 

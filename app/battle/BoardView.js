@@ -41,6 +41,7 @@ export class BoardView {
   #state = null;
   #lineTimer = null;
   #previewKey = null;
+  #speech = null;
 
   constructor(app, { me, opp, meInfo, oppInfo }) {
     this.#app = app;
@@ -782,6 +783,28 @@ export class BoardView {
   toast(text) {
     const r = relRect(this.#parts.lane, this.el);
     floatText(this.#parts.fx, r.cx, r.cy, text, 'warn', { speed: 1.6 });
+  }
+
+  /**
+   * The opponent says `text`: a speech bubble under their portrait, up long enough
+   * to read. A new line replaces the one showing.
+   */
+  say(text) {
+    this.#speech?.remove();
+    if (!text) return;
+    const avatar = relRect(this.#parts.opp.avatar, this.el);
+    const bubble = h('div.speech', { style: { top: `${avatar.y + avatar.h + 10}px` } }, text);
+    bubble.style.setProperty('--tail-x', `${Math.max(14, avatar.cx - 8)}px`);
+    this.#speech = bubble;
+    this.#parts.fx.append(bubble);
+    const hold = Math.min(6000, 1800 + 55 * text.length);
+    const animation = bubble.animate([
+      { opacity: 0, transform: 'translateY(-6px) scale(.9)' },
+      { opacity: 1, transform: 'none', offset: 220 / (hold + 520) },
+      { opacity: 1, transform: 'none', offset: (hold + 220) / (hold + 520) },
+      { opacity: 0, transform: 'translateY(-4px)' },
+    ], { duration: hold + 520, easing: 'ease-out' });
+    animation.finished.then(() => bubble.remove(), () => bubble.remove());
   }
 
   /** Victory or defeat. */

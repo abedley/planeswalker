@@ -3,14 +3,15 @@ import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import { STEP, PHASE } from '../engine/turnStructure.js';
 import {
-  isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, isHarmfulEffect,
+  isCreature, isLand, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, isHarmfulEffect,
+  castsAtInstantSpeed,
 } from '../cards/cards.js';
 import { manaPoolTotal, canPayMana } from '../engine/mana.js';
 import {
-  bestBy, manaSources, neededColors, canReach, chooseManaAction,
+  bestBy, manaSources, neededColors, canReach, chooseManaAction, manaAvailable, castCost,
 } from './manaPlanning.js';
 import {
-  creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING,
+  creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING, legalBlocks,
 } from './combat.js';
 import {
   scoreEffects, bestScore, costScore, candidateTargets, permanentValue,
@@ -174,7 +175,8 @@ export class BasicAIController extends EventEmitter {
         const canBlockPair = (blockerId, attackerId) => decision.blocks[blockerId] === attackerId
           || mine.some((a) => a.type === ACTION.SET_BLOCKER && a.cardId === blockerId && a.attackerId === attackerId);
         // Planned once per declaration, as for attacks.
-        this.#declaration.plan ??= passive ? {} : chooseBlocks(state, me, canBlockPair, {
+        // Even passive blocks must meet blocking requirements (a lure).
+        this.#declaration.plan ??= passive ? legalBlocks(state, me, canBlockPair, {}) : chooseBlocks(state, me, canBlockPair, {
           blocking: this.#swerves() ? this.#pick(Object.values(BLOCK_PLAN).filter((p) => p !== this.#blocking)) : this.#blocking,
           heuristics: this.#heuristics,
         });
@@ -183,8 +185,13 @@ export class BasicAIController extends EventEmitter {
       case DECISION.ASSIGN_COMBAT_DAMAGE:
         return bestBy(mine, (a) => assignmentScore(state, decision, a.assignment));
       case DECISION.CHOOSE_TARGETS:
-        // A triggered ability's target: the best one for us, even if every option is bad.
+        // A triggered ability's target: the best one for us, even if every option is bad
+        // (declining an optional one, with no targets, scores 0).
         return bestBy(mine, (a) => scoreEffects(state, me, decision.effects, a.targets, decision.sourceId));
+      case DECISION.CHOOSE_MODE:
+        return bestBy(mine, (a) => scoreEffects(state, me, decision.modes[a.mode].effects, a.targets ?? [], decision.sourceId));
+      case DECISION.LEGEND_RULE:
+        return bestBy(mine, (a) => legendValue(state, a.cardId));
       case DECISION.MULLIGAN: {
         const { hand } = state.players.find((p) => p.id === me);
         const keeps = !this.#mulligans || keepsHand(hand, decision.mulligans, landShare(state, me));
@@ -205,7 +212,7 @@ export class BasicAIController extends EventEmitter {
         return mine[0];
     }
     if (passive) return find(ACTION.PASS_PRIORITY);
-    return find(ACTION.PLAY_LAND) ?? this.#act(state, mine) ?? find(ACTION.PASS_PRIORITY);
+    return chooseLand(state, me, mine) ?? this.#act(state, mine) ?? find(ACTION.PASS_PRIORITY);
   }
 
   /**
@@ -251,7 +258,7 @@ export class BasicAIController extends EventEmitter {
     // mana kept up for instants we'd rather cast later.
     let order = candidates.filter((c) => c.now).sort((a, b) => b.score - a.score);
     if (window === WINDOW.MAIN) {
-      const plan = knapsack(candidates, manaPoolTotal(player.manaPool) + sources.length);
+      const plan = knapsack(candidates, manaAvailable(player.manaPool, sources));
       order = plan.filter((c) => c.now).sort((a, b) => manaValue(b.manaCost) - manaValue(a.manaCost) || b.score - a.score);
     }
     const fodder = order.some((intent) => intent.cost?.sacrifice) ? this.#doomedFodder(state) : null;
@@ -291,7 +298,7 @@ export class BasicAIController extends EventEmitter {
   #candidates(state, window, player, sources) {
     const me = this.#playerId;
     const preCombat = window === WINDOW.MAIN && state.phase === PHASE.PRECOMBAT_MAIN;
-    const available = manaPoolTotal(player.manaPool) + sources.length;
+    const available = manaAvailable(player.manaPool, sources);
     const result = [];
     const noise = this.#noise;
     const doomed = this.#doomed(state);
@@ -304,16 +311,38 @@ export class BasicAIController extends EventEmitter {
     };
 
     for (const card of player.hand) {
+      for (const ability of card.handAbilities ?? []) {
+        // Cycling: a land we can spare, in our main phase or at the end of the opponent's turn.
+        if (window !== WINDOW.MAIN && window !== WINDOW.END) continue;
+        const spare = isLand(card) && landsInPlay(state, me) >= 5;
+        if (!spare) continue;
+        const matches = (a) => a.type === ACTION.ACTIVATE_ABILITY && a.cardId === card.id && a.abilityId === ability.id;
+        add({ score: 1, manaCost: ability.cost.mana ?? {}, cost: {}, sourceId: card.id, now: true, matches });
+      }
       if (isLand(card)) continue;
-      const instant = isInstant(card);
+      const instant = castsAtInstantSpeed(card);
       if (!instant && window !== WINDOW.MAIN) continue;
       const cost = card.additionalCost ?? {};
+      const manaCost = castCost(state, me, card);
       const castMatches = (targetId) => (a) => a.type === ACTION.CAST_SPELL && a.cardId === card.id
         && (targetId === null || a.targets?.[0] === targetId);
       if (!card.spell) {
-        // A permanent spell.
+        // A permanent spell; with flash, also as a surprise blocker or at the end of the opponent's turn.
+        if (window !== WINDOW.MAIN && window !== WINDOW.END && window !== WINDOW.ATTACKED) continue;
+        if (window === WINDOW.ATTACKED && !isCreature(card)) continue;
         for (const { targetId, score } of permanentSpellOptions(state, me, card, preCombat, this.#heuristics)) {
-          add({ score, manaCost: card.manaCost, cost, sourceId: card.id, now: true, matches: castMatches(targetId) });
+          add({ score, manaCost, cost, sourceId: card.id, now: true, matches: castMatches(targetId) });
+        }
+        continue;
+      }
+      if (card.spell.targets) {
+        // Several targets (a fight): the best combination.
+        const best = bestTargets(state, me, card.spell.effects, card.spell.targets, card.id, preCombat);
+        if (best && best.score > 0 && windowAllows(window, card.spell.effects, instant, best.targets.at(-1), state, me)) {
+          const matches = (a) => a.type === ACTION.CAST_SPELL && a.cardId === card.id && a.targets?.join() === best.targets.join();
+          add({ score: best.score, manaCost, cost, sourceId: card.id, now: true, matches });
+        } else if (best && best.score > 0 && instant && window === WINDOW.MAIN) {
+          add({ score: 0.6 * best.score, manaCost, cost, sourceId: card.id, now: false, matches: () => false });
         }
         continue;
       }
@@ -324,11 +353,11 @@ export class BasicAIController extends EventEmitter {
         || (instant && cashesInDoomed(state, me, cost, card.id, window, fodder)));
       if (allowed) {
         const score = best.score + costScore(state, me, cost, {}, card.id) + cheapestSacrifice(state, me, cost, card.id, fodder);
-        add({ score, manaCost: card.manaCost, cost, sourceId: card.id, now: true, matches: castMatches(best.targetId) });
+        add({ score, manaCost, cost, sourceId: card.id, now: true, matches: castMatches(best.targetId) });
       } else if (instant && window === WINDOW.MAIN) {
         // Hold it: worth keeping mana up for, at a discount.
         const later = bestScore(state, me, effects, target, cost, card.id);
-        if (later > 0) add({ score: 0.6 * later, manaCost: card.manaCost, cost, sourceId: card.id, now: false, matches: () => false });
+        if (later > 0) add({ score: 0.6 * later, manaCost, cost, sourceId: card.id, now: false, matches: () => false });
       }
     }
 
@@ -433,6 +462,47 @@ function windowAllows(window, effects, instantSpeed, targetId, state, me) {
     default:
       return false;
   }
+}
+
+const landsInPlay = (state, me) => state.battlefield.filter((p) => p.controllerId === me && isLand(p)).length;
+
+/**
+ * Which land to play: one that enters untapped, unless the mana is already enough
+ * for every spell in hand, when a land that enters tapped costs nothing.
+ */
+function chooseLand(state, me, mine) {
+  const plays = mine.filter((a) => a.type === ACTION.PLAY_LAND);
+  if (plays.length < 2) return plays[0];
+  const { hand } = state.players.find((p) => p.id === me);
+  const card = (a) => hand.find((c) => c.id === a.cardId);
+  const untapped = state.battlefield.filter((p) => p.controllerId === me && isLand(p) && !p.tapped).length;
+  const costliest = Math.max(0, ...hand.filter((c) => !isLand(c)).map((c) => manaValue(castCost(state, me, c) ?? {})));
+  const tappedIsFree = untapped >= costliest;
+  return plays.find((a) => Boolean(card(a)?.entersTapped) === tappedIsFree) ?? plays[0];
+}
+
+/** Which of several legendary permanents with the same name to keep (704.5j). */
+function legendValue(state, id) {
+  const permanent = state.battlefield.find((p) => p.id === id);
+  const attached = state.battlefield.filter((p) => p.attachedTo === id).length;
+  return permanentValue(permanent) + 3 * attached + (permanent.tapped ? 0 : 1) + (permanent.summoningSick ? 0 : 0.5);
+}
+
+/**
+ * The best combination of targets for a spell with several (a fight), `{ targets, score }`,
+ * or null if there's none.
+ */
+function bestTargets(state, me, effects, kinds, sourceId, preCombat) {
+  let options = [[]];
+  for (const kind of kinds) {
+    options = options.flatMap((chosen) => candidateTargets(state, me, kind).filter((id) => !chosen.includes(id)).map((id) => [...chosen, id]));
+  }
+  let best = null;
+  for (const targets of options) {
+    const score = scoreEffects(state, me, effects, targets, sourceId, { preCombat });
+    if (!best || score > best.score) best = { targets, score };
+  }
+  return best;
 }
 
 const isTheirs = (state, me, id) => state.battlefield.some((p) => p.id === id && p.controllerId !== me)

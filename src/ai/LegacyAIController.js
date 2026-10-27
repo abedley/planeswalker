@@ -6,6 +6,7 @@ import {
   PLAYER_TARGETS, SPELL_TARGETS, effectAffects, matchesPermanentKind,
 } from '../cards/cards.js';
 import { manaPoolTotal } from '../engine/mana.js';
+import { legalizeBlocks } from '../engine/blockRules.js';
 
 const AI_STRATEGY = Object.freeze({
   /** Plays lands, casts creatures, attacks when it has more creatures, blocks to trade. */
@@ -72,7 +73,7 @@ export class LegacyAIController extends EventEmitter {
         return this.#moveTowards(state.pendingDecision.attackers, passive ? [] : this.#planAttack(state), find,
           ACTION.TOGGLE_ATTACKER, ACTION.CONFIRM_ATTACKERS);
       case DECISION.DECLARE_BLOCKERS:
-        return this.#chooseBlock(state, passive ? {} : this.#planBlocks(state), find);
+        return this.#chooseBlock(state, this.#legal(state, passive ? {} : this.#planBlocks(state)), find);
       case DECISION.ASSIGN_COMBAT_DAMAGE: {
         // Send as much damage as possible to the player (trample); otherwise take the first split.
         const toPlayer = (a) => Object.entries(a.assignment)
@@ -367,6 +368,20 @@ export class LegacyAIController extends EventEmitter {
     const differs = (id) => current.includes(id) !== wanted.includes(id);
     const next = [...current, ...wanted].find(differs);
     return (next && find(toggleType, (a) => a.cardId === next)) || find(confirmType);
+  }
+
+  /**
+   * Blocks that meet blocking requirements (a lure), which this AI predates; otherwise
+   * it could never confirm its blocks.
+   */
+  #legal(state, plan) {
+    const { blocks } = state.pendingDecision;
+    const byId = (id) => state.battlefield.find((p) => p.id === id);
+    const allowed = (b, a) => blocks[b.id] === a.id || state.validActions.some((x) => (
+      x.type === ACTION.SET_BLOCKER && x.cardId === b.id && x.attackerId === a.id));
+    const attackers = state.combat.attackers.map((a) => byId(a.cardId)).filter(Boolean);
+    const blockers = state.battlefield.filter((p) => p.controllerId === this.#playerId && isCreature(p) && !p.tapped);
+    return legalizeBlocks(attackers, blockers, plan, allowed);
   }
 
   #chooseBlock(state, plan, find) {

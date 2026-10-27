@@ -150,6 +150,50 @@ export const IMPORTED_CARDS = {
     "scryfallId": "a27efec0-40c4-48bc-a21a-3af28a6529b5",
     "scryfallUri": "https://scryfall.com/card/m20/44/air-elemental?utm_source=api"
   },
+  "alphaStatus": {
+    "id": "alphaStatus",
+    "name": "Alpha Status",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 2,
+        "per": {
+          "of": "creatures",
+          "controller": "any",
+          "sharesTypeWith": true
+        }
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +2/+2 for each other creature on the battlefield that shares a creature type with it.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/d/fd210c45-57f3-4d7d-93ba-81fe4298ade3.jpg?1783944870",
+      "card": "https://cards.scryfall.io/normal/front/f/d/fd210c45-57f3-4d7d-93ba-81fe4298ade3.jpg?1783944870"
+    },
+    "artist": "Darrell Riche",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "scg",
+    "collectorNumber": "110",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +2/+2 for each other creature on the battlefield that shares a creature type with it.",
+    "scryfallId": "fd210c45-57f3-4d7d-93ba-81fe4298ade3",
+    "scryfallUri": "https://scryfall.com/card/scg/110/alpha-status?utm_source=api"
+  },
   "angelOfTheDawn": {
     "id": "angelOfTheDawn",
     "name": "Angel of the Dawn",
@@ -246,6 +290,57 @@ export const IMPORTED_CARDS = {
     "scryfallId": "0ce4702d-f65b-413e-99da-112f632a0a63",
     "scryfallUri": "https://scryfall.com/card/m19/227/arcane-encyclopedia?utm_source=api"
   },
+  "audacity": {
+    "id": "audacity",
+    "name": "Audacity",
+    "manaCost": {
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "putIntoGraveyard",
+        "text": "When this Aura is put into a graveyard from the battlefield, draw a card.",
+        "trigger": "putIntoGraveyard",
+        "effect": {
+          "type": "drawCards",
+          "count": 1
+        }
+      }
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "keywords": [
+          "trample"
+        ]
+      }
+    ],
+    "text": "Enchant creature\nEnchanted creature gets +2/+0 and has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)\nWhen this Aura is put into a graveyard from the battlefield, draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/5/e51ed531-13bf-4c88-8a7c-e133038e65fb.jpg?1783908655",
+      "card": "https://cards.scryfall.io/normal/front/e/5/e51ed531-13bf-4c88-8a7c-e133038e65fb.jpg?1783908655"
+    },
+    "artist": "Rudy Siswanto",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "j25",
+    "collectorNumber": "631",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Enchant creature\nEnchanted creature gets +2/+0 and has trample. (It can deal excess combat damage to the player or planeswalker it's attacking.)\nWhen this Aura is put into a graveyard from the battlefield, draw a card.",
+    "scryfallId": "e51ed531-13bf-4c88-8a7c-e133038e65fb",
+    "scryfallUri": "https://scryfall.com/card/j25/631/audacity?utm_source=api"
+  },
   "basiliskCollar": {
     "id": "basiliskCollar",
     "name": "Basilisk Collar",
@@ -298,6 +393,59 @@ export const IMPORTED_CARDS = {
     "oracleText": "Equipped creature has deathtouch and lifelink. (Any amount of damage it deals to a creature is enough to destroy it. Damage dealt by this creature also causes you to gain that much life.)\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
     "scryfallId": "7b36fba7-71f7-4b7f-bde5-b3a9752ad21c",
     "scryfallUri": "https://scryfall.com/card/fdn/669/basilisk-collar?utm_source=api"
+  },
+  "beastKinRanger": {
+    "id": "beastKinRanger",
+    "name": "Beast-Kin Ranger",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Ranger"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "keywords": [
+      "trample"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "creatureEnters",
+        "text": "Whenever another creature you control enters, this creature gets +1/+0 until end of turn.",
+        "trigger": "creatureEnters",
+        "filter": {
+          "other": true
+        },
+        "effect": {
+          "type": "pump",
+          "power": 1,
+          "toughness": 0,
+          "affected": "source"
+        }
+      }
+    ],
+    "text": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever another creature you control enters, this creature gets +1/+0 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/1/0102e0be-5783-4825-9489-713b1b1df0b2.jpg?1783909098",
+      "card": "https://cards.scryfall.io/normal/front/0/1/0102e0be-5783-4825-9489-713b1b1df0b2.jpg?1783909098"
+    },
+    "artist": "Alexander Mokhov",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "fdn",
+    "collectorNumber": "100",
+    "typeLine": "Creature — Elf Ranger",
+    "oracleText": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nWhenever another creature you control enters, this creature gets +1/+0 until end of turn.",
+    "scryfallId": "0102e0be-5783-4825-9489-713b1b1df0b2",
+    "scryfallUri": "https://scryfall.com/card/fdn/100/beast-kin-ranger?utm_source=api"
   },
   "benalishMarshal": {
     "id": "benalishMarshal",
@@ -658,6 +806,66 @@ export const IMPORTED_CARDS = {
     "scryfallId": "9cff3fae-e072-4068-a1de-27de3d89c532",
     "scryfallUri": "https://scryfall.com/card/m19/48/cancel?utm_source=api"
   },
+  "canopyTactician": {
+    "id": "canopyTactician",
+    "name": "Canopy Tactician",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "abilities": [
+      {
+        "id": "tapForGGG",
+        "text": "{T}: Add {G}{G}{G}.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 3
+          }
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "other": true,
+        "subtypes": [
+          "Elf"
+        ]
+      }
+    ],
+    "text": "Other Elves you control get +1/+1.\n{T}: Add {G}{G}{G}.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/e/3eaf48c9-09bc-4d81-a3a5-432219a71754.jpg?1783928121",
+      "card": "https://cards.scryfall.io/normal/front/3/e/3eaf48c9-09bc-4d81-a3a5-432219a71754.jpg?1783928121"
+    },
+    "artist": "Ekaterina Burmak",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "khm",
+    "collectorNumber": "378",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "Other Elves you control get +1/+1.\n{T}: Add {G}{G}{G}.",
+    "scryfallId": "3eaf48c9-09bc-4d81-a3a5-432219a71754",
+    "scryfallUri": "https://scryfall.com/card/khm/378/canopy-tactician?utm_source=api"
+  },
   "cavalryDrillmaster": {
     "id": "cavalryDrillmaster",
     "name": "Cavalry Drillmaster",
@@ -874,6 +1082,70 @@ export const IMPORTED_CARDS = {
     "scryfallId": "e2111753-a930-403f-9d94-a86dfcb069da",
     "scryfallUri": "https://scryfall.com/card/m20/54/cloudkin-seer?utm_source=api"
   },
+  "coliseumBehemoth": {
+    "id": "coliseumBehemoth",
+    "name": "Coliseum Behemoth",
+    "manaCost": {
+      "generic": 5,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Beast"
+    ],
+    "power": 7,
+    "toughness": 7,
+    "keywords": [
+      "trample"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, choose one —\n• Destroy target artifact or enchantment.\n• Draw a card.",
+        "trigger": "entersBattlefield",
+        "effects": [],
+        "modes": [
+          {
+            "text": "Destroy target artifact or enchantment.",
+            "effects": [
+              {
+                "type": "destroy"
+              }
+            ],
+            "target": "artifactOrEnchantment"
+          },
+          {
+            "text": "Draw a card.",
+            "effects": [
+              {
+                "type": "drawCards",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "text": "Trample\nWhen this creature enters, choose one —\n• Destroy target artifact or enchantment.\n• Draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/0/900206f1-7dd6-4db9-a430-73e560fd196b.jpg?1783906589",
+      "card": "https://cards.scryfall.io/normal/front/9/0/900206f1-7dd6-4db9-a430-73e560fd196b.jpg?1783906589"
+    },
+    "artist": "Ryu Fujinaka",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "fin",
+    "collectorNumber": "181",
+    "typeLine": "Creature — Beast",
+    "oracleText": "Trample\nWhen this creature enters, choose one —\n• Destroy target artifact or enchantment.\n• Draw a card.",
+    "scryfallId": "900206f1-7dd6-4db9-a430-73e560fd196b",
+    "scryfallUri": "https://scryfall.com/card/fin/181/coliseum-behemoth?utm_source=api"
+  },
   "colossalDreadmaw": {
     "id": "colossalDreadmaw",
     "name": "Colossal Dreadmaw",
@@ -986,6 +1258,44 @@ export const IMPORTED_CARDS = {
     "oracleText": "Enchant creature\nEnchanted creature gets -1/-1 and can't block.",
     "scryfallId": "3f9c1ba3-8b7c-413b-865d-0ca4b2f55903",
     "scryfallUri": "https://scryfall.com/card/m15/92/crippling-blight?utm_source=api"
+  },
+  "dawnsLightArcher": {
+    "id": "dawnsLightArcher",
+    "name": "Dawn's Light Archer",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Archer"
+    ],
+    "power": 4,
+    "toughness": 2,
+    "keywords": [
+      "flash",
+      "reach"
+    ],
+    "text": "Flash\nReach",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/6/76e80656-6bcb-4d99-8bd2-ca5f75f40daf.jpg?1783904429",
+      "card": "https://cards.scryfall.io/normal/front/7/6/76e80656-6bcb-4d99-8bd2-ca5f75f40daf.jpg?1783904429"
+    },
+    "artist": "Scott Gustafson",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ecl",
+    "collectorNumber": "174",
+    "typeLine": "Creature — Elf Archer",
+    "oracleText": "Flash\nReach",
+    "scryfallId": "76e80656-6bcb-4d99-8bd2-ca5f75f40daf",
+    "scryfallUri": "https://scryfall.com/card/ecl/174/dawns-light-archer?utm_source=api"
   },
   "dawnwingMarshal": {
     "id": "dawnwingMarshal",
@@ -1337,6 +1647,215 @@ export const IMPORTED_CARDS = {
     "scryfallId": "76ceff1d-9e83-41cc-b54b-8bf90d985da9",
     "scryfallUri": "https://scryfall.com/card/m19/177/druid-of-the-cowl?utm_source=api"
   },
+  "dwynenGiltLeafDaen": {
+    "id": "dwynenGiltLeafDaen",
+    "name": "Dwynen, Gilt-Leaf Daen",
+    "manaCost": {
+      "generic": 2,
+      "G": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 3,
+    "toughness": 4,
+    "keywords": [
+      "reach"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "attacks",
+        "text": "Whenever Dwynen attacks, you gain 1 life for each attacking Elf you control.",
+        "trigger": "attacks",
+        "effect": {
+          "type": "gainLife",
+          "amount": 1,
+          "per": {
+            "of": "creatures",
+            "subtypes": [
+              "Elf"
+            ],
+            "attacking": true
+          }
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "other": true,
+        "subtypes": [
+          "Elf"
+        ]
+      }
+    ],
+    "text": "Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/1/01c00d7b-7fac-4f8c-a1ea-de2cf4d06627.jpg?1783909060",
+      "card": "https://cards.scryfall.io/normal/front/0/1/01c00d7b-7fac-4f8c-a1ea-de2cf4d06627.jpg?1783909060"
+    },
+    "artist": "Johannes Voss",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "217",
+    "typeLine": "Legendary Creature — Elf Warrior",
+    "oracleText": "Reach (This creature can block creatures with flying.)\nOther Elf creatures you control get +1/+1.\nWhenever Dwynen attacks, you gain 1 life for each attacking Elf you control.",
+    "scryfallId": "01c00d7b-7fac-4f8c-a1ea-de2cf4d06627",
+    "scryfallUri": "https://scryfall.com/card/fdn/217/dwynen-gilt-leaf-daen?utm_source=api"
+  },
+  "elderGargaroth": {
+    "id": "elderGargaroth",
+    "name": "Elder Gargaroth",
+    "manaCost": {
+      "generic": 3,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Beast"
+    ],
+    "power": 6,
+    "toughness": 6,
+    "keywords": [
+      "reach",
+      "vigilance",
+      "trample"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "attacksOrBlocks",
+        "text": "Whenever this creature attacks or blocks, choose one —\n• Create a 3/3 green Beast creature token.\n• You gain 3 life.\n• Draw a card.",
+        "trigger": "attacksOrBlocks",
+        "effects": [],
+        "modes": [
+          {
+            "text": "Create a 3/3 green Beast creature token.",
+            "effects": [
+              {
+                "type": "createToken",
+                "count": 1,
+                "token": {
+                  "colors": [
+                    "green"
+                  ],
+                  "subtypes": [
+                    "Beast"
+                  ],
+                  "power": 3,
+                  "toughness": 3
+                }
+              }
+            ]
+          },
+          {
+            "text": "You gain 3 life.",
+            "effects": [
+              {
+                "type": "gainLife",
+                "amount": 3
+              }
+            ]
+          },
+          {
+            "text": "Draw a card.",
+            "effects": [
+              {
+                "type": "drawCards",
+                "count": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "text": "Reach, vigilance, trample\nWhenever this creature attacks or blocks, choose one —\n• Create a 3/3 green Beast creature token.\n• You gain 3 life.\n• Draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/e/be0d51ff-9a01-41bd-8e80-ee1e7117d695.jpg?1789753265",
+      "card": "https://cards.scryfall.io/normal/front/b/e/be0d51ff-9a01-41bd-8e80-ee1e7117d695.jpg?1789753265"
+    },
+    "artist": "Nicholas Gregory",
+    "colors": [
+      "G"
+    ],
+    "rarity": "mythic",
+    "set": "fdc",
+    "collectorNumber": "200",
+    "typeLine": "Creature — Beast",
+    "oracleText": "Reach, vigilance, trample\nWhenever this creature attacks or blocks, choose one —\n• Create a 3/3 green Beast creature token.\n• You gain 3 life.\n• Draw a card.",
+    "scryfallId": "be0d51ff-9a01-41bd-8e80-ee1e7117d695",
+    "scryfallUri": "https://scryfall.com/card/fdc/200/elder-gargaroth?utm_source=api"
+  },
+  "elderleafMentor": {
+    "id": "elderleafMentor",
+    "name": "Elderleaf Mentor",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 3,
+    "toughness": 2,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, create a 1/1 green Elf Warrior creature token.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "createToken",
+          "count": 1,
+          "token": {
+            "colors": [
+              "green"
+            ],
+            "subtypes": [
+              "Elf",
+              "Warrior"
+            ],
+            "power": 1,
+            "toughness": 1
+          }
+        }
+      }
+    ],
+    "text": "When this creature enters, create a 1/1 green Elf Warrior creature token.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/1/a175c5cf-b33d-481d-b093-57072f6f671e.jpg?1783918879",
+      "card": "https://cards.scryfall.io/normal/front/a/1/a175c5cf-b33d-481d-b093-57072f6f671e.jpg?1783918879"
+    },
+    "artist": "Zoltan Boros",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "j22",
+    "collectorNumber": "652",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "When this creature enters, create a 1/1 green Elf Warrior creature token.",
+    "scryfallId": "a175c5cf-b33d-481d-b093-57072f6f671e",
+    "scryfallUri": "https://scryfall.com/card/j22/652/elderleaf-mentor?utm_source=api"
+  },
   "electrify": {
     "id": "electrify",
     "name": "Electrify",
@@ -1372,6 +1891,299 @@ export const IMPORTED_CARDS = {
     "oracleText": "Electrify deals 4 damage to target creature.",
     "scryfallId": "60bee89d-d916-4095-830f-6270f8c4f0d8",
     "scryfallUri": "https://scryfall.com/card/m19/139/electrify?utm_source=api"
+  },
+  "elfswornGiant": {
+    "id": "elfswornGiant",
+    "name": "Elfsworn Giant",
+    "manaCost": {
+      "generic": 3,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Giant"
+    ],
+    "power": 5,
+    "toughness": 3,
+    "keywords": [
+      "reach"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "landEnters",
+        "text": "Landfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.",
+        "trigger": "landEnters",
+        "effect": {
+          "type": "createToken",
+          "count": 1,
+          "token": {
+            "colors": [
+              "green"
+            ],
+            "subtypes": [
+              "Elf",
+              "Warrior"
+            ],
+            "power": 1,
+            "toughness": 1
+          }
+        }
+      }
+    ],
+    "text": "Reach (This creature can block creatures with flying.)\nLandfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/1/5128a5be-ffa6-4998-8488-872d80b24cb2.jpg?1783909097",
+      "card": "https://cards.scryfall.io/normal/front/5/1/5128a5be-ffa6-4998-8488-872d80b24cb2.jpg?1783909097"
+    },
+    "artist": "Dave Dorman",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "fdn",
+    "collectorNumber": "103",
+    "typeLine": "Creature — Giant",
+    "oracleText": "Reach (This creature can block creatures with flying.)\nLandfall — Whenever a land you control enters, create a 1/1 green Elf Warrior creature token.",
+    "scryfallId": "5128a5be-ffa6-4998-8488-872d80b24cb2",
+    "scryfallUri": "https://scryfall.com/card/fdn/103/elfsworn-giant?utm_source=api"
+  },
+  "elvishArchdruid": {
+    "id": "elvishArchdruid",
+    "name": "Elvish Archdruid",
+    "manaCost": {
+      "generic": 1,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Druid"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: Add {G} for each Elf you control.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 1
+          },
+          "per": {
+            "of": "creatures",
+            "subtypes": [
+              "Elf"
+            ]
+          }
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "other": true,
+        "subtypes": [
+          "Elf"
+        ]
+      }
+    ],
+    "text": "Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/f/bf8eba57-8c51-490b-995f-53eeb7ad574f.jpg?1783940473",
+      "card": "https://cards.scryfall.io/normal/front/b/f/bf8eba57-8c51-490b-995f-53eeb7ad574f.jpg?1783940473"
+    },
+    "artist": "Karl Kopinski",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "m13",
+    "collectorNumber": "168",
+    "typeLine": "Creature — Elf Druid",
+    "oracleText": "Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.",
+    "scryfallId": "bf8eba57-8c51-490b-995f-53eeb7ad574f",
+    "scryfallUri": "https://scryfall.com/card/m13/168/elvish-archdruid?utm_source=api"
+  },
+  "elvishArchers": {
+    "id": "elvishArchers",
+    "name": "Elvish Archers",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Archer"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "keywords": [
+      "first strike"
+    ],
+    "text": "First strike",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/e/0e8411c9-4f6f-4301-ac36-386016a32852.jpg?1783945432",
+      "card": "https://cards.scryfall.io/normal/front/0/e/0e8411c9-4f6f-4301-ac36-386016a32852.jpg?1783945432"
+    },
+    "artist": "Doug Chaffee",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "7ed",
+    "collectorNumber": "239",
+    "typeLine": "Creature — Elf Archer",
+    "oracleText": "First strike",
+    "scryfallId": "0e8411c9-4f6f-4301-ac36-386016a32852",
+    "scryfallUri": "https://scryfall.com/card/7ed/239/elvish-archers?utm_source=api"
+  },
+  "elvishRegrower": {
+    "id": "elvishRegrower",
+    "name": "Elvish Regrower",
+    "manaCost": {
+      "generic": 2,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Druid"
+    ],
+    "power": 4,
+    "toughness": 3,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, return target permanent card from your graveyard to your hand.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "returnFromGraveyard"
+        },
+        "target": "permanentCardInYourGraveyard"
+      }
+    ],
+    "text": "When this creature enters, return target permanent card from your graveyard to your hand.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/6/2694e3cd-26ed-4a10-ae55-fb84d7800253.jpg?1783909097",
+      "card": "https://cards.scryfall.io/normal/front/2/6/2694e3cd-26ed-4a10-ae55-fb84d7800253.jpg?1783909097"
+    },
+    "artist": "Zoltan Boros",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "fdn",
+    "collectorNumber": "104",
+    "typeLine": "Creature — Elf Druid",
+    "oracleText": "When this creature enters, return target permanent card from your graveyard to your hand.",
+    "scryfallId": "2694e3cd-26ed-4a10-ae55-fb84d7800253",
+    "scryfallUri": "https://scryfall.com/card/fdn/104/elvish-regrower?utm_source=api"
+  },
+  "elvishVanguard": {
+    "id": "elvishVanguard",
+    "name": "Elvish Vanguard",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "triggeredAbilities": [
+      {
+        "id": "creatureEnters",
+        "text": "Whenever another Elf enters, put a +1/+1 counter on this creature.",
+        "trigger": "creatureEnters",
+        "filter": {
+          "other": true,
+          "controller": "any",
+          "subtypes": [
+            "Elf"
+          ]
+        },
+        "effect": {
+          "type": "addCounters",
+          "counter": "+1/+1",
+          "count": 1,
+          "affected": "source"
+        }
+      }
+    ],
+    "text": "Whenever another Elf enters, put a +1/+1 counter on this creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/1/311dd5e5-8dc1-4de4-8bfb-3024e3ff8bf2.jpg?1783937567",
+      "card": "https://cards.scryfall.io/normal/front/3/1/311dd5e5-8dc1-4de4-8bfb-3024e3ff8bf2.jpg?1783937567"
+    },
+    "artist": "Steve Prescott",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ema",
+    "collectorNumber": "164",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "Whenever another Elf enters, put a +1/+1 counter on this creature.",
+    "scryfallId": "311dd5e5-8dc1-4de4-8bfb-3024e3ff8bf2",
+    "scryfallUri": "https://scryfall.com/card/ema/164/elvish-vanguard?utm_source=api"
+  },
+  "elvishWarrior": {
+    "id": "elvishWarrior",
+    "name": "Elvish Warrior",
+    "manaCost": {
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 2,
+    "toughness": 3,
+    "text": "",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/c/2c6b767b-49e5-4845-9b3f-29540e5fa330.jpg?1783945042",
+      "card": "https://cards.scryfall.io/normal/front/2/c/2c6b767b-49e5-4845-9b3f-29540e5fa330.jpg?1783945042"
+    },
+    "artist": "Christopher Moeller",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ons",
+    "collectorNumber": "260",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "",
+    "scryfallId": "2c6b767b-49e5-4845-9b3f-29540e5fa330",
+    "scryfallUri": "https://scryfall.com/card/ons/260/elvish-warrior?utm_source=api"
   },
   "emberHauler": {
     "id": "emberHauler",
@@ -1551,6 +2363,48 @@ export const IMPORTED_CARDS = {
     "oracleText": "Haste (This creature can attack and {T} as soon as it comes under your control.)\n{T}, Sacrifice this creature: It deals 1 damage to any target.",
     "scryfallId": "d1296316-7781-4e98-95e6-7020648be6a5",
     "scryfallUri": "https://scryfall.com/card/fdn/195/fanatical-firebrand?utm_source=api"
+  },
+  "feralInvocation": {
+    "id": "feralInvocation",
+    "name": "Feral Invocation",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Aura"
+    ],
+    "keywords": [
+      "flash"
+    ],
+    "enchant": "creature",
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 2,
+        "toughness": 2
+      }
+    ],
+    "text": "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature gets +2/+2.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/c/5c1f15a2-0058-4188-9696-385fa6974bd4.jpg?1783939745",
+      "card": "https://cards.scryfall.io/normal/front/5/c/5c1f15a2-0058-4188-9696-385fa6974bd4.jpg?1783939745"
+    },
+    "artist": "Mathias Kollros",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ths",
+    "collectorNumber": "158",
+    "typeLine": "Enchantment — Aura",
+    "oracleText": "Flash (You may cast this spell any time you could cast an instant.)\nEnchant creature\nEnchanted creature gets +2/+2.",
+    "scryfallId": "5c1f15a2-0058-4188-9696-385fa6974bd4",
+    "scryfallUri": "https://scryfall.com/card/ths/158/feral-invocation?utm_source=api"
   },
   "fetidImp": {
     "id": "fetidImp",
@@ -1743,6 +2597,89 @@ export const IMPORTED_CARDS = {
     "scryfallId": "e0aa62c0-d24b-4bce-9f2b-d42402b0830c",
     "scryfallUri": "https://scryfall.com/card/m19/56/frilled-sea-serpent?utm_source=api"
   },
+  "gaeasCradle": {
+    "id": "gaeasCradle",
+    "name": "Gaea's Cradle",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: Add {G} for each creature you control.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 1
+          },
+          "per": {
+            "of": "creatures"
+          }
+        }
+      }
+    ],
+    "text": "{T}: Add {G} for each creature you control.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/5/25b0b816-0583-44aa-9dc5-f3ff48993a51.jpg?1783946299",
+      "card": "https://cards.scryfall.io/normal/front/2/5/25b0b816-0583-44aa-9dc5-f3ff48993a51.jpg?1783946299"
+    },
+    "artist": "Mark Zug",
+    "colors": [],
+    "rarity": "rare",
+    "set": "usg",
+    "collectorNumber": "321",
+    "typeLine": "Legendary Land",
+    "oracleText": "{T}: Add {G} for each creature you control.",
+    "scryfallId": "25b0b816-0583-44aa-9dc5-f3ff48993a51",
+    "scryfallUri": "https://scryfall.com/card/usg/321/gaeas-cradle?utm_source=api"
+  },
+  "galewindMoose": {
+    "id": "galewindMoose",
+    "name": "Galewind Moose",
+    "manaCost": {
+      "generic": 4,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elemental",
+      "Elk"
+    ],
+    "power": 6,
+    "toughness": 6,
+    "keywords": [
+      "flash",
+      "reach",
+      "vigilance",
+      "trample"
+    ],
+    "text": "Flash\nReach, vigilance, trample",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/8/58706bd8-558a-43b9-9f1e-c1ff0044203b.jpg?1783910810",
+      "card": "https://cards.scryfall.io/normal/front/5/8/58706bd8-558a-43b9-9f1e-c1ff0044203b.jpg?1783910810"
+    },
+    "artist": "Valera Lutfullina",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "blb",
+    "collectorNumber": "173",
+    "typeLine": "Creature — Elemental Elk",
+    "oracleText": "Flash\nReach, vigilance, trample",
+    "scryfallId": "58706bd8-558a-43b9-9f1e-c1ff0044203b",
+    "scryfallUri": "https://scryfall.com/card/blb/173/galewind-moose?utm_source=api"
+  },
   "gallantCavalry": {
     "id": "gallantCavalry",
     "name": "Gallant Cavalry",
@@ -1803,6 +2740,50 @@ export const IMPORTED_CARDS = {
     "oracleText": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, create a 2/2 white Knight creature token with vigilance.",
     "scryfallId": "e388c433-3a37-45f6-825a-d13d2223b6f7",
     "scryfallUri": "https://scryfall.com/card/m19/12/gallant-cavalry?utm_source=api"
+  },
+  "ghaltaPrimalHunger": {
+    "id": "ghaltaPrimalHunger",
+    "name": "Ghalta, Primal Hunger",
+    "manaCost": {
+      "generic": 10,
+      "G": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elder",
+      "Dinosaur"
+    ],
+    "power": 12,
+    "toughness": 12,
+    "keywords": [
+      "trample"
+    ],
+    "costReduction": {
+      "per": {
+        "of": "power"
+      }
+    },
+    "text": "This spell costs {X} less to cast, where X is the total power of creatures you control.\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/5/3584c119-8302-40ed-8949-1a8de4b15e0d.jpg?1783908847",
+      "card": "https://cards.scryfall.io/normal/front/3/5/3584c119-8302-40ed-8949-1a8de4b15e0d.jpg?1783908847"
+    },
+    "artist": "Kemonomichi",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "j25",
+    "collectorNumber": "77",
+    "typeLine": "Legendary Creature — Elder Dinosaur",
+    "oracleText": "This spell costs {X} less to cast, where X is the total power of creatures you control.\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "scryfallId": "3584c119-8302-40ed-8949-1a8de4b15e0d",
+    "scryfallUri": "https://scryfall.com/card/j25/77/ghalta-primal-hunger?utm_source=api"
   },
   "giantGrowth": {
     "id": "giantGrowth",
@@ -2370,6 +3351,78 @@ export const IMPORTED_CARDS = {
     "scryfallId": "ad6d0a11-3a9c-4de0-9a46-06d2b9356eb7",
     "scryfallUri": "https://scryfall.com/card/m19/147/hostile-minotaur?utm_source=api"
   },
+  "imperiousPerfect": {
+    "id": "imperiousPerfect",
+    "name": "Imperious Perfect",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{G}, {T}: Create a 1/1 green Elf Warrior creature token.",
+        "cost": {
+          "mana": {
+            "G": 1
+          },
+          "tap": true
+        },
+        "effect": {
+          "type": "createToken",
+          "count": 1,
+          "token": {
+            "colors": [
+              "green"
+            ],
+            "subtypes": [
+              "Elf",
+              "Warrior"
+            ],
+            "power": 1,
+            "toughness": 1
+          }
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "other": true,
+        "subtypes": [
+          "Elf"
+        ]
+      }
+    ],
+    "text": "Other Elves you control get +1/+1.\n{G}, {T}: Create a 1/1 green Elf Warrior creature token.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/4/e/4ef8940a-d1d9-460e-9949-89bb30f9e6d6.jpg?1783928792",
+      "card": "https://cards.scryfall.io/normal/front/4/e/4ef8940a-d1d9-460e-9949-89bb30f9e6d6.jpg?1783928792"
+    },
+    "artist": "Scott M. Fischer",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "cmr",
+    "collectorNumber": "235",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "Other Elves you control get +1/+1.\n{G}, {T}: Create a 1/1 green Elf Warrior creature token.",
+    "scryfallId": "4ef8940a-d1d9-460e-9949-89bb30f9e6d6",
+    "scryfallUri": "https://scryfall.com/card/cmr/235/imperious-perfect?utm_source=api"
+  },
   "inspiredCharge": {
     "id": "inspiredCharge",
     "name": "Inspired Charge",
@@ -2406,6 +3459,70 @@ export const IMPORTED_CARDS = {
     "oracleText": "Creatures you control get +2/+1 until end of turn.",
     "scryfallId": "812cf63f-aa3d-405b-92e1-7ffa31352481",
     "scryfallUri": "https://scryfall.com/card/m19/15/inspired-charge?utm_source=api"
+  },
+  "inspiringBard": {
+    "id": "inspiringBard",
+    "name": "Inspiring Bard",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Bard"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, choose one —\n• Bardic Inspiration — Target creature gets +2/+2 until end of turn.\n• Song of Rest — You gain 3 life.",
+        "trigger": "entersBattlefield",
+        "effects": [],
+        "modes": [
+          {
+            "text": "Bardic Inspiration — Target creature gets +2/+2 until end of turn.",
+            "effects": [
+              {
+                "type": "pump",
+                "power": 2,
+                "toughness": 2
+              }
+            ],
+            "target": "creature"
+          },
+          {
+            "text": "Song of Rest — You gain 3 life.",
+            "effects": [
+              {
+                "type": "gainLife",
+                "amount": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "text": "When this creature enters, choose one —\n• Bardic Inspiration — Target creature gets +2/+2 until end of turn.\n• Song of Rest — You gain 3 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/b/0b33db66-d205-4164-b168-6084df562ebb.jpg?1783926461",
+      "card": "https://cards.scryfall.io/normal/front/0/b/0b33db66-d205-4164-b168-6084df562ebb.jpg?1783926461"
+    },
+    "artist": "Eelis Kyttanen",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "afr",
+    "collectorNumber": "189",
+    "typeLine": "Creature — Elf Bard",
+    "oracleText": "When this creature enters, choose one —\n• Bardic Inspiration — Target creature gets +2/+2 until end of turn.\n• Song of Rest — You gain 3 life.",
+    "scryfallId": "0b33db66-d205-4164-b168-6084df562ebb",
+    "scryfallUri": "https://scryfall.com/card/afr/189/inspiring-bard?utm_source=api"
   },
   "inspiringCaptain": {
     "id": "inspiringCaptain",
@@ -3329,6 +4446,64 @@ export const IMPORTED_CARDS = {
     "scryfallId": "d1ca08a0-c58d-4c13-bf63-0401d89839b4",
     "scryfallUri": "https://scryfall.com/card/m20/341/oakenform?utm_source=api"
   },
+  "oranRiefTheVastwood": {
+    "id": "oranRiefTheVastwood",
+    "name": "Oran-Rief, the Vastwood",
+    "supertypes": [],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForG",
+        "text": "{T}: Add {G}.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 1
+          }
+        }
+      },
+      {
+        "id": "ability2",
+        "text": "{T}: Put a +1/+1 counter on each green creature that entered this turn.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addCounters",
+          "counter": "+1/+1",
+          "count": 1,
+          "filter": {
+            "colors": [
+              "G"
+            ],
+            "enteredThisTurn": true
+          },
+          "affected": "eachCreature"
+        }
+      }
+    ],
+    "entersTapped": true,
+    "text": "This land enters tapped.\n{T}: Add {G}.\n{T}: Put a +1/+1 counter on each green creature that entered this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/c/fc3d73d8-47cd-481c-ae13-9d993fd54420.jpg?1783910636",
+      "card": "https://cards.scryfall.io/normal/front/f/c/fc3d73d8-47cd-481c-ae13-9d993fd54420.jpg?1783910636"
+    },
+    "artist": "Mike Bierek",
+    "colors": [],
+    "rarity": "rare",
+    "set": "blc",
+    "collectorNumber": "320",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\n{T}: Add {G}.\n{T}: Put a +1/+1 counter on each green creature that entered this turn.",
+    "scryfallId": "fc3d73d8-47cd-481c-ae13-9d993fd54420",
+    "scryfallUri": "https://scryfall.com/card/blc/320/oran-rief-the-vastwood?utm_source=api"
+  },
   "overcome": {
     "id": "overcome",
     "name": "Overcome",
@@ -3676,6 +4851,44 @@ export const IMPORTED_CARDS = {
     "scryfallId": "0b1b55c1-d74b-4688-a3b8-8480d99524c7",
     "scryfallUri": "https://scryfall.com/card/m19/261/plains?utm_source=api"
   },
+  "pounce": {
+    "id": "pounce",
+    "name": "Pounce",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "fight"
+      }
+    ],
+    "targets": [
+      "creatureYouControl",
+      "creatureOpponentControls"
+    ],
+    "text": "Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/b/2b96cba6-33d7-4e1d-88f7-da3da681540d.jpg?1783935721",
+      "card": "https://cards.scryfall.io/normal/front/2/b/2b96cba6-33d7-4e1d-88f7-da3da681540d.jpg?1783935721"
+    },
+    "artist": "Lucas Graciano",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "xln",
+    "collectorNumber": "200",
+    "typeLine": "Instant",
+    "oracleText": "Target creature you control fights target creature you don't control. (Each deals damage equal to its power to the other.)",
+    "scryfallId": "2b96cba6-33d7-4e1d-88f7-da3da681540d",
+    "scryfallUri": "https://scryfall.com/card/xln/200/pounce?utm_source=api"
+  },
   "preposterousProportions": {
     "id": "preposterousProportions",
     "name": "Preposterous Proportions",
@@ -3715,6 +4928,62 @@ export const IMPORTED_CARDS = {
     "oracleText": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
     "scryfallId": "acb65189-60e4-42e0-9fb1-da6b716b91d7",
     "scryfallUri": "https://scryfall.com/card/fdn/109/preposterous-proportions?utm_source=api"
+  },
+  "priestOfTitania": {
+    "id": "priestOfTitania",
+    "name": "Priest of Titania",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Druid"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: Add {G} for each Elf on the battlefield.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 1
+          },
+          "per": {
+            "of": "creatures",
+            "controller": "any",
+            "subtypes": [
+              "Elf"
+            ]
+          }
+        }
+      }
+    ],
+    "text": "{T}: Add {G} for each Elf on the battlefield.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/2/a2180068-c4a2-4b52-8705-f2a87e81ec93.jpg?1783938829",
+      "card": "https://cards.scryfall.io/normal/front/a/2/a2180068-c4a2-4b52-8705-f2a87e81ec93.jpg?1783938829"
+    },
+    "artist": "Rebecca Guay",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "c14",
+    "collectorNumber": "210",
+    "typeLine": "Creature — Elf Druid",
+    "oracleText": "{T}: Add {G} for each Elf on the battlefield.",
+    "scryfallId": "a2180068-c4a2-4b52-8705-f2a87e81ec93",
+    "scryfallUri": "https://scryfall.com/card/c14/210/priest-of-titania?utm_source=api"
   },
   "prodigalPyromancer": {
     "id": "prodigalPyromancer",
@@ -3907,6 +5176,52 @@ export const IMPORTED_CARDS = {
     "scryfallId": "2c9bf6d8-ebf6-40ff-858a-3483d19bb584",
     "scryfallUri": "https://scryfall.com/card/m20/153/rapacious-dragon?utm_source=api"
   },
+  "reclamationSage": {
+    "id": "reclamationSage",
+    "name": "Reclamation Sage",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Shaman"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield",
+        "text": "When this creature enters, you may destroy target artifact or enchantment.",
+        "trigger": "entersBattlefield",
+        "effect": {
+          "type": "destroy"
+        },
+        "target": "artifactOrEnchantment",
+        "optional": true
+      }
+    ],
+    "text": "When this creature enters, you may destroy target artifact or enchantment.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/9/2951026c-69bb-4ffc-a24f-b0795a12aa79.jpg?1783934530",
+      "card": "https://cards.scryfall.io/normal/front/2/9/2951026c-69bb-4ffc-a24f-b0795a12aa79.jpg?1783934530"
+    },
+    "artist": "Christopher Moeller",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "m19",
+    "collectorNumber": "196",
+    "typeLine": "Creature — Elf Shaman",
+    "oracleText": "When this creature enters, you may destroy target artifact or enchantment.",
+    "scryfallId": "2951026c-69bb-4ffc-a24f-b0795a12aa79",
+    "scryfallUri": "https://scryfall.com/card/m19/196/reclamation-sage?utm_source=api"
+  },
   "revitalize": {
     "id": "revitalize",
     "name": "Revitalize",
@@ -4088,6 +5403,60 @@ export const IMPORTED_CARDS = {
     "oracleText": "{T}: Add {C}.\n{4}, {T}: Target creature can't be blocked this turn.",
     "scryfallId": "a2a424ea-ef32-4ac5-8f8c-3ea1839f01d4",
     "scryfallUri": "https://scryfall.com/card/fdn/264/rogues-passage?utm_source=api"
+  },
+  "safewrightCavalry": {
+    "id": "safewrightCavalry",
+    "name": "Safewright Cavalry",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior"
+    ],
+    "power": 4,
+    "toughness": 4,
+    "keywords": [
+      "can't be blocked by more than one creature"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{5}: Target Elf you control gets +2/+2 until end of turn.",
+        "cost": {
+          "mana": {
+            "generic": 5
+          }
+        },
+        "effect": {
+          "type": "pump",
+          "power": 2,
+          "toughness": 2
+        },
+        "target": "elfYouControl"
+      }
+    ],
+    "text": "This creature can't be blocked by more than one creature.\n{5}: Target Elf you control gets +2/+2 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/7/f7de412a-9731-4bfc-8fbc-c95988a3dd70.jpg?1783904425",
+      "card": "https://cards.scryfall.io/normal/front/f/7/f7de412a-9731-4bfc-8fbc-c95988a3dd70.jpg?1783904425"
+    },
+    "artist": "Milivoj Ćeran",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ecl",
+    "collectorNumber": "191",
+    "typeLine": "Creature — Elf Warrior",
+    "oracleText": "This creature can't be blocked by more than one creature.\n{5}: Target Elf you control gets +2/+2 until end of turn.",
+    "scryfallId": "f7de412a-9731-4bfc-8fbc-c95988a3dd70",
+    "scryfallUri": "https://scryfall.com/card/ecl/191/safewright-cavalry?utm_source=api"
   },
   "savannahLions": {
     "id": "savannahLions",
@@ -4282,6 +5651,61 @@ export const IMPORTED_CARDS = {
     "oracleText": "Shock deals 2 damage to any target.",
     "scryfallId": "59fa8e8d-bcb8-47bf-b71a-df11c8d0f2c9",
     "scryfallUri": "https://scryfall.com/card/m21/159/shock?utm_source=api"
+  },
+  "shortBow": {
+    "id": "shortBow",
+    "name": "Short Bow",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {1}",
+        "cost": {
+          "mana": {
+            "generic": 1
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 1,
+        "keywords": [
+          "reach",
+          "vigilance"
+        ]
+      }
+    ],
+    "text": "Equipped creature gets +1/+1 and has reach and vigilance.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/5/1/51d8b72b-fa8f-48d3-bddc-d3ce9b8ba2ea.jpg?1783910786",
+      "card": "https://cards.scryfall.io/normal/front/5/1/51d8b72b-fa8f-48d3-bddc-d3ce9b8ba2ea.jpg?1783910786"
+    },
+    "artist": "Zara Alfonso",
+    "colors": [],
+    "rarity": "uncommon",
+    "set": "blb",
+    "collectorNumber": "248",
+    "typeLine": "Artifact — Equipment",
+    "oracleText": "Equipped creature gets +1/+1 and has reach and vigilance.\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "scryfallId": "51d8b72b-fa8f-48d3-bddc-d3ce9b8ba2ea",
+    "scryfallUri": "https://scryfall.com/card/blb/248/short-bow?utm_source=api"
   },
   "shortSword": {
     "id": "shortSword",
@@ -4792,6 +6216,42 @@ export const IMPORTED_CARDS = {
     "scryfallId": "6859a5ba-1c1c-4631-bba8-f9900b827178",
     "scryfallUri": "https://scryfall.com/card/fdn/71/stab?utm_source=api"
   },
+  "steelLeafChampion": {
+    "id": "steelLeafChampion",
+    "name": "Steel Leaf Champion",
+    "manaCost": {
+      "G": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Knight"
+    ],
+    "power": 5,
+    "toughness": 4,
+    "keywords": [
+      "can't be blocked by power 2 or less"
+    ],
+    "text": "This creature can't be blocked by creatures with power 2 or less.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/5/d5362bf5-de79-4ad8-866a-1c590998fc96.jpg?1789753305",
+      "card": "https://cards.scryfall.io/normal/front/d/5/d5362bf5-de79-4ad8-866a-1c590998fc96.jpg?1789753305"
+    },
+    "artist": "Chris Rahn",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "fdc",
+    "collectorNumber": "230",
+    "typeLine": "Creature — Elf Knight",
+    "oracleText": "This creature can't be blocked by creatures with power 2 or less.",
+    "scryfallId": "d5362bf5-de79-4ad8-866a-1c590998fc96",
+    "scryfallUri": "https://scryfall.com/card/fdc/230/steel-leaf-champion?utm_source=api"
+  },
   "stoneGolem": {
     "id": "stoneGolem",
     "name": "Stone Golem",
@@ -5020,6 +6480,45 @@ export const IMPORTED_CARDS = {
     "scryfallId": "96fc0138-46fc-493c-8a28-8630c4759193",
     "scryfallUri": "https://scryfall.com/card/m11/216/sword-of-vengeance?utm_source=api"
   },
+  "tajuruPathwarden": {
+    "id": "tajuruPathwarden",
+    "name": "Tajuru Pathwarden",
+    "manaCost": {
+      "generic": 4,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Warrior",
+      "Ally"
+    ],
+    "power": 5,
+    "toughness": 4,
+    "keywords": [
+      "vigilance",
+      "trample"
+    ],
+    "text": "Vigilance (Attacking doesn't cause this creature to tap.)\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/0/b073e75b-b432-41a5-a71e-d169fecf774f.jpg?1783937900",
+      "card": "https://cards.scryfall.io/normal/front/b/0/b073e75b-b432-41a5-a71e-d169fecf774f.jpg?1783937900"
+    },
+    "artist": "Victor Adame Minguez",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ogw",
+    "collectorNumber": "145",
+    "typeLine": "Creature — Elf Warrior Ally",
+    "oracleText": "Vigilance (Attacking doesn't cause this creature to tap.)\nTrample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "scryfallId": "b073e75b-b432-41a5-a71e-d169fecf774f",
+    "scryfallUri": "https://scryfall.com/card/ogw/145/tajuru-pathwarden?utm_source=api"
+  },
   "tatteredMummy": {
     "id": "tatteredMummy",
     "name": "Tattered Mummy",
@@ -5065,6 +6564,41 @@ export const IMPORTED_CARDS = {
     "oracleText": "When this creature dies, each opponent loses 2 life.",
     "scryfallId": "6a27ce41-69e7-4b86-9b9c-1a724d0728e9",
     "scryfallUri": "https://scryfall.com/card/m19/295/tattered-mummy?utm_source=api"
+  },
+  "tauntingElf": {
+    "id": "tauntingElf",
+    "name": "Taunting Elf",
+    "manaCost": {
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf"
+    ],
+    "power": 0,
+    "toughness": 1,
+    "keywords": [
+      "all creatures able to block it do so"
+    ],
+    "text": "All creatures able to block this creature do so.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/b/6b24af94-9632-47da-9bf3-e81bb743cd43.jpg?1783945036",
+      "card": "https://cards.scryfall.io/normal/front/6/b/6b24af94-9632-47da-9bf3-e81bb743cd43.jpg?1783945036"
+    },
+    "artist": "Rebecca Guay",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "ons",
+    "collectorNumber": "290",
+    "typeLine": "Creature — Elf",
+    "oracleText": "All creatures able to block this creature do so.",
+    "scryfallId": "6b24af94-9632-47da-9bf3-e81bb743cd43",
+    "scryfallUri": "https://scryfall.com/card/ons/290/taunting-elf?utm_source=api"
   },
   "thornhideWolves": {
     "id": "thornhideWolves",
@@ -5186,6 +6720,114 @@ export const IMPORTED_CARDS = {
     "scryfallId": "f4af156d-0fbf-4a4e-b0c1-db7e95be4903",
     "scryfallUri": "https://scryfall.com/card/m21/165/thrill-of-possibility?utm_source=api"
   },
+  "timberwatchElf": {
+    "id": "timberwatchElf",
+    "name": "Timberwatch Elf",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf"
+    ],
+    "power": 1,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "pump",
+          "power": 1,
+          "toughness": 1,
+          "per": {
+            "of": "creatures",
+            "controller": "any",
+            "subtypes": [
+              "Elf"
+            ]
+          }
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "{T}: Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/3/e3c2e98a-d9ef-4973-a0f1-ea9f7d0828f6.jpg?1783938826",
+      "card": "https://cards.scryfall.io/normal/front/e/3/e3c2e98a-d9ef-4973-a0f1-ea9f7d0828f6.jpg?1783938826"
+    },
+    "artist": "Dave Dorman",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "c14",
+    "collectorNumber": "220",
+    "typeLine": "Creature — Elf",
+    "oracleText": "{T}: Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield.",
+    "scryfallId": "e3c2e98a-d9ef-4973-a0f1-ea9f7d0828f6",
+    "scryfallUri": "https://scryfall.com/card/c14/220/timberwatch-elf?utm_source=api"
+  },
+  "titaniasChosen": {
+    "id": "titaniasChosen",
+    "name": "Titania's Chosen",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Archer"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "triggeredAbilities": [
+      {
+        "id": "spellCast",
+        "text": "Whenever a player casts a green spell, put a +1/+1 counter on this creature.",
+        "trigger": "spellCast",
+        "filter": {
+          "controller": "any",
+          "colors": [
+            "G"
+          ]
+        },
+        "effect": {
+          "type": "addCounters",
+          "counter": "+1/+1",
+          "count": 1,
+          "affected": "source"
+        }
+      }
+    ],
+    "text": "Whenever a player casts a green spell, put a +1/+1 counter on this creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/c/ace535dd-9a9c-408f-8c91-33081f14c921.jpg?1783936244",
+      "card": "https://cards.scryfall.io/normal/front/a/c/ace535dd-9a9c-408f-8c91-33081f14c921.jpg?1783936244"
+    },
+    "artist": "Mark Zug",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "cma",
+    "collectorNumber": "158",
+    "typeLine": "Creature — Elf Archer",
+    "oracleText": "Whenever a player casts a green spell, put a +1/+1 counter on this creature.",
+    "scryfallId": "ace535dd-9a9c-408f-8c91-33081f14c921",
+    "scryfallUri": "https://scryfall.com/card/cma/158/titanias-chosen?utm_source=api"
+  },
   "titanicGrowth": {
     "id": "titanicGrowth",
     "name": "Titanic Growth",
@@ -5256,6 +6898,97 @@ export const IMPORTED_CARDS = {
     "oracleText": "",
     "scryfallId": "2eda67da-02b5-4ecb-9038-10e026d454ec",
     "scryfallUri": "https://scryfall.com/card/m19/80/tolarian-scholar?utm_source=api"
+  },
+  "tranquilThicket": {
+    "id": "tranquilThicket",
+    "name": "Tranquil Thicket",
+    "supertypes": [],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForG",
+        "text": "{T}: Add {G}.",
+        "cost": {
+          "tap": true
+        },
+        "effect": {
+          "type": "addMana",
+          "mana": {
+            "G": 1
+          }
+        }
+      }
+    ],
+    "handAbilities": [
+      {
+        "id": "cycling",
+        "text": "Cycling {G}",
+        "cost": {
+          "mana": {
+            "G": 1
+          },
+          "discardSelf": true
+        },
+        "effect": {
+          "type": "drawCards",
+          "count": 1
+        }
+      }
+    ],
+    "entersTapped": true,
+    "text": "This land enters tapped.\n{T}: Add {G}.\nCycling {G} ({G}, Discard this card: Draw a card.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/1/7159ff50-904c-494e-a72b-6a8e36c51c59.jpg?1783939619",
+      "card": "https://cards.scryfall.io/normal/front/7/1/7159ff50-904c-494e-a72b-6a8e36c51c59.jpg?1783939619"
+    },
+    "artist": "Heather Hudson",
+    "colors": [],
+    "rarity": "common",
+    "set": "c13",
+    "collectorNumber": "329",
+    "typeLine": "Land",
+    "oracleText": "This land enters tapped.\n{T}: Add {G}.\nCycling {G} ({G}, Discard this card: Draw a card.)",
+    "scryfallId": "7159ff50-904c-494e-a72b-6a8e36c51c59",
+    "scryfallUri": "https://scryfall.com/card/c13/329/tranquil-thicket?utm_source=api"
+  },
+  "treetopScout": {
+    "id": "treetopScout",
+    "name": "Treetop Scout",
+    "manaCost": {
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Scout"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "keywords": [
+      "can't be blocked except by flyers"
+    ],
+    "text": "This creature can't be blocked except by creatures with flying.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/f/2fa39646-a609-4b37-b8de-97893ae43c49.jpg?1783944865",
+      "card": "https://cards.scryfall.io/normal/front/2/f/2fa39646-a609-4b37-b8de-97893ae43c49.jpg?1783944865"
+    },
+    "artist": "Alan Pollack",
+    "colors": [
+      "G"
+    ],
+    "rarity": "common",
+    "set": "scg",
+    "collectorNumber": "130",
+    "typeLine": "Creature — Elf Scout",
+    "oracleText": "This creature can't be blocked except by creatures with flying.",
+    "scryfallId": "2fa39646-a609-4b37-b8de-97893ae43c49",
+    "scryfallUri": "https://scryfall.com/card/scg/130/treetop-scout?utm_source=api"
   },
   "twoHeadedZombie": {
     "id": "twoHeadedZombie",
@@ -5909,6 +7642,57 @@ export const IMPORTED_CARDS = {
     "oracleText": "As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.",
     "scryfallId": "9c0f60a6-b5c8-4704-8b61-94e8fc463e5d",
     "scryfallUri": "https://scryfall.com/card/m21/126/village-rites?utm_source=api"
+  },
+  "vinebredBrawler": {
+    "id": "vinebredBrawler",
+    "name": "Vinebred Brawler",
+    "manaCost": {
+      "generic": 2,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Berserker"
+    ],
+    "power": 4,
+    "toughness": 2,
+    "keywords": [
+      "must be blocked"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "attacks",
+        "text": "Whenever this creature attacks, another target Elf you control gets +2/+1 until end of turn.",
+        "trigger": "attacks",
+        "effect": {
+          "type": "pump",
+          "power": 2,
+          "toughness": 1
+        },
+        "target": "elfYouControl",
+        "targetOther": true
+      }
+    ],
+    "text": "This creature must be blocked if able.\nWhenever this creature attacks, another target Elf you control gets +2/+1 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/3/63c573fe-e74c-48ca-ad05-92f37dc466f1.jpg?1783904419",
+      "card": "https://cards.scryfall.io/normal/front/6/3/63c573fe-e74c-48ca-ad05-92f37dc466f1.jpg?1783904419"
+    },
+    "artist": "Evyn Fong",
+    "colors": [
+      "G"
+    ],
+    "rarity": "uncommon",
+    "set": "ecl",
+    "collectorNumber": "201",
+    "typeLine": "Creature — Elf Berserker",
+    "oracleText": "This creature must be blocked if able.\nWhenever this creature attacks, another target Elf you control gets +2/+1 until end of turn.",
+    "scryfallId": "63c573fe-e74c-48ca-ad05-92f37dc466f1",
+    "scryfallUri": "https://scryfall.com/card/ecl/201/vinebred-brawler?utm_source=api"
   },
   "volcanicDragon": {
     "id": "volcanicDragon",

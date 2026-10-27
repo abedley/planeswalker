@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  Game, ACTION, SAMPLE_SPELLS, SAMPLE_EFFECTS, passPriority, playLand, DECISION, PHASE, STEP,
+  Game, ACTION, SAMPLE_SPELLS, SAMPLE_EFFECTS, passPriority, playLand, DECISION, PHASE, STEP, CARD_TYPE, TARGET, EFFECT, KEYWORD,
 } from '../src/index.js';
-import { playOptions, variantsFor, perform, sameAction } from '../app/battle/play.js';
-import { shouldAutoPass, primaryAction } from '../app/battle/autopass.js';
+import {
+  playOptions, variantsFor, secondTargets, perform, sameAction,
+} from '../app/battle/play.js';
+import { shouldAutoPass, primaryAction, blockHint } from '../app/battle/autopass.js';
 import { promptFor } from '../app/battle/describe.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
@@ -191,4 +193,71 @@ test('mulligans: the main button opens the choice, and the prompt says what to d
   assert.equal(promptFor(state(game), 'p1'), 'Tap 1 card to put on the bottom');
   // No auto-passing through a decision.
   assert.equal(shouldAutoPass(state(game), 'p1', { hasOptions: false }), false);
+});
+
+// The Pathfinder's Elves in the app.
+
+test('a fight\'s two targets, and cycling from the hand, are play options', () => {
+  const elfCards = {
+    ...cards,
+    pounceFree: {
+      id: 'pounceFree', name: 'Pounce', manaCost: {}, types: [CARD_TYPE.INSTANT],
+      targets: [TARGET.CREATURE_YOU_CONTROL, TARGET.CREATURE_OPPONENT_CONTROLS], effects: [{ type: EFFECT.FIGHT }],
+    },
+    bearFree: { id: 'bearFree', name: 'Bear', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 2, toughness: 2 },
+    thicketFree: {
+      id: 'thicketFree', name: 'Thicket', types: [CARD_TYPE.LAND],
+      handAbilities: [{ id: 'cycling', text: 'Cycling {G}', cost: { mana: { G: 1 }, discardSelf: true }, effects: [{ type: EFFECT.DRAW_CARDS, count: 1 }] }],
+    },
+  };
+  const deck = (first) => [...first, ...Array(40 - first.length).fill('forest')];
+  const game = new Game({
+    players, cards: elfCards, shuffleLibraries: false, emblems: { p1: [], p2: [] },
+    decks: { p1: deck(['bearFree', 'pounceFree', 'thicketFree', 'forest']), p2: deck(['bearFree', 'bearFree']) },
+  });
+  game.start();
+  const pass = () => game.dispatch(passPriority(state(game).priorityPlayerId));
+  const until = (done) => { for (let i = 0; i < 80 && !done(state(game)); i++) {
+    const s = state(game);
+    const confirm = s.validActions.find((a) => a.type.startsWith('CONFIRM_'));
+    if (s.pendingDecision) game.dispatch(confirm ?? s.validActions[0]); else pass();
+  } };
+  const main = (player, turn) => (s) => s.activePlayerId === player && s.turn === turn && s.phase === PHASE.PRECOMBAT_MAIN && !s.pendingDecision;
+  until(main('p1', 1));
+  game.dispatch(playLand('p1', state(game).players[0].hand.find((c) => c.cardId === 'forest').id));
+  const castBear = (playerId) => {
+    const bear = state(game).players.find((p) => p.id === playerId).hand.find((c) => c.cardId === 'bearFree');
+    game.dispatch({ type: ACTION.CAST_SPELL, playerId, cardId: bear.id });
+    pass(); pass();
+  };
+  castBear('p1');
+  until(main('p2', 2));
+  castBear('p2');
+  castBear('p2');
+  until(main('p1', 3));
+  const options = playOptions(game, 'p1');
+  const pounce = options.find((o) => o.sourceId === handCard(game, 'pounceFree').id);
+  const myBear = state(game).battlefield.find((p) => p.controllerId === 'p1' && p.cardId === 'bearFree').id;
+  assert.deepEqual(pounce.targets, [myBear]);
+  assert.equal(secondTargets(variantsFor(pounce, myBear)).length, 2, 'either of their Bears');
+  const cycle = options.find((o) => o.sourceId === handCard(game, 'thicketFree').id && o.fromHand);
+  assert.deepEqual([cycle.kind, cycle.abilityId, cycle.text], ['activate', 'cycling', 'Cycling {G}']);
+  assert.deepEqual(perform(game, 'p1', cycle, cycle.variants[0]), { ok: true });
+  assert.ok(state(game).players[0].graveyard.some((c) => c.cardId === 'thicketFree'));
+});
+
+test('the main button and prompt for modes, optional targets, graveyard cards and the legend rule', () => {
+  const base = { players: [{ id: 'p1', hand: [] }], stack: [], battlefield: [], combat: { attackers: [] }, status: 'inProgress' };
+  const at = (decision, validActions) => ({ ...base, pendingDecision: { playerId: 'p1', ...decision }, validActions });
+  const decline = { type: ACTION.CHOOSE_TARGETS, playerId: 'p1', targets: [] };
+  assert.deepEqual(primaryAction(at({ type: DECISION.CHOOSE_TARGETS, optional: true, targetKind: TARGET.ARTIFACT }, [decline]), 'p1'),
+    { label: 'Don\'t', action: decline });
+  assert.equal(primaryAction(at({ type: DECISION.CHOOSE_TARGETS, targetKind: TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD }, []), 'p1').reopen, true);
+  assert.equal(primaryAction(at({ type: DECISION.CHOOSE_MODE }, []), 'p1').reopen, true);
+  assert.equal(primaryAction(at({ type: DECISION.LEGEND_RULE }, []), 'p1').reopen, true);
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MODE, sourceName: 'Inspiring Bard' }, []), 'p1'), 'Choose one: Inspiring Bard');
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_TARGETS, optional: true, sourceName: 'Reclamation Sage' }, []), 'p1'),
+    'You may choose a target: Reclamation Sage');
+  const lure = { id: 'x', name: 'Taunting Elf', keywords: [KEYWORD.LURE] };
+  assert.equal(blockHint({ ...base, battlefield: [lure], combat: { attackers: [{ cardId: 'x' }] } }), 'Every creature able to block Taunting Elf must');
 });

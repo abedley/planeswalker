@@ -10,8 +10,9 @@
  * thousands of times a second.
  */
 import {
-  isCreature, isLand, hasKeyword, cantAttack, manaValue, anthemApplies, KEYWORD, AFFECTED,
+  isCreature, isLand, hasKeyword, cantAttack, manaValue, anthemApplies, canBlockCreature, KEYWORD, AFFECTED,
 } from '../cards/cards.js';
+import { legalizeBlocks } from '../engine/blockRules.js';
 // blocking.js imports this module too, so neither may use the other's exports while
 // loading (here, only inside functions).
 import { blockingPlansFor } from './blocking.js';
@@ -33,6 +34,10 @@ export function creatureValue(creature) {
   if (has(creature, KEYWORD.VIGILANCE)) value += 0.5;
   if (has(creature, KEYWORD.REACH)) value += 0.5;
   if (has(creature, KEYWORD.HASTE)) value += 0.2;
+  // Hard to block: flyers only, big blockers only, or one at a time.
+  if (has(creature, KEYWORD.BLOCKED_ONLY_BY_FLYERS)) value += 0.5 + 0.5 * power;
+  if (has(creature, KEYWORD.CANT_BE_BLOCKED_BY_POWER_2_OR_LESS)) value += 0.3 * power;
+  if (has(creature, KEYWORD.MAX_ONE_BLOCKER)) value += 0.2 * power;
   if (cantAttack(creature)) value -= 1.5 * power;
   // Pacified (can't attack or block): little more than a body to sacrifice.
   if (has(creature, KEYWORD.CANT_ATTACK) && has(creature, KEYWORD.CANT_BLOCK)) value -= toughness;
@@ -72,12 +77,25 @@ const withBonus = (creature, bonus) => ({
   keywords: [...new Set([...(creature.keywords ?? []), ...(bonus.keywords ?? [])])],
 });
 
-/** Whether `blocker` may block `attacker` (702.9b, 702.17b); menace is a rule about the whole block. */
+/**
+ * Whether `blocker` may block `attacker` (509.1b, as the engine checks it); menace and
+ * "more than one creature" are rules about the whole block.
+ */
 export function canBlock(blocker, attacker) {
   if (!isCreature(blocker) || blocker.tapped) return false;
-  if (has(blocker, KEYWORD.CANT_BLOCK) || has(attacker, KEYWORD.CANT_BE_BLOCKED)) return false;
-  if (has(attacker, KEYWORD.FLYING)) return has(blocker, KEYWORD.FLYING) || has(blocker, KEYWORD.REACH);
-  return true;
+  return canBlockCreature(blocker, attacker);
+}
+
+/**
+ * `blocks` made legal for the engine: blocking requirements ("must be blocked", "all
+ * creatures able to block it do so") met and group restrictions kept (blockRules.js),
+ * changing the plan as little as possible.
+ */
+export function legalBlocks(state, me, canBlockPair, blocks) {
+  const byId = (id) => state.battlefield.find((p) => p.id === id);
+  const attackers = state.combat.attackers.map((a) => byId(a.cardId)).filter(Boolean);
+  const blockers = state.battlefield.filter((p) => p.controllerId === me && isCreature(p) && !p.tapped);
+  return legalizeBlocks(attackers, blockers, blocks, (b, a) => canBlockPair(b.id, a.id), creatureValue);
 }
 
 /** How much damage one combat damage event from this creature is (double strike hits twice). */
@@ -400,7 +418,7 @@ export const BLOCKING = Object.freeze({
  */
 export function chooseBlocks(state, me, canBlockPair, { blocking = BLOCKING.VALUE, heuristics = {} } = {}) {
   if (blocking === BLOCKING.GREEDY) return planBlocks(state, me, canBlockPair, { heuristics });
-  return blockingPlansFor(state, me, canBlockPair, { plans: [blocking] })[blocking].blocks;
+  return legalBlocks(state, me, canBlockPair, blockingPlansFor(state, me, canBlockPair, { plans: [blocking] })[blocking].blocks);
 }
 
 /**
@@ -450,7 +468,8 @@ export function planBlocks(state, me, canBlockPair, { heuristics = {} } = {}) {
     if (best) assign(best, attacker);
   }
   // Double blocks on attackers still unblocked.
-  for (const attacker of sorted.filter((a) => blockersOf.get(a.id).length === 0 && !has(a, KEYWORD.MENACE))) {
+  const onlyOne = (a) => has(a, KEYWORD.MAX_ONE_BLOCKER);
+  for (const attacker of sorted.filter((a) => blockersOf.get(a.id).length === 0 && !has(a, KEYWORD.MENACE) && !onlyOne(a))) {
     const able = options(attacker);
     let best = null;
     let bestScore = 0;
@@ -471,7 +490,7 @@ export function planBlocks(state, me, canBlockPair, { heuristics = {} } = {}) {
   if (heuristics.reinforce) {
     for (const attacker of sorted) {
       const group = blockersOf.get(attacker.id);
-      if (!group.length || resolveCombat(attacker, group).attackerDies) continue;
+      if (!group.length || onlyOne(attacker) || resolveCombat(attacker, group).attackerDies) continue;
       for (const extra of options(attacker)) {
         const bigger = [...group, extra];
         if (resolveCombat(attacker, bigger).attackerDies && blockScore(attacker, bigger) > blockScore(attacker, group)) {
@@ -501,5 +520,5 @@ export function planBlocks(state, me, canBlockPair, { heuristics = {} } = {}) {
     const cheapest = options(attacker).sort((x, y) => creatureValue(x) - creatureValue(y)).slice(0, needed);
     if (cheapest.length === needed) assign(cheapest, attacker);
   }
-  return plan;
+  return legalBlocks(state, me, canBlockPair, plan);
 }

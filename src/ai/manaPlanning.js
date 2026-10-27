@@ -3,7 +3,7 @@
  * reach, and which source to tap next. Shared by the AIs.
  */
 import { ACTION } from '../engine/actions.js';
-import { isCreature, manaValue } from '../cards/cards.js';
+import { isCreature, manaValue, countOf, spellCost } from '../cards/cards.js';
 import { manaPoolTotal, MANA_TYPES } from '../engine/mana.js';
 
 /** The item with the highest score (the first one on ties). */
@@ -17,7 +17,19 @@ export function bestBy(items, score) {
   return best;
 }
 
-/** Untapped mana sources: `{ cardId, actions, colors, sacrifices }` from the valid mana actions. */
+/** How much mana one activation of a mana ability adds (counting "for each", 608.2h). */
+function manaAmount(state, ability, controllerId, sourceId) {
+  return ability.effects.reduce((sum, effect) => {
+    const each = effect.anyColor ?? Object.values(effect.mana ?? {}).reduce((a, n) => a + n, 0);
+    const times = effect.per ? countOf(effect.per, { battlefield: state.battlefield, controllerId, sourceId, combat: state.combat }) : 1;
+    return sum + each * times;
+  }, 0);
+}
+
+/**
+ * Untapped mana sources: `{ cardId, actions, colors, sacrifices, amount }` from the valid
+ * mana actions, where `amount` is how much mana tapping it adds.
+ */
 export function manaSources(state, mine) {
   const byCard = new Map();
   for (const action of mine) {
@@ -26,10 +38,13 @@ export function manaSources(state, mine) {
     const ability = source?.abilities.find((ab) => ab.id === action.abilityId);
     if (!ability?.isManaAbility) continue;
     if (!byCard.has(source.id)) {
-      byCard.set(source.id, { cardId: source.id, actions: [], colors: new Set(), sacrifices: !!ability.cost.sacrificeSelf, creature: isCreature(source) });
+      byCard.set(source.id, {
+        cardId: source.id, actions: [], colors: new Set(), sacrifices: !!ability.cost.sacrificeSelf, creature: isCreature(source), amount: 0,
+      });
     }
     const entry = byCard.get(source.id);
     entry.actions.push(action);
+    entry.amount = Math.max(entry.amount, manaAmount(state, ability, action.playerId, source.id));
     for (const effect of ability.effects) {
       if (effect.anyColor) ['W', 'U', 'B', 'R', 'G'].forEach((c) => entry.colors.add(c));
       for (const type of Object.keys(effect.mana ?? {})) entry.colors.add(type);
@@ -48,19 +63,26 @@ export function neededColors(cost, pool) {
   return needed;
 }
 
+/** The mana in the pool plus what the untapped sources could add. */
+export const manaAvailable = (pool, sources) => manaPoolTotal(pool) + sources.reduce((sum, s) => sum + (s.amount ?? 1), 0);
+
 /** Whether the pool plus the untapped sources could pay a cost (approximately, per color). */
 export function canReach(cost, pool, sources) {
-  if (manaValue(cost) > manaPoolTotal(pool) + sources.length) return false;
+  if (manaValue(cost) > manaAvailable(pool, sources)) return false;
   return Object.entries(neededColors(cost, pool))
-    .every(([type, n]) => sources.filter((s) => s.colors.has(type)).length >= n);
+    .every(([type, n]) => sources.filter((s) => s.colors.has(type)).reduce((sum, s) => sum + (s.amount ?? 1), 0) >= n);
 }
+
+/** What `card` in `me`'s hand costs to cast now (with cost reductions, spellCost). */
+export const castCost = (state, me, card) => spellCost(card, { battlefield: state.battlefield, controllerId: me, combat: state.combat });
 
 /**
  * Picks a mana ability to activate: one making a color we still need, preferring
  * lands to creatures and anything to sacrificing a Treasure.
  */
 export function chooseManaAction(sources, needed) {
-  const rank = (source) => (source.sacrifices ? 10 : 0) + (source.creature ? 1 : 0);
+  // Sources that make several mana come after those making one, so less goes to waste.
+  const rank = (source) => (source.sacrifices ? 10 : 0) + (source.creature ? 1 : 0) + ((source.amount ?? 1) > 1 ? 2 : 0);
   const wanted = Object.keys(needed);
   const useful = wanted.length ? sources.filter((s) => wanted.some((c) => s.colors.has(c))) : sources;
   const source = bestBy(useful.length ? useful : sources, (s) => -rank(s));

@@ -14,6 +14,10 @@ export const ACTION = Object.freeze({
   DISCARD: 'DISCARD',
   // Choosing the target of a triggered ability as it's put on the stack (603.3d).
   CHOOSE_TARGETS: 'CHOOSE_TARGETS',
+  // Choosing the mode of a modal triggered ability ("choose one —", 700.2) and its target.
+  CHOOSE_MODE: 'CHOOSE_MODE',
+  // The legend rule (704.5j): which of the legendary permanents with the same name to keep.
+  KEEP_LEGEND: 'KEEP_LEGEND',
   // Mulligans (103.5): keep the opening hand or draw a new one, then put cards on the bottom.
   KEEP_HAND: 'KEEP_HAND',
   MULLIGAN: 'MULLIGAN',
@@ -60,6 +64,8 @@ export const assignCombatDamage = (playerId, attackerId, assignment) => (
 );
 export const discard = (playerId, cardId) => ({ type: ACTION.DISCARD, playerId, cardId });
 export const chooseTargets = (playerId, targets) => ({ type: ACTION.CHOOSE_TARGETS, playerId, targets });
+export const chooseMode = (playerId, mode, targets) => ({ type: ACTION.CHOOSE_MODE, playerId, mode, ...(targets ? { targets } : {}) });
+export const keepLegend = (playerId, cardId) => ({ type: ACTION.KEEP_LEGEND, playerId, cardId });
 export const keepHand = (playerId) => ({ type: ACTION.KEEP_HAND, playerId });
 export const mulligan = (playerId) => ({ type: ACTION.MULLIGAN, playerId });
 export const putOnBottom = (playerId, cardId) => ({ type: ACTION.PUT_ON_BOTTOM, playerId, cardId });

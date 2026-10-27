@@ -7,7 +7,7 @@ import { convertScryfallCard, cardIdFromName } from '../tools/scryfall/convert.j
 import { importCards, parseCardLine } from '../tools/import-cards.js';
 import { readImportedCards, readImportedModule, writeImportedCards } from '../tools/scryfall/importedModule.js';
 import {
-  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER, KEYWORD,
+  Game, castSpell, activateAbility, playLand, passPriority, PHASE, AFFECTED, TARGET, TOKEN, TRIGGER, KEYWORD, EFFECT,
 } from '../src/index.js';
 import { FIXTURES } from './fixtures/scryfallCards.js';
 
@@ -74,12 +74,8 @@ test('reports rules text the engine can\'t do', () => {
 });
 
 test('reports unsupported card types, supertypes and layouts', () => {
-  assert.deepEqual(problems('jaceBeleren').slice(0, 2), [
-    'Unsupported supertype: Legendary.',
-    'Unsupported card type: Planeswalker.',
-  ]);
+  assert.deepEqual(problems('jaceBeleren')[0], 'Unsupported card type: Planeswalker.');
   assert.deepEqual(problems('thalia'), [
-    'Unsupported supertype: Legendary.',
     'Unsupported rules text: "Noncreature spells cost {1} more to cast."',
   ]);
   assert.deepEqual(problems('delverOfSecrets'), [
@@ -507,4 +503,100 @@ test('converts removal for creatures in combat', () => {
   assert.ok(ok);
   assert.equal(definition.target, 'attackingOrBlockingCreature');
   assert.deepEqual(definition.effects, [{ type: 'destroy' }]);
+});
+
+// The Pathfinder's Elves.
+const definition = (key) => {
+  const result = convert(key);
+  assert.equal(result.ok, true, `${key}: ${result.problems?.join(' / ')}`);
+  return result.definition;
+};
+
+test('converts flash, on creatures and Auras', () => {
+  assert.deepEqual(definition('dawnsLightArcher').keywords, [KEYWORD.FLASH, KEYWORD.REACH]);
+  const invocation = definition('feralInvocation');
+  assert.deepEqual(invocation.keywords, [KEYWORD.FLASH]);
+  assert.equal(invocation.enchant, TARGET.CREATURE);
+});
+
+test('converts triggers on other creatures entering, landfall, attacks, blocks, spells and Auras', () => {
+  assert.deepEqual(definition('beastKinRanger').triggeredAbilities[0], {
+    id: TRIGGER.CREATURE_ENTERS, trigger: TRIGGER.CREATURE_ENTERS, filter: { other: true },
+    text: 'Whenever another creature you control enters, this creature gets +1/+0 until end of turn.',
+    effect: { type: EFFECT.PUMP, power: 1, toughness: 0, affected: AFFECTED.SOURCE },
+  });
+  assert.deepEqual(definition('elvishVanguard').triggeredAbilities[0].filter, { other: true, controller: 'any', subtypes: ['Elf'] });
+  assert.equal(definition('elfswornGiant').triggeredAbilities[0].trigger, TRIGGER.LAND_ENTERS);
+  const brawler = definition('vinebredBrawler');
+  assert.deepEqual(brawler.keywords, [KEYWORD.MUST_BE_BLOCKED]);
+  assert.deepEqual(
+    [brawler.triggeredAbilities[0].trigger, brawler.triggeredAbilities[0].target, brawler.triggeredAbilities[0].targetOther],
+    [TRIGGER.ATTACKS, TARGET.ELF_YOU_CONTROL, true],
+  );
+  assert.deepEqual(definition('titaniasChosen').triggeredAbilities[0].filter, { controller: 'any', colors: ['G'] });
+  assert.equal(definition('audacity').triggeredAbilities[0].trigger, TRIGGER.PUT_INTO_GRAVEYARD);
+  assert.equal(definition('elderGargaroth').triggeredAbilities[0].trigger, TRIGGER.ATTACKS_OR_BLOCKS);
+});
+
+test('converts "you may" and "choose one —" triggers', () => {
+  const sage = definition('reclamationSage').triggeredAbilities[0];
+  assert.deepEqual([sage.optional, sage.target, sage.effect], [true, TARGET.ARTIFACT_OR_ENCHANTMENT, { type: EFFECT.DESTROY }]);
+  const bard = definition('inspiringBard').triggeredAbilities[0];
+  assert.deepEqual(bard.modes, [
+    { text: 'Bardic Inspiration — Target creature gets +2/+2 until end of turn.', effects: [{ type: EFFECT.PUMP, power: 2, toughness: 2 }], target: TARGET.CREATURE },
+    { text: 'Song of Rest — You gain 3 life.', effects: [{ type: EFFECT.GAIN_LIFE, amount: 3 }] },
+  ]);
+  assert.equal(definition('coliseumBehemoth').triggeredAbilities[0].modes[0].target, TARGET.ARTIFACT_OR_ENCHANTMENT);
+  assert.equal(definition('elderGargaroth').triggeredAbilities[0].modes.length, 3);
+});
+
+test('converts graveyard targets, Elf targets and fights', () => {
+  assert.deepEqual(definition('elvishRegrower').triggeredAbilities[0].target, TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD);
+  assert.equal(definition('safewrightCavalry').abilities[0].target, TARGET.ELF_YOU_CONTROL);
+  const pounce = definition('pounce');
+  assert.deepEqual([pounce.effects, pounce.targets], [[{ type: EFFECT.FIGHT }], [TARGET.CREATURE_YOU_CONTROL, TARGET.CREATURE_OPPONENT_CONTROLS]]);
+});
+
+test('converts "for each" and "where X is" amounts', () => {
+  assert.deepEqual(definition('elvishArchdruid').abilities[0].effect, {
+    type: EFFECT.ADD_MANA, mana: { G: 1 }, per: { of: 'creatures', subtypes: ['Elf'] },
+  });
+  assert.equal(definition('elvishArchdruid').abilities[0].id, 'ability1', 'not a plain tapForG');
+  assert.deepEqual(definition('gaeasCradle').abilities[0].effect.per, { of: 'creatures' });
+  assert.deepEqual(definition('priestOfTitania').abilities[0].effect.per, { of: 'creatures', controller: 'any', subtypes: ['Elf'] });
+  assert.deepEqual(definition('timberwatchElf').abilities[0].effect, {
+    type: EFFECT.PUMP, power: 1, toughness: 1, per: { of: 'creatures', controller: 'any', subtypes: ['Elf'] },
+  });
+  assert.deepEqual(definition('dwynen').triggeredAbilities[0].effect.per, { of: 'creatures', subtypes: ['Elf'], attacking: true });
+  assert.deepEqual(definition('alphaStatus').staticAbilities[0].per, { of: 'creatures', controller: 'any', sharesTypeWith: true });
+  assert.deepEqual(definition('ghalta').costReduction, { per: { of: 'power' } });
+});
+
+test('converts legendary cards, a legendary card\'s short name, and Elf lords', () => {
+  const dwynen = definition('dwynen');
+  assert.deepEqual(dwynen.supertypes, ['Legendary']);
+  assert.equal(dwynen.triggeredAbilities[0].trigger, TRIGGER.ATTACKS);
+  const lord = { affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, power: 1, toughness: 1, other: true, subtypes: ['Elf'] };
+  assert.deepEqual(definition('canopyTactician').staticAbilities, [lord]);
+  assert.deepEqual(definition('elvishArchdruid').staticAbilities, [lord]);
+  assert.equal(definition('canopyTactician').abilities[0].id, 'tapForGGG');
+  assert.deepEqual(definition('gaeasCradle').supertypes, ['Legendary']);
+});
+
+test('converts lands that enter tapped, cycling and the counters of Oran-Rief', () => {
+  const thicket = definition('tranquilThicket');
+  assert.equal(thicket.entersTapped, true);
+  assert.deepEqual(thicket.handAbilities, [{
+    id: 'cycling', text: 'Cycling {G}', cost: { mana: { G: 1 }, discardSelf: true }, effect: { type: EFFECT.DRAW_CARDS, count: 1 },
+  }]);
+  assert.deepEqual(definition('oranRief').abilities[1].effect, {
+    type: EFFECT.ADD_COUNTERS, counter: '+1/+1', count: 1, filter: { colors: ['G'], enteredThisTurn: true }, affected: AFFECTED.EACH_CREATURE,
+  });
+});
+
+test('converts the new blocking restrictions and requirements', () => {
+  assert.deepEqual(definition('treetopScout').keywords, [KEYWORD.BLOCKED_ONLY_BY_FLYERS]);
+  assert.deepEqual(definition('steelLeafChampion').keywords, [KEYWORD.CANT_BE_BLOCKED_BY_POWER_2_OR_LESS]);
+  assert.deepEqual(definition('safewrightCavalry').keywords, [KEYWORD.MAX_ONE_BLOCKER]);
+  assert.deepEqual(definition('tauntingElf').keywords, [KEYWORD.LURE]);
 });

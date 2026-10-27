@@ -6,7 +6,8 @@
  * - `{ kind: 'pass' }`
  * - `{ kind: 'land', cardId }`: play a land with that card id (definition id)
  * - `{ kind: 'cast', cardId, targetId }` / `{ kind: 'activate', cardId, abilityId, targetId }`,
- *   paying mana by tapping sources as needed
+ *   paying mana by tapping sources as needed; a spell with several targets (a fight)
+ *   has `targets` instead of `targetId`
  * - `{ kind: 'attack', attackers: [ids] }` / `{ kind: 'block', blocks: { blockerId: attackerId } }`
  * - `{ kind: 'raw', action }`: any other decision (discarding, dividing damage, targets)
  *
@@ -16,14 +17,16 @@ import { ACTION } from '../engine/actions.js';
 import { DECISION } from '../engine/Game.js';
 import { PHASE } from '../engine/turnStructure.js';
 import { canPayMana } from '../engine/mana.js';
-import { isCreature, isLand, isInstant, isAura, isCurse, hasKeyword, KEYWORD, EFFECT } from '../cards/cards.js';
+import {
+  isCreature, isLand, isAura, isCurse, hasKeyword, castsAtInstantSpeed, KEYWORD, EFFECT,
+} from '../cards/cards.js';
 import {
   planAttack, planBlocks, chooseBlocks, creatureValue, curseValue, BLOCKING,
 } from './combat.js';
 import { candidateTargets, scoreEffects, costScore } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import {
-  bestBy, manaSources, neededColors, canReach, chooseManaAction,
+  bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost,
 } from './manaPlanning.js';
 
 /** How many targets per spell or ability are worth considering (the best-scoring ones). */
@@ -35,7 +38,7 @@ export function macroKey(macro) {
   switch (macro.kind) {
     case 'pass': return 'pass';
     case 'land': return `land:${macro.cardId}`;
-    case 'cast': return `cast:${macro.cardId}>${macro.targetId ?? ''}`;
+    case 'cast': return `cast:${macro.cardId}>${macro.targets?.join('+') ?? macro.targetId ?? ''}`;
     case 'activate': return `activate:${macro.cardId}:${macro.abilityId}>${macro.targetId ?? ''}`;
     case 'attack': return `attack:${[...macro.attackers].sort().join(',')}`;
     case 'block': return `block:${Object.entries(macro.blocks).sort().map(([b, a]) => `${b}>${a}`).join(',')}`;
@@ -132,8 +135,25 @@ function priorityMacros(state, me, mine) {
   const canSacrifice = (cost, sourceId) => !cost?.sacrifice || state.battlefield.some((p) => p.controllerId === me
     && p.id !== sourceId && (cost.sacrifice !== 'creature' || isCreature(p)));
   for (const card of player.hand) {
-    if (isLand(card) || !(isInstant(card) || sorceryTiming) || !affordable(card.manaCost)) continue;
+    // Cycling and other abilities that work from the hand.
+    for (const ability of card.handAbilities ?? []) {
+      if (affordable(ability.cost.mana) && (sorceryTiming || state.activePlayerId !== me)) {
+        macros.push(keyed({ kind: 'activate', cardId: card.id, abilityId: ability.id, targetId: null }));
+      }
+    }
+    if (isLand(card) || !(castsAtInstantSpeed(card) || sorceryTiming) || !affordable(castCost(state, me, card))) continue;
     if (!canSacrifice(card.additionalCost, card.id)) continue;
+    if (card.spell?.targets) {
+      // Several targets (a fight): the best few combinations.
+      let combos = [[]];
+      for (const kind of card.spell.targets) {
+        combos = combos.flatMap((chosen) => candidateTargets(state, me, kind).filter((id) => !chosen.includes(id)).map((id) => [...chosen, id]));
+      }
+      combos.map((targets) => ({ targets, score: scoreEffects(state, me, card.spell.effects, targets, card.id) }))
+        .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
+        .forEach(({ targets }) => macros.push(keyed({ kind: 'cast', cardId: card.id, targetId: null, targets })));
+      continue;
+    }
     let targets = [null];
     if (isCurse(card)) {
       targets = state.battlefield.filter((p) => p.controllerId !== me && isCreature(p))
@@ -233,7 +253,7 @@ function payAndAct(state, me, mine, macro) {
   const type = macro.kind === 'cast' ? ACTION.CAST_SPELL : ACTION.ACTIVATE_ABILITY;
   const matches = mine.filter((a) => a.type === type && a.cardId === macro.cardId
     && (macro.kind === 'cast' || a.abilityId === macro.abilityId)
-    && (macro.targetId === null || a.targets?.[0] === macro.targetId));
+    && (macro.targets ? a.targets?.join() === macro.targets.join() : macro.targetId === null || a.targets?.[0] === macro.targetId));
   const player = state.players.find((p) => p.id === me);
   const { manaCost, cost } = costsOf(state, me, macro);
   if (matches.length) {
@@ -251,11 +271,12 @@ function payAndAct(state, me, mine, macro) {
 function costsOf(state, me, macro) {
   if (macro.kind === 'cast') {
     const card = state.players.find((p) => p.id === me).hand.find((c) => c.id === macro.cardId);
-    return { manaCost: card?.manaCost ?? undefined, cost: card?.additionalCost ?? {} };
+    return { manaCost: card ? castCost(state, me, card) ?? undefined : undefined, cost: card?.additionalCost ?? {} };
   }
-  const source = state.battlefield.find((p) => p.id === macro.cardId)
-    ?? state.players.find((p) => p.id === me).emblems.find((e) => e.id === macro.cardId);
-  const ability = source?.abilities.find((a) => a.id === macro.abilityId);
+  const player = state.players.find((p) => p.id === me);
+  const inHand = player.hand.find((c) => c.id === macro.cardId);
+  const source = state.battlefield.find((p) => p.id === macro.cardId) ?? player.emblems.find((e) => e.id === macro.cardId) ?? inHand;
+  const ability = (source === inHand ? source?.handAbilities : source?.abilities)?.find((a) => a.id === macro.abilityId);
   return ability ? { manaCost: ability.cost.mana ?? {}, cost: ability.cost } : { manaCost: undefined, cost: {} };
 }
 

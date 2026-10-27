@@ -38,6 +38,16 @@ The *Costs & effects sampler* deck (`SAMPLE_EFFECTS` / `SAMPLE_EFFECTS_DECK`) sh
 any of the effects above. Try the *Triggered abilities sampler* deck (`SAMPLE_TRIGGERS` /
 `SAMPLE_TRIGGERS_DECK`).
 
+**The Pathfinder's Elves** brought more:
+- **Triggers:** "whenever another creature you control (or another Elf) enters", landfall,
+  attacking, blocking, a green spell being cast, and an Aura going to the graveyard.
+- **Choices on triggers:** "you may" and "choose one —".
+- **Spells and abilities:** flash, cycling, lands that enter tapped, the legend rule, fights,
+  returning a card from the graveyard, and "for each" / "where X is" amounts.
+- **Evasion and blocks:** "can't be blocked except by creatures with flying" and the like, and
+  blocking requirements ("must be blocked if able", "all creatures able to block it do so").
+- **Details:** see *Rules implemented*.
+
 **Where this game differs from Magic:** each player has innate planeswalker-style abilities,
 granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
 or nothing. For now every player starts with one emblem, **Planeswalker**, with
@@ -120,9 +130,16 @@ in their color with their type's emblem, and their name on the board. Planeswalk
 can have `art` and `color`; otherwise they get a monogram crest.
 
 **Attacking and blocking restrictions:** a creature that can't attack, can't block, or can't be
-blocked wears a badge on the board ("Can't attack" and "Can't block" in red, "Unblockable" in
-blue). One that has it only this turn, from a spell or ability, has a gold outline; one that has
-it from its Aura or Equipment (Pacifism, Maniacal Rage, Aether Tunnel) doesn't.
+blocked wears a badge on the board ("Can't attack" and "Can't block" in red; "Unblockable",
+"Flyers only", "Power 3+ only" and "One blocker" in blue; "Block me" and "Lure", for blocking
+requirements, in orange). One that has it only this turn, from a spell or ability, has a gold
+outline; one that has it from its Aura or Equipment (Pacifism, Maniacal Rage, Aether Tunnel)
+doesn't.
+
+**Choices on sheets:** "choose one —" (the mode, then its target on the board), the legend rule
+(which copy stays) and a card in your graveyard (Elvish Regrower) are chosen on a sheet. A "you
+may" trigger turns the main button into *Don't*. A fight (Pounce) takes your creature, then
+theirs. A card with cycling shows *Cycling {G}* beside *Play* in the hand preview.
 
 **Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
 color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
@@ -181,15 +198,31 @@ npm run import-cards -- --dry-run "Birds of Paradise"      # report only, write 
 
 A card is only imported if the engine supports everything it does:
 - It's a single-faced creature, land, artifact, enchantment, instant or sorcery, with no
-  supertype other than Basic.
+  supertype other than Basic or Legendary (a legendary card may call itself by its short name,
+  "Dwynen").
 - Its mana cost uses only generic and {W}{U}{B}{R}{G}{C} symbols.
 - Its power and toughness are fixed numbers.
 - Its rules text is only:
-  - supported keywords, and "CARDNAME can't block." / "CARDNAME can't be blocked."
+  - supported keywords (flash on any spell), and "CARDNAME can't block." / "CARDNAME can't be
+    blocked." / "… can't be blocked except by creatures with flying." / "… by creatures with
+    power 2 or less." / "… by more than one creature." / "CARDNAME must be blocked if able." /
+    "All creatures able to block CARDNAME do so."
+  - "CARDNAME enters tapped.", "Cycling {G}" and "This spell costs {X} less to cast, where X is
+    the total power of creatures you control." (Ghalta)
   - activated abilities, "<cost>: <effect>", optionally ending "Activate only as a sorcery."
   - triggered abilities, "When CARDNAME enters [the battlefield], <effect>" and "When CARDNAME
     dies, <effect>". Elvish Visionary, Wall of Omens, Flametongue Kavu and Doomed Traveler
-    import; Blood Artist ("Whenever … another creature dies") doesn't.
+    import; Blood Artist ("Whenever … another creature dies") doesn't. Also:
+    - "When CARDNAME is put into a graveyard from the battlefield" (Audacity; Rancor's "return
+      Rancor to its owner's hand" isn't supported)
+    - "Whenever CARDNAME attacks [or blocks]"
+    - "Whenever another creature you control enters" and "Whenever another Elf enters"
+      (anyone's)
+    - "[Landfall —] Whenever a land you control enters"
+    - "Whenever a player casts a green spell"
+
+    The effect may start "you may" (Reclamation Sage), or be "choose one —" followed by
+    bullet lines, one per mode (Inspiring Bard, Elder Gargaroth).
   - for Auras and Equipment, "Enchant creature", "Enchanted/Equipped creature gets +N/+N and
     has …", optionally ending "… and can't block" ("can't attack or block", "can't attack",
     "can't be blocked"), and "Equip {N}". Pacifism, Maniacal Rage, Crippling Blight and Aether
@@ -197,9 +230,13 @@ A card is only imported if the engine supports everything it does:
   - anthems and lords, on any permanent: "[Other] [white | <creature type>] creatures you control
     get +N/+N [and have …]." Glorious Anthem, Honor of the Pure, Benalish Marshal ("Other
     creatures …"), Captain of the Watch and Veteran Swordsmith ("Other Soldier creatures …")
-    import. Crusade ("White creatures get +1/+1.", everyone's) doesn't.
+    import. Crusade ("White creatures get +1/+1.", everyone's) doesn't. "Other Elves you control
+    get +1/+1." (Canopy Tactician) imports too.
+  - Alpha Status's "Enchanted creature gets +2/+2 for each other creature on the battlefield that
+    shares a creature type with it."
 - For instants and sorceries, every sentence must be a supported effect, with at most one
-  target in total, plus optionally "As an additional cost to cast this spell, <cost>."
+  target in total (a fight has two), plus optionally "As an additional cost to cast this spell,
+  <cost>."
 
 The grammar is in `tools/scryfall/rulesText.js`.
 - **Costs:** {T}, mana symbols, "Pay N life", "Sacrifice CARDNAME", "Sacrifice a creature"
@@ -211,19 +248,27 @@ The grammar is in `tools/scryfall/rulesText.js`.
     permanent / all creatures / …"
   - "Return target creature to its owner's hand."
   - "Tap / Untap target creature."
+  - "Target Elf you control …" and "another target Elf you control …"
+  - "Return target permanent card from your graveyard to your hand."
+  - "Target creature you control fights target creature you don't control."
   - Creatures in combat can be targets: "target attacking creature" and "target attacking or
     blocking creature" (Divine Verdict, Gideon's Reproach).
   - "Target creature / Creatures your opponents control / … can't block this turn." and "…
     [gets +N/+N and] can't be blocked this turn."
   - "Target creature / Creatures you control / CARDNAME gets +N/+N [and gains …] until end of
     turn."
-  - "Put a +1/+1 counter on …"
-  - "You / Target player / Each opponent gain(s) / lose(s) N life."
+  - "Put a +1/+1 counter on …" and "Put a +1/+1 counter on each green creature that entered this
+    turn." (Oran-Rief)
+  - "Target creature gets +X/+X until end of turn, where X is the number of Elves on the
+    battlefield."
+  - "You / Target player / Each opponent gain(s) / lose(s) N life [for each attacking Elf you
+    control]."
   - "[Target player] draws / mills N cards."
   - "Create N P/T <color> <type> creature tokens [with <keywords>]."
   - "Create N Treasure / Food / Clue tokens." and "Investigate."
   - "Counter target [creature / noncreature] spell."
-  - "Add {B}{B}{B}." and "Add one mana of any color."
+  - "Add {B}{B}{B}.", "Add one mana of any color." and "Add {G} for each Elf you control / Elf on
+    the battlefield / creature you control."
   - "<effect> and create <tokens>.", which is read as two sentences, e.g. "Draw two cards and
     create two Treasure tokens."
   - "<effect> and <effect>.", also read as two sentences.
@@ -247,7 +292,6 @@ Not imported — uses things the game doesn't support yet (2):
   - Birds of Paradise
       Unsupported rules text: "{T}: Add one mana of any color."
   - Thalia, Guardian of Thraben
-      Unsupported supertype: Legendary.
       Unsupported rules text: "Noncreature spells cost {1} more to cast."
 ```
 
@@ -256,9 +300,10 @@ the importer, it waits and tries again. A line can pin a printing: `Shock (M21)`
 `4 Shock (M21)` (the count is ignored). Behind a proxy, run Node with `NODE_USE_ENV_PROXY=1`
 (Node 22.21+), because Node's `fetch` ignores `HTTPS_PROXY` otherwise.
 
-`cards/real-cards.txt` lists the real cards the campaign uses: 147 cards, mostly from M19, M20,
+`cards/real-cards.txt` lists the real cards the campaign uses: 182 cards, mostly from M19, M20,
 M21 and Foundations, plus Divine Verdict (ORI), Gideon's Reproach and Benalish Marshal (DOM),
-Prodigal Pyromancer (M11) and some older core-set Auras, Equipment and anthems (M10–M15, ORI). Forest and Llanowar Elves
+Prodigal Pyromancer (M11), some older core-set Auras, Equipment and anthems (M10–M15, ORI), and
+the Pathfinder's Elf deck and its sideboard in the printings of its Moxfield list. Forest and Llanowar Elves
 are defined by hand, so for those the importer records only their art, in `CARD_PRESENTATION`.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
@@ -325,15 +370,17 @@ game.dispatch(castSpell('p1', 'p1-7'));            // a Llanowar Elves in hand
 | --- | --- |
 | `{ type: 'PASS_PRIORITY', playerId }` | the player has priority |
 | `{ type: 'PLAY_LAND', playerId, cardId }` | it's the player's main phase, they have priority, the stack is empty, and they haven't played a land this turn. There is one entry per land in their hand |
-| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId, targets?, costChoices? }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated, and one per legal target for abilities that target (e.g. equip) |
-| `{ type: 'CAST_SPELL', playerId, cardId, targets?, costChoices? }` | the mana cost is already in the player's pool, and the timing fits: instants whenever the player has priority, everything else at sorcery timing (their main phase, with priority and an empty stack). There is one entry per castable card. A spell that targets (an Aura, a Shock, ...) has one entry per legal target, with `targets: [id]`, where the id is a permanent's, a player's, or (for counterspells) a spell's stack object id |
+| `{ type: 'ACTIVATE_ABILITY', playerId, cardId, abilityId, targets?, costChoices? }` | the player has priority, controls the permanent or emblem (`cardId` is its id), and can pay the ability's cost (e.g. it's untapped for a {T} cost, and there's enough mana in their pool). Emblem abilities also respect their timing and per-turn limit. There is one entry per ability that can be activated, and one per legal target for abilities that target (e.g. equip). Cycling is activated the same way from the hand, with the card's id |
+| `{ type: 'CAST_SPELL', playerId, cardId, targets?, costChoices? }` | the mana cost is already in the player's pool, and the timing fits: instants (and spells with flash) whenever the player has priority, everything else at sorcery timing (their main phase, with priority and an empty stack). There is one entry per castable card. A spell that targets (an Aura, a Shock, ...) has one entry per legal target, with `targets: [id]`, where the id is a permanent's, a player's, or (for counterspells) a spell's stack object id. A fight has one entry per pair, `targets: [yours, theirs]` |
 | `{ type: 'TOGGLE_ATTACKER', playerId, cardId }` | declare attackers step (`pendingDecision.type === 'declareAttackers'`): adds the creature to, or removes it from, `pendingDecision.attackers`. There is one entry per creature that can attack |
 | `{ type: 'CONFIRM_ATTACKERS', playerId }` | declare attackers step: locks in the attack, which can be empty |
 | `{ type: 'SET_BLOCKER', playerId, cardId, attackerId }` | declare blockers step (`'declareBlockers'`): the creature blocks that attacker, or blocks nothing when `attackerId` is `null`. Updates `pendingDecision.blocks` |
 | `{ type: 'CONFIRM_BLOCKERS', playerId }` | declare blockers step: locks in the blocks |
 | `{ type: 'ASSIGN_COMBAT_DAMAGE', playerId, attackerId, assignment }` | a combat damage step (`'assignCombatDamage'`), when an attacker has more than one legal split: several blockers, or trample. `assignment` maps blocker ids (and, with trample, the defending player's id) to damage. There is one entry per legal split |
 | `{ type: 'DISCARD', playerId, cardId }` | the cleanup step is waiting for the active player to discard down to 7 (`state.pendingDecision`). There is one entry per card in their hand |
-| `{ type: 'CHOOSE_TARGETS', playerId, targets }` | a triggered ability with more than one legal target is being put on the stack (`'chooseTargets'`); its controller picks one. There is one entry per legal target |
+| `{ type: 'CHOOSE_TARGETS', playerId, targets }` | a triggered ability with more than one legal target is being put on the stack (`'chooseTargets'`); its controller picks one. There is one entry per legal target, and for a "you may" ability (`optional`), even with one target, a decline: `targets: []` |
+| `{ type: 'CHOOSE_MODE', playerId, mode, targets? }` | a "choose one —" ability is being put on the stack (`'chooseMode'`, with its `modes` and `options`): one entry per mode, and per legal target of a mode that targets |
+| `{ type: 'KEEP_LEGEND', playerId, cardId }` | the legend rule (`'legendRule'`): the player controls legendary permanents with the same name (`cardIds`) and keeps one; the others go to the graveyard |
 | `{ type: 'KEEP_HAND', playerId }` | before the first turn, in a game with `mulligans: true` (`'mulligan'`): keep the hand. With `pendingDecision.mulligans` taken, it's then `'putOnBottom'` with that `count` |
 | `{ type: 'MULLIGAN', playerId }` | the same decision, with fewer than 7 mulligans taken: shuffle the hand into the library and draw a new 7 |
 | `{ type: 'PUT_ON_BOTTOM', playerId, cardId }` | `'putOnBottom'`: put a card from the hand on the bottom of the library. There is one entry per card in their hand |
@@ -412,7 +459,12 @@ Every payload carries a `seq` number that increases for each event the game emit
 | `drawFromEmptyLibrary` / `playerLost` / `gameEnded` | `playerId` / `reason` / `winnerId` | a player decks out |
 | `actionAccepted` / `actionRejected` | `action` (+ `reason`) | an action is processed |
 | `abilityTriggered` | the trigger: `id`, `sourceId`, `sourceName`, `controllerId`, `trigger`, `text`, `effects`, `targetKind` | a triggered ability triggers |
-| `triggeredAbilityPutOnStack` / `triggeredAbilityRemoved` | `triggerId`, `sourceId`, `stackObjectId`, `targets` / `reason` | it's put on the stack, or removed for lack of a legal target |
+| `triggeredAbilityPutOnStack` / `triggeredAbilityRemoved` | `triggerId`, `sourceId`, `stackObjectId`, `targets` / `reason` | it's put on the stack, or removed for lack of a legal target (or declined: `'Declined.'`) |
+| `modeChosen` | `triggerId`, `sourceId`, `mode`, `text` | a "choose one —" ability's mode is chosen |
+| `cardCycled` | `playerId`, `cardId`, `cardName` | a card is cycled (it's also discarded) |
+| `fought` | `cardIds` | two creatures fight (the damage follows as `damageDealt`) |
+| `cardReturnedFromGraveyard` | `cardId`, `cardName`, `ownerId`, `sourceId` | a card goes from a graveyard to its owner's hand |
+| `permanentToGraveyard` | `cardId`, `cardName`, `controllerId`, `reason` (`auraNotLegallyAttached` / `legendRule`) | a state-based action puts a permanent into the graveyard |
 | `state` | full snapshot incl. `validActions`, `version` | the game is waiting for input |
 
 `game.onAny((name, payload) => ...)` receives every event.
@@ -496,6 +548,13 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   its mana cost is paid from the pool (601.2). Mana has to be in the pool before casting:
   activating mana abilities partway through casting (601.2g) isn't modelled. When the spell
   resolves, the creature enters the battlefield (608.3).
+- Flash (702.8): a spell with flash (`KEYWORD.FLASH`, `castsAtInstantSpeed`) is cast like an
+  instant, creatures and Auras alike.
+- Cost reductions (601.2f): `costReduction: { per }` takes the count (see *Counted amounts*) off
+  the generic part of the cost. `spellCost` is what a card costs now, for the engine and the AI.
+- Lands that enter tapped (`entersTapped`, 614.1c), and cycling (702.29): `handAbilities` are
+  activated from the hand with `ACTIVATE_ABILITY`. Cycling's cost is mana plus `discardSelf`;
+  it uses the stack and draws a card.
 - Summoning sickness (302.6): a creature can't attack, or use abilities with {T} in the cost,
   until its controller has controlled it since the start of their most recent turn. It can
   still block.
@@ -538,6 +597,14 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
     more than one, the attacking player chooses (`ASSIGN_COMBAT_DAMAGE`); when there's exactly
     one, it's applied automatically. Splits are keyed by blocker id, plus the defending player's
     id for trample.
+  - Restrictions on blocking (509.1b), written as keywords: `BLOCKED_ONLY_BY_FLYERS` (reach
+    doesn't help), `CANT_BE_BLOCKED_BY_POWER_2_OR_LESS` and `MAX_ONE_BLOCKER` (no second
+    `SET_BLOCKER` is offered). `canBlockCreature` is shared by the engine and the AI.
+  - Requirements (509.1c): `MUST_BE_BLOCKED` ("must be blocked if able") and `LURE` ("all
+    creatures able to block it do so"). The blocks must obey as many requirements as any legal
+    blocks could, so `CONFIRM_BLOCKERS` appears only then (`blocksLegal` in
+    `src/engine/blockRules.js`, an exact search over the creatures that could meet one).
+    `legalizeBlocks` turns any plan into the nearest legal one, for the AIs.
   - Other keywords aren't implemented yet.
 - Damage on creatures wears off in the cleanup step (514.2).
 - Artifacts and enchantments (301, 303) are cast with sorcery timing and resolve onto the
@@ -575,6 +642,18 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
 
     They're colorless artifacts, so they can use {T} abilities the turn they're created.
   - `counterSpell`: the countered spell goes to its owner's graveyard (701.6).
+  - `fight` (701.14): a spell's first target and second each deal damage equal to their power
+    to the other; if either is gone or no longer a legal target, neither does. A spell with
+    several targets lists their kinds in `targets` instead of `target`; each is checked again on
+    resolution, keeping its place.
+  - `returnFromGraveyard`: the target card (`TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD`) goes to
+    its owner's hand.
+  - Counted amounts (608.2h): `per: { of: 'creatures' | 'power', controller?, subtypes?,
+    attacking?, other?, sharesTypeWith? }` on an effect multiplies its amounts (damage, life,
+    cards, +N/+N, mana) by a count made as it happens: "Add {G} for each Elf you control",
+    "where X is the number of Elves on the battlefield". `countOf` makes the count.
+  - `filter: { colors?, subtypes?, enteredThisTurn? }` narrows the creatures an "each creature"
+    effect affects: Oran-Rief's "each green creature that entered this turn".
 - Costs (118, 601.2f–h, 602.2b): {T}, mana, life, `sacrificeSelf`, `sacrifice` (a permanent
   kind) and `discard` (a number of cards). A spell's `additionalCost` is paid after its mana
   cost. A sacrificed source is gone before the ability resolves, but the ability still
@@ -583,11 +662,12 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   one resolves, its targets are checked again, and if they're all illegal it doesn't resolve
   (608.2b). A spell that doesn't resolve goes to its owner's graveyard (`stackObjectFizzled`).
   Target kinds (`TARGET`):
-  - creatures: `creature`, `creatureYouControl`, `creatureOpponentControls`
+  - creatures: `creature`, `creatureYouControl`, `creatureOpponentControls`, `elfYouControl`
   - other permanents: `artifact`, `enchantment`, `artifactOrEnchantment`, `land`,
     `nonlandPermanent`, `permanent`
   - players: `player`, `opponent`, and `any` (a creature or a player)
   - spells on the stack: `spell`, `creatureSpell`, `noncreatureSpell`
+  - cards: `permanentCardInYourGraveyard`
   
   Abilities can target their own source, except Auras and Equipment attaching to themselves.
 - Auras (303.4): "Enchant creature" Auras target a creature when cast and enter attached to it.
@@ -602,7 +682,8 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
 - Continuous effects (613): each permanent keeps its printed `base` power, toughness and
   keywords. The current values are recalculated whenever something enters, leaves, or is
   attached. The effects so far are:
-  - static abilities on attached Auras and Equipment (`affected: 'attachedPermanent'`)
+  - static abilities on attached Auras and Equipment (`affected: 'attachedPermanent'`), with a
+    `per` for Alpha Status ("+2/+2 for each other creature that shares a creature type with it")
   - anthems and lords (`affected: 'eachCreatureYouControl'`, optionally `other: true`,
     `colors: ['W']` or `subtypes: ['Soldier']`): every creature its controller controls that
     matches, including ones that arrive later. When the source leaves, the bonus goes, so a
@@ -614,8 +695,24 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   These add power, toughness and keywords. Combat and keyword rules use the recalculated
   values.
 - Triggered abilities (603): `triggeredAbilities: [{ id, text, trigger, effects, target? }]`,
-  where `trigger` is `entersBattlefield` (603.6a) or `dies` (700.4: put into a graveyard from the
-  battlefield, by any means, including tokens). Being exiled or returned to hand isn't dying.
+  where `trigger` (`TRIGGER`) is:
+  - `entersBattlefield` (603.6a)
+  - `dies` (700.4: put into a graveyard from the battlefield, by any means, including tokens).
+    Being exiled or returned to hand isn't dying.
+  - `putIntoGraveyard`: the same for any permanent (Audacity)
+  - `attacks` (508.3a) and `attacksOrBlocks` (509.3c)
+  - `creatureEnters` and `landEnters`, for other permanents entering; and `spellCast`
+    (601.2i), for a spell being cast. Each has a `filter`: `{ other?, controller?: 'you' |
+    'any', subtypes?, colors? }`.
+
+  More options on an ability:
+  - `targetOther`: "another target", not its source.
+  - `optional`: "you may". Its controller always chooses, even with one target, and can decline
+    with `targets: []`. (In the rules the target is chosen first and the choice made on
+    resolution.)
+  - `modes`: "choose one —" (700.2), `[{ text, effects, target? }]`. The mode, and its target,
+    are chosen as it goes on the stack (`chooseMode`). A mode with no legal target isn't
+    offered, and with one option left it's chosen automatically.
   - When the event happens, the ability triggers (`abilityTriggered`, `state.pendingTriggers`).
     The next time a player would receive priority, after state-based actions, it goes on the
     stack (603.3). Its controller is the permanent's controller at the time.
@@ -635,6 +732,9 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   there are none left (704.3). Creatures with lethal damage or 0 toughness die (704.5f, 704.5g).
   A player loses at 0 life (704.5a), or after trying to draw from an empty library (704.5b). The
   game ends as soon as any player loses, because multiplayer elimination isn't modelled.
+  The legend rule (704.5j): a player who controls legendary permanents with the same name
+  chooses one to keep (`legendRule`, `KEEP_LEGEND`), and the rest go to the graveyard. Priority
+  waits until they've chosen.
 
 Cards are defined in `src/cards/cards.js` (by hand) and `src/cards/importedCards.js` (generated
 from Scryfall, see above): a mana cost, types, power and toughness for creatures, and activated
@@ -708,6 +808,13 @@ Everything a campaign has is data. There are two campaigns:
     in black, Sword of Vengeance in red, Fireshrieker on the Dragonlord's dragons. White Weenie
     also has Glorious Anthem and Benalish Marshal; Honor of the Pure is a reward.
   - **Planeswalkers:** the Warden plays Green Stompy and the Sage plays Blue Skies.
+  - **The Pathfinder** plays Elf Tribe (`PATHFINDER_DECK`, the
+    [Moxfield deck](https://moxfield.com/decks/OI7KqguvQECVPrOhlSQjvw)):
+    - **Rewards:** cards only from the deck's sideboard (`PATHFINDER_REWARDS`), in every tier.
+    - **Its emblem:** "{G}: Untap target creature." (sorcery speed, once a turn).
+    - **Powers:** *Free Call* makes the untap cost 0; *Elf Summons* adds "{2}: Create a 1/1
+      green Elf Warrior creature token."; and the shared Tough Hide and Second Wind.
+    - Its cards stay out of the other planeswalkers' pools.
   - **Opponents** climb from basic-AI White, Black and Red, through searching full builds and
     the other planeswalker's color, to **the Dragonlord**.
 - **`SAMPLE_CAMPAIGN`** (`src/campaign/sampleCampaign.js`) uses the made-up sample cards, for
@@ -720,9 +827,9 @@ A campaign contains:
 | `rules` | `lives`, `minDeckSize`, `rewards: { cards, powers, removeCard }` (what each win offers), `limits` (game limits, default `GAME_LIMITS`) and `maxAbilities` (planeswalker abilities over all of a player's emblems, default 4) |
 | `cards` | definitions of every card the campaign uses (beyond `CARDS`) |
 | `emblems` | emblem definitions for planeswalkers, powers and bosses (see *Emblems*) |
-| `planeswalkers` | `{ name, text, color?, art?, colors?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use. With `colors` (e.g. `['G']`), card rewards are only cards in those colors or colorless (`poolFor`) |
+| `planeswalkers` | `{ name, text, color?, art?, colors?, emblems, startingLife?, powers, decks? }`: starting emblems, the powers it can earn, and (optionally) which starter decks it may use. With `colors` (e.g. `['G']`), card rewards are only cards in those colors or colorless (`poolFor`). With `cardPool`, its card rewards come from that pool in every tier, instead of the tier's |
 | `starterDecks` | `{ name, cards }` |
-| `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`) |
+| `powers` | `{ kind, name, text, repeatable?, ... }`, with these kinds: `emblem` (`emblemId`), `activations` (`emblemId`, `amount`: more uses per turn), `startingLife` (`amount`), `extraLife` (`amount`), `upgrade` (`emblemId`, `to`: swaps an emblem the run has for a better one, keeping its extra uses) |
 | `opponents` | `{ name, color?, art?, deck, emblems?, startingLife?, ai }`, where `ai` is `{ kind: 'basic' }` or `{ kind: 'search', budgetMs, weights? }` (`weights` defaults to the opponent's id, see *Weights for each CPU deck*) |
 | `cardPools` | lists of card ids that rewards are drawn from |
 | `ladder` | tiers `{ id, name, fights, opponents, cardPool, rewards?, boss? }`, from easiest to the boss |
@@ -782,7 +889,8 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
     keyword pairing.
 - **Mana:** in its main phase it picks the most valuable set of spells and abilities it can
   afford (a small knapsack over its hand). It keeps mana up for instants it would rather cast
-  later, and taps lands and Elves before sacrificing Treasures.
+  later, and taps lands and Elves before sacrificing Treasures. It counts what each source makes
+  (Elvish Archdruid, Gaea's Cradle), and what a spell costs now (Ghalta).
 - **Instants:**
   - combat tricks once blockers are declared, when they win the fight
   - removal on attackers
@@ -793,6 +901,16 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
   lethal. An anthem or lord counts for what it adds to its controller's creatures
   (`anthemValue`), both when casting it and when removing it, so removal can go at a lord before
   a bigger creature.
+- **The Elves' mechanics:**
+  - **Choices on triggers:** modes and optional targets are chosen by `scoreEffects`; declining
+    scores 0, so it won't destroy its own artifact.
+  - **Fights:** a fight is scored by which creatures die.
+  - **The legend rule:** the copy it keeps is the one worth the most.
+  - **Flash and cycling:** flash creatures can come down as surprise blockers or at the end of
+    the opponent's turn, and it cycles a land once it has five.
+  - **Lands:** it plays a land that enters tapped when it doesn't need the mana.
+  - **Blocks:** every block plan is made legal with `legalizeBlocks` (blocking requirements,
+    moving the cheapest blockers), so the AIs can always confirm.
 - **Auras and Equipment:** a bonus Aura or Equipment goes on its best creature. A curse
   (`isCurse`: an Aura that shrinks its creature or stops it attacking, like Weakness or
   Pacifism) goes on the opponent's creature it takes the most from (`curseValue`: the drop in

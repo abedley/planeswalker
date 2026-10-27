@@ -6,7 +6,9 @@
 import { DECISION } from '../../src/engine/Game.js';
 import { PHASE, STEP } from '../../src/engine/turnStructure.js';
 import { ACTION } from '../../src/engine/actions.js';
-import { isCreature, hasKeyword, cantAttack } from '../../src/cards/cards.js';
+import {
+  isCreature, hasKeyword, cantAttack, KEYWORD, TARGET,
+} from '../../src/cards/cards.js';
 
 const isMain = (state) => state.phase === PHASE.PRECOMBAT_MAIN || state.phase === PHASE.POSTCOMBAT_MAIN;
 
@@ -34,6 +36,15 @@ export function shouldAutoPass(state, me, { hasOptions, fullControl = false, end
   return !(state.step === STEP.DECLARE_ATTACKERS || state.step === STEP.DECLARE_BLOCKERS || state.step === STEP.END);
 }
 
+/** Why the blocks can't be confirmed yet: menace, or a blocking requirement. */
+export function blockHint(state) {
+  const attackers = (state.combat?.attackers ?? []).map((a) => state.battlefield?.find((p) => p.id === a.cardId)).filter(Boolean);
+  const named = (keyword) => attackers.find((a) => hasKeyword(a, keyword))?.name;
+  if (named(KEYWORD.LURE)) return `Every creature able to block ${named(KEYWORD.LURE)} must`;
+  if (named(KEYWORD.MUST_BE_BLOCKED)) return `${named(KEYWORD.MUST_BE_BLOCKED)} must be blocked`;
+  return 'Menace needs two blockers';
+}
+
 /** Creatures of `me` that look able to attack (untapped, no defender, not summoning sick). */
 export const readyAttackers = (state, me) => state.battlefield.filter((p) => p.controllerId === me && isCreature(p)
   && !p.tapped && !cantAttack(p) && (!p.summoningSick || hasKeyword(p, 'haste')));
@@ -57,8 +68,18 @@ export function primaryAction(state, me) {
       case DECISION.DECLARE_BLOCKERS: {
         const n = Object.keys(decision.blocks).length;
         const action = find(ACTION.CONFIRM_BLOCKERS);
-        return { label: n ? `Block (${n})` : 'No blocks', action, ...(action ? {} : { hint: 'Menace needs two blockers' }) };
+        return { label: n ? `Block (${n})` : 'No blocks', action, ...(action ? {} : { hint: blockHint(state) }) };
       }
+      case DECISION.CHOOSE_TARGETS: {
+        // "You may": the button declines. A card in a graveyard is chosen from a sheet.
+        const decline = mine.find((a) => a.type === ACTION.CHOOSE_TARGETS && a.targets.length === 0);
+        if (decision.targetKind === TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD) return { label: 'Choose a card', reopen: true };
+        return decline ? { label: 'Don\'t', action: decline } : { label: 'Choose a target' };
+      }
+      case DECISION.CHOOSE_MODE:
+        return { label: 'Choose one', reopen: true };
+      case DECISION.LEGEND_RULE:
+        return { label: 'Keep one', reopen: true };
       case DECISION.DISCARD_TO_HAND_SIZE:
         return { label: `Discard ${decision.count}` };
       case DECISION.MULLIGAN:

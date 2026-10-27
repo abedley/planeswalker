@@ -43,8 +43,11 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Replaces the card's name and "this creature"-style self-references with "~". */
 export function normalizeSelfReferences(text, cardName) {
+  // A legendary card can call itself by its short name: "Dwynen" for "Dwynen, Gilt-Leaf Daen".
+  const shortName = cardName.includes(', ') ? cardName.split(', ')[0] : null;
   return text
     .replace(new RegExp(escapeRegExp(cardName), 'g'), '~')
+    .replace(shortName ? new RegExp(`\\b${escapeRegExp(shortName)}\\b`, 'g') : /(?!)/, '~')
     .replace(/\b[Tt]his (?:creature|artifact|enchantment|land|spell|permanent|Aura|Equipment)\b/g, '~')
     // There are no planeswalkers or battles, so "or planeswalker" adds nothing.
     .replace(/ or planeswalker\b/g, '');
@@ -82,6 +85,10 @@ export function parseKeywordList(text, problems) {
 const PERMANENT_SUBJECTS = {
   'target creature': [AFFECTED.TARGET, TARGET.CREATURE],
   'target creature you control': [AFFECTED.TARGET, TARGET.CREATURE_YOU_CONTROL],
+  'target elf you control': [AFFECTED.TARGET, TARGET.ELF_YOU_CONTROL],
+  // "another target": the source can't target itself.
+  'another target elf you control': [AFFECTED.TARGET, TARGET.ELF_YOU_CONTROL, false, true],
+  'another target creature you control': [AFFECTED.TARGET, TARGET.CREATURE_YOU_CONTROL, false, true],
   'target creature an opponent controls': [AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS],
   "target creature you don't control": [AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS],
   'target attacking creature': [AFFECTED.TARGET, TARGET.ATTACKING_CREATURE],
@@ -102,7 +109,7 @@ const PERMANENT_SUBJECTS = {
   '~': [AFFECTED.SOURCE],
 };
 const CREATURE_SUBJECTS = Object.fromEntries(Object.entries(PERMANENT_SUBJECTS).filter(([phrase]) => (
-  phrase === '~' || phrase.includes('creature')
+  phrase === '~' || phrase.includes('creature') || phrase.includes('elf')
 )));
 /** 509.1b: "can't block" / "can't be blocked", as the keywords this game writes them as. */
 const RESTRICTIONS = { "can't block": KEYWORD.CANT_BLOCK, "can't be blocked": KEYWORD.CANT_BE_BLOCKED };
@@ -122,6 +129,34 @@ const DAMAGE_RECIPIENTS = {
 /** Looks a phrase up in a subject table, case-insensitively. */
 const lookup = (table, phrase) => table[phrase.trim().toLowerCase()] ?? null;
 
+/** Plural creature types, for "Elves you control". */
+const PLURAL_SUBTYPES = { Elves: 'Elf', Dwarves: 'Dwarf', Wolves: 'Wolf' };
+/** "Elves" -> "Elf", "Soldiers" -> "Soldier". */
+export const singularSubtype = (word) => PLURAL_SUBTYPES[word] ?? word.replace(/s$/, '');
+
+/**
+ * What "for each <phrase>" or "where X is <phrase>" counts, as a `per` (see countOf
+ * in src/cards/cards.js), or null: "Elf you control", "creature you control", "Elf on
+ * the battlefield", "attacking Elf you control", "the number of Elves on the
+ * battlefield", "the total power of creatures you control".
+ */
+export function parseCount(phrase) {
+  const power = /^the total power of creatures you control$/.exec(phrase);
+  if (power) return { of: 'power' };
+  const match = /^(?:the number of )?(attacking )?([A-Z]?[a-z]+) (you control|on the battlefield)$/.exec(phrase);
+  if (!match) return null;
+  const [, attacking, kind, where] = match;
+  const singular = singularSubtype(kind);
+  const isCreatureWord = /^creatures?$/.test(kind);
+  if (!isCreatureWord && !/^[A-Z]/.test(kind)) return null;
+  return {
+    of: 'creatures',
+    ...(where === 'on the battlefield' ? { controller: 'any' } : {}),
+    ...(isCreatureWord ? {} : { subtypes: [singular] }),
+    ...(attacking ? { attacking: true } : {}),
+  };
+}
+
 /** An effect object, with `affected` only when it differs from the effect type's default. */
 function effect(type, fields, [affected]) {
   const result = { type, ...fields };
@@ -129,6 +164,7 @@ function effect(type, fields, [affected]) {
 }
 
 const COLORS = ['white', 'blue', 'black', 'red', 'green', 'colorless'];
+const COLOR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
 const PREDEFINED_TOKENS = { Treasure: TOKEN.TREASURE, Food: TOKEN.FOOD, Clue: TOKEN.CLUE };
 const createTokens = (count, token) => {
   const you = PLAYER_SUBJECTS.you;
@@ -170,6 +206,15 @@ const SENTENCES = [
     },
   },
   {
+    // "Target creature gets +X/+X until end of turn, where X is the number of Elves on the battlefield."
+    pattern: /^(.+?) gets? \+X\/\+X until end of turn, where X is (.+)\.$/,
+    parse: ([, phrase, countText]) => {
+      const subject = lookup(CREATURE_SUBJECTS, phrase);
+      const per = parseCount(countText);
+      return subject && per && [[subject, effect(EFFECT.PUMP, { power: 1, toughness: 1, per }, subject)]];
+    },
+  },
+  {
     pattern: /^(.+?) gets? ([+-]\d+)\/([+-]\d+)(?: and gains? (.+?))? until end of turn\.$/,
     parse: ([, phrase, power, toughness, keywordText], problems) => {
       const subject = lookup(CREATURE_SUBJECTS, phrase);
@@ -198,11 +243,31 @@ const SENTENCES = [
     },
   },
   {
+    // Oran-Rief: "Put a +1/+1 counter on each green creature that entered this turn."
+    pattern: /^Put a \+1\/\+1 counter on each (white|blue|black|red|green) creature that entered this turn\.$/,
+    parse: ([, color]) => {
+      const subject = [AFFECTED.EACH_CREATURE];
+      const filter = { colors: [COLOR_LETTERS[color]], enteredThisTurn: true };
+      return [[subject, effect(EFFECT.ADD_COUNTERS, { counter: COUNTER.PLUS_ONE, count: 1, filter }, subject)]];
+    },
+  },
+  {
     pattern: /^Put (\w+) \+1\/\+1 counters? on (.+)\.$/,
     parse: ([, count, phrase]) => {
       const subject = lookup(PERMANENT_SUBJECTS, phrase);
       if (!subject || !toNumber(count)) return null;
       return [[subject, effect(EFFECT.ADD_COUNTERS, { counter: COUNTER.PLUS_ONE, count: toNumber(count) }, subject)]];
+    },
+  },
+  {
+    // Dwynen: "You gain 1 life for each attacking Elf you control."
+    pattern: /^(.+?) (gains?|loses?) (\w+) life for each (.+)\.$/,
+    parse: ([, phrase, verb, amount, countText]) => {
+      const subject = lookup(PLAYER_SUBJECTS, phrase);
+      const per = parseCount(countText);
+      if (!subject || !per || !toNumber(amount)) return null;
+      const type = verb.startsWith('gain') ? EFFECT.GAIN_LIFE : EFFECT.LOSE_LIFE;
+      return [[subject, effect(type, { amount: toNumber(amount), per }, subject)]];
     },
   },
   {
@@ -262,6 +327,32 @@ const SENTENCES = [
     parse: ([, kind]) => {
       const subject = [AFFECTED.TARGET, { spell: TARGET.SPELL, 'creature spell': TARGET.CREATURE_SPELL, 'noncreature spell': TARGET.NONCREATURE_SPELL }[kind]];
       return [[subject, effect(EFFECT.COUNTER_SPELL, {}, subject)]];
+    },
+  },
+  {
+    // "Add {G} for each Elf you control." (Elvish Archdruid, Gaea's Cradle)
+    pattern: /^Add ((?:\{[^}]+\})+) for each (.+)\.$/,
+    parse: ([, symbols, countText], problems) => {
+      const mana = parseManaSymbols(symbols, problems, `"Add ${symbols}."`);
+      const per = parseCount(countText);
+      if (!per || mana.generic || Object.keys(mana).length === 0) return null;
+      const you = PLAYER_SUBJECTS.you;
+      return [[you, effect(EFFECT.ADD_MANA, { mana, per }, you)]];
+    },
+  },
+  {
+    // 701.14: "Target creature you control fights target creature you don't control." Two targets.
+    pattern: /^Target creature you control fights target creature (?:you don't control|an opponent controls)\.$/,
+    parse: () => [
+      [[AFFECTED.TARGET, TARGET.CREATURE_YOU_CONTROL], { type: EFFECT.FIGHT }],
+      [[AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS], null],
+    ],
+  },
+  {
+    pattern: /^Return target permanent card from your graveyard to your hand\.$/,
+    parse: () => {
+      const subject = [AFFECTED.TARGET, TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD];
+      return [[subject, effect(EFFECT.RETURN_FROM_GRAVEYARD, {}, subject)]];
     },
   },
   {
@@ -332,26 +423,31 @@ function parseTwoPartSentence(sentence, problems) {
 }
 
 /**
- * Parses effect sentences (already normalized with "~") into `{ effects, target }`,
- * or `{ failed: sentence }` for the first sentence that isn't supported. At most
- * one target is allowed across all of them.
+ * Parses effect sentences (already normalized with "~") into `{ effects, target }`
+ * (plus `targetOther` for "another target ..."), or `{ failed: sentence }` for the
+ * first sentence that isn't supported. At most one target is allowed across all of
+ * them, except a fight's two (`targets`).
  */
 export function parseEffects(text, problems) {
   const effects = [];
   const targets = [];
+  let targetOther = false;
   for (const sentence of sentences(text)) {
     const parsed = parseSentence(sentence, problems) ?? parseTwoPartSentence(sentence, problems);
     if (!parsed) return { failed: sentence };
-    for (const [[affected, targetKind, sameTarget], parsedEffect] of parsed) {
+    for (const [[affected, targetKind, sameTarget, other], parsedEffect] of parsed) {
       if (affected === AFFECTED.TARGET && !sameTarget) targets.push(targetKind);
-      effects.push(parsedEffect);
+      if (other) targetOther = true;
+      if (parsedEffect) effects.push(parsedEffect);
     }
   }
+  const fight = effects.length === 1 && effects[0].type === EFFECT.FIGHT;
+  if (fight) return { effects, target: null, targets };
   if (targets.length > 1) {
     problems.push(`More than one target isn't supported: "${text}"`);
     return { effects: [], target: null };
   }
-  return { effects, target: targets[0] ?? null };
+  return { effects, target: targets[0] ?? null, ...(targetOther ? { targetOther } : {}) };
 }
 
 const SACRIFICE_KINDS = {

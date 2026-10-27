@@ -15,14 +15,16 @@ import { h, wait } from '../dom.js';
 import { icon } from '../icons.js';
 import { crest, preloadImages } from '../art.js';
 import { BoardView } from './BoardView.js';
-import { playOptions, variantsFor, perform } from './play.js';
+import {
+  playOptions, variantsFor, secondTargets, perform,
+} from './play.js';
 import { shouldAutoPass, primaryAction } from './autopass.js';
 import { promptFor, variantLabel, nameOf, findCard } from './describe.js';
 import { damagePlans } from './damage.js';
-import { boardCard, fullCard } from '../cardView.js';
+import { boardCard, fullCard, typeLine } from '../cardView.js';
 import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
-import { isLand } from '../../src/cards/cards.js';
+import { isLand, castsAtInstantSpeed, TARGET } from '../../src/cards/cards.js';
 
 const LONG_PRESS_MS = 430;
 
@@ -170,10 +172,88 @@ export class Battle {
         this.#refresh();
         return;
       }
-      if (state.pendingDecision?.type === DECISION.ASSIGN_COMBAT_DAMAGE) this.#assignDamage(state);
-      if (state.pendingDecision?.type === DECISION.MULLIGAN) this.#offerMulligan(state);
+      this.#openDecisionSheet(state);
     }
     this.#setInteractive(acting);
+  }
+
+  /** Decisions made on a sheet rather than on the board: damage, mulligans, modes, the legend rule, graveyard cards. */
+  #openDecisionSheet(state) {
+    const decision = state.pendingDecision;
+    switch (decision?.type) {
+      case DECISION.ASSIGN_COMBAT_DAMAGE: this.#assignDamage(state); break;
+      case DECISION.MULLIGAN: this.#offerMulligan(state); break;
+      case DECISION.CHOOSE_MODE: this.#chooseMode(state); break;
+      case DECISION.LEGEND_RULE: this.#keepLegend(state); break;
+      case DECISION.CHOOSE_TARGETS:
+        if (decision.targetKind === TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD) this.#chooseGraveyardCard(state);
+        break;
+      default: break;
+    }
+  }
+
+  /** "Choose one —" (700.2): a sheet of the modes; a mode with a target then asks for it on the board. */
+  #chooseMode(state) {
+    const decision = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE_MODE);
+    const modes = [...new Set(mine.map((a) => a.mode))];
+    const pick = (mode) => {
+      const actions = mine.filter((a) => a.mode === mode);
+      if (actions.length === 1) {
+        this.#dispatch(actions[0]);
+        return;
+      }
+      this.#mode = {
+        kind: 'targeting',
+        targets: new Set(actions.map((a) => a.targets[0])),
+        sourceId: decision.sourceId,
+        prompt: 'Choose a target',
+        pick: (id) => this.#dispatch(actions.find((a) => a.targets[0] === id)),
+      };
+      this.#refresh();
+    };
+    this.#app.overlays.sheet({
+      title: decision.sourceName,
+      text: 'Choose one.',
+      options: modes.map((mode, i) => ({ label: inlineSymbols(decision.modes[mode].text), primary: i === 0, onPick: () => pick(mode) })),
+      cancel: null,
+    });
+  }
+
+  /** The legend rule (704.5j): which of your legendary permanents with the same name stays. */
+  #keepLegend(state) {
+    const decision = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.KEEP_LEGEND);
+    this.#app.overlays.sheet({
+      title: `Two ${decision.name}`,
+      text: 'You can control only one legendary permanent with the same name. Keep one; the other goes to the graveyard.',
+      options: mine.map((action, i) => {
+        const card = findCard(state, action.cardId);
+        return {
+          label: h('div.dmg-row', h('div.dmg-card', boardCard(card, this.#app.definitions))),
+          sub: [card.tapped ? 'Tapped' : 'Untapped', card.summoningSick ? 'just arrived' : ''].filter(Boolean).join(', '),
+          primary: i === 0,
+          onPick: () => this.#dispatch(action),
+        };
+      }),
+      cancel: null,
+    });
+  }
+
+  /** A card in your graveyard as a target (Elvish Regrower): a sheet of the cards. */
+  #chooseGraveyardCard(state) {
+    const decision = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE_TARGETS);
+    this.#app.overlays.sheet({
+      title: decision.sourceName,
+      text: inlineSymbols(decision.text),
+      options: mine.map((action) => {
+        if (!action.targets.length) return { label: 'Don\'t', onPick: () => this.#dispatch(action) };
+        const card = findCard(state, action.targets[0]);
+        return { label: card.name, sub: typeLine(card), onPick: () => this.#dispatch(action) };
+      }),
+      cancel: null,
+    });
   }
 
   async #finish(state) {
@@ -282,12 +362,15 @@ export class Battle {
     this.#view.showPreview(card, [{ label: status, disabled: true }], { key: `${card.id}|wait|${status}` });
   }
 
-  /** The preview buttons for a hand card when you have priority. */
+  /** The preview buttons for a hand card when you have priority: play it, and cycle it. */
   #handActions(card) {
-    const option = this.#options.find((o) => o.sourceId === card.id);
-    if (!option) return [{ label: this.#whyNot(card), disabled: true }];
-    const label = option.kind === 'land' ? 'Play land' : option.targets.length ? 'Cast → target' : 'Cast';
-    return [{ label, primary: true, onPick: () => this.#interactive && this.#begin(option) }];
+    const options = this.#options.filter((o) => o.sourceId === card.id);
+    if (!options.length) return [{ label: this.#whyNot(card), disabled: true }];
+    const labelOf = (option) => {
+      if (option.fromHand) return inlineSymbols(option.text);
+      return option.kind === 'land' ? 'Play land' : option.targets.length ? 'Cast → target' : 'Cast';
+    };
+    return options.map((option, i) => ({ label: labelOf(option), primary: i === 0, onPick: () => this.#interactive && this.#begin(option) }));
   }
 
   /** Tapping a hand card: inspect it (and, on your move, see what it can do); tap again to close. */
@@ -335,8 +418,22 @@ export class Battle {
     this.#commit(option, null);
   }
 
-  #commit(option, targetId) {
-    const variants = variantsFor(option, targetId);
+  #commit(option, targetId, secondId = null) {
+    let variants = variantsFor(option, targetId);
+    // A second target (a fight): tap it on the board.
+    const seconds = secondTargets(variants);
+    if (seconds.length > 1 && secondId === null) {
+      this.#mode = {
+        kind: 'targeting',
+        targets: new Set(seconds),
+        sourceId: targetId,
+        prompt: 'Choose the second target',
+        pick: (id) => this.#commit(option, targetId, id),
+      };
+      this.#refresh();
+      return;
+    }
+    if (secondId !== null) variants = variants.filter((v) => v.targets[1] === secondId);
     const go = (variant) => {
       this.#mode = { kind: 'idle' };
       this.#view.showPreview(null);
@@ -708,8 +805,7 @@ export class Battle {
     if (!this.#interactive) return;
     const primary = primaryAction(this.#state, this.#me);
     if (primary.reopen) {
-      if (this.#state.pendingDecision?.type === DECISION.MULLIGAN) this.#offerMulligan(this.#state);
-      else this.#assignDamage(this.#state);
+      this.#openDecisionSheet(this.#state);
       return;
     }
     if (!primary.action) {
@@ -783,7 +879,7 @@ export class Battle {
   #whyNot(card) {
     const state = this.#state;
     if (card.types.includes('Land')) return state.activePlayerId !== this.#me ? 'Play lands on your turn' : 'One land per turn';
-    const sorcerySpeed = !card.types.includes('Instant');
+    const sorcerySpeed = !castsAtInstantSpeed(card);
     if (sorcerySpeed && (state.activePlayerId !== this.#me || state.stack.length)) return 'Cast on your main phase';
     return 'Not enough mana';
   }

@@ -127,8 +127,9 @@ and planeswalkers have at most 4 abilities, so a whole board always fits. Lands 
 ("Forest ×5, 3 ready"), and a side with more than five creatures switches to two rows.
 
 **Art:** imported cards use Scryfall's images (`image.art` on the board and in hand, `image.card`
-when inspecting). Cards without art, such as the samples and tokens, get generated art: a gradient
-in their color with their type's emblem, and their name on the board. Planeswalkers and opponents
+when inspecting). Tokens use the art of a matching printed Scryfall token (see *Importing token
+art*). Cards without art, such as the samples, get generated art: a gradient in their color with
+their type's emblem, and their name on the board. Planeswalkers and opponents
 can have `art` and `color`; otherwise they get a monogram crest.
 
 **Attacking and blocking restrictions:** a creature that can't attack, can't block, or can't be
@@ -197,6 +198,20 @@ npm run import-cards -- --file cards/real-cards.txt        # one card per line, 
 npm run import-cards -- --query "set:fdn t:creature c:g"   # any Scryfall search
 npm run import-cards -- --dry-run "Birds of Paradise"      # report only, write nothing
 ```
+
+### Importing token art
+
+`tools/import-tokens.js` (`npm run import-tokens`) finds every token the cards, sample decks and
+campaigns can create, plus Treasure, Food and Clue, and writes the art of a matching Scryfall
+token to `src/cards/tokenArt.js` (`TOKEN_PRESENTATION`, keyed by the card id the game gives the
+token: `tokenCardId`).
+- **Matching:** the Scryfall token must have the same name, type line, power/toughness, colors
+  and keywords, and no other rules text.
+- **Which printing:** the token printed alongside a card that creates it (Scryfall's related
+  cards), else the newest regular printing from a token set.
+- **Re-running** keeps the tokens' current art and adds the new ones; `--refresh` picks every
+  printing again, and `--dry-run` writes nothing. A test fails when a token has no art, so run it
+  after adding a card that makes a new kind of token.
 
 A card is only imported if the engine supports everything it does:
 - It's a single-faced creature, land, artifact, enchantment, instant or sorcery, with no

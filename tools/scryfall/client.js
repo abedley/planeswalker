@@ -54,13 +54,13 @@ export function fetchCardByName(name, set) {
 
 /**
  * Many cards at once (https://scryfall.com/docs/api/cards/collection), 75 per
- * request: `identifiers` are `{ name, set? }`. Returns `{ cards, notFound }`.
+ * request: `identifiers` are `{ name, set? }` or `{ id }` (a Scryfall id). Returns `{ cards, notFound }`.
  */
 export async function fetchCollection(identifiers) {
   const cards = [];
   const notFound = [];
   for (let i = 0; i < identifiers.length; i += COLLECTION_SIZE) {
-    const chunk = identifiers.slice(i, i + COLLECTION_SIZE).map(({ name, set }) => (set ? { name, set } : { name }));
+    const chunk = identifiers.slice(i, i + COLLECTION_SIZE).map(({ id, name, set }) => (id ? { id } : set ? { name, set } : { name }));
     const page = await getJson(`${API}/cards/collection`, { method: 'POST', body: { identifiers: chunk } });
     cards.push(...page.data);
     notFound.push(...page.not_found);
@@ -68,10 +68,13 @@ export async function fetchCollection(identifiers) {
   return { cards, notFound };
 }
 
-/** Runs a Scryfall search (https://scryfall.com/docs/syntax), following every page. */
-export async function searchCards(query) {
+/**
+ * Runs a Scryfall search (https://scryfall.com/docs/syntax), following every page.
+ * `unique` is Scryfall's: 'cards' (one printing of each), 'art' or 'prints'.
+ */
+export async function searchCards(query, { unique = 'cards' } = {}) {
   const cards = [];
-  let url = `${API}/cards/search?unique=cards&q=${encodeURIComponent(query)}`;
+  let url = `${API}/cards/search?unique=${unique}&q=${encodeURIComponent(query)}`;
   while (url) {
     const page = await getJson(url);
     cards.push(...page.data);

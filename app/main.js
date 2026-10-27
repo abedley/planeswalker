@@ -4,6 +4,7 @@
  */
 import { CARDS } from '../src/cards/cards.js';
 import { CARD_PRESENTATION } from '../src/cards/importedCards.js';
+import { TOKEN_PRESENTATION } from '../src/cards/tokenArt.js';
 import { CAMPAIGN } from '../src/campaign/realCampaign.js';
 import { h, wait } from './dom.js';
 import { installIcons } from './icons.js';
@@ -62,11 +63,15 @@ function createApp(root) {
   const app = {
     root,
     content: CAMPAIGN,
-    /** Every card definition, for art and text lookups by `cardId` (with art for the hand-written ones). */
+    /**
+     * Every card definition, for art and text lookups by `cardId` (with art for the
+     * hand-written ones), and Scryfall art for tokens, by the id the game gives them.
+     */
     definitions: {
       ...CARDS,
       ...Object.fromEntries(Object.entries(CARD_PRESENTATION).map(([id, look]) => [id, { ...CARDS[id], ...look }])),
       ...CAMPAIGN.cards,
+      ...TOKEN_PRESENTATION,
     },
     storage,
     get settings() { return settings; },

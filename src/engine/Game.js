@@ -6,7 +6,7 @@ import {
   CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS, TRIGGER,
   isLand, isCreature, isAura, isEquipment, isPermanentCard, isManaAbility, hasKeyword, anthemApplies,
   abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor, castsAtInstantSpeed,
-  isLegendary, matchesFilter, countOf, scaleEffect, spellCost, canBlockCreature, colorsOf,
+  isLegendary, matchesFilter, countOf, scaleEffect, spellCost, canBlockCreature, colorsOf, tokenCardId, creatureTokenName,
 } from '../cards/cards.js';
 import { blocksLegal } from './blockRules.js';
 import { EMBLEMS, DEFAULT_EMBLEMS } from '../cards/emblems.js';
@@ -886,16 +886,16 @@ export class Game extends EventEmitter {
   #predefinedTokenId(name) {
     const definition = TOKENS[name];
     if (!definition) throw new Error(`Unknown token: ${name}`);
-    const cardId = `token:${name}`;
+    const cardId = tokenCardId(name);
     this.#cardDefinitions[cardId] ??= { ...structuredClone(definition), id: cardId, colors: [], token: true };
     return cardId;
   }
 
   #creatureTokenId(token) {
-    const name = token.name ?? `${(token.subtypes ?? []).join(' ')} Token`.trim();
+    const name = creatureTokenName(token);
     const keywords = token.keywords ?? [];
     const colors = token.colors ?? [];
-    const cardId = `token:${name}:${token.power}/${token.toughness}:${colors.join(',')}:${keywords.join(',')}`;
+    const cardId = tokenCardId(token);
     const keywordText = keywords.length ? ` with ${keywords.join(', ')}` : '';
     this.#cardDefinitions[cardId] ??= {
       id: cardId,

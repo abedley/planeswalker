@@ -40,7 +40,7 @@ export const DECISION = Object.freeze({
 
 export const STARTING_LIFE = 20; // 103.4
 export const OPENING_HAND_SIZE = 7; // 103.5
-export const MAX_HAND_SIZE = 7; // 402.2
+export const MAX_HAND_SIZE = 8; // 402.2 (house rule; the comprehensive rules say 7)
 export const LAND_PLAYS_PER_TURN = 1; // 305.2
 
 /**

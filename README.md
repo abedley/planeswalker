@@ -572,7 +572,7 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
     round by round.
   - With `mulligans: false` (the default), everyone keeps the first 7, as before.
 - Turn-based actions: the active player untaps their permanents (502.3), draws in the draw step
-  (504.1), and discards down to the maximum hand size of 7 in cleanup (514.1, 402.2).
+  (504.1), and discards down to the maximum hand size of 8 (a house rule; the rules say 7) in cleanup (514.1, 402.2).
 - Playing lands: a special action that doesn't use the stack (116.2a). The active player can do
   it in their main phase while they have priority and the stack is empty (305.1, 505.6b), once
   per turn (305.2). Afterwards the same player gets priority again (117.3c), and the run of

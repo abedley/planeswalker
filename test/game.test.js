@@ -147,9 +147,8 @@ test('walks the full turn structure, skipping blockers and damage without attack
   assert.deepEqual(visited, [
     // Turn 1: the starting player skips their draw step.
     ...steps(1, [[PHASE.BEGINNING, STEP.UPKEEP], ...rest]),
-    // Turn 2: p2 ends with 8 cards, so the game stops in cleanup for a discard.
-    ...steps(2, [[PHASE.BEGINNING, STEP.UPKEEP], [PHASE.BEGINNING, STEP.DRAW], ...rest,
-      [PHASE.ENDING, STEP.CLEANUP]]),
+    // Turn 2: p2 ends with 8 cards, within the maximum hand size, so cleanup needs no stop.
+    ...steps(2, [[PHASE.BEGINNING, STEP.UPKEEP], [PHASE.BEGINNING, STEP.DRAW], ...rest]),
     { turn: 3, phase: PHASE.BEGINNING, step: STEP.UPKEEP },
   ]);
 });
@@ -319,16 +318,16 @@ test('playing a land resets the run of passes', () => {
 // -----------------------------------------------------------------------------
 // Cleanup
 
-test('the active player discards down to 7 in the cleanup step', () => {
+test('the active player discards down to 8 in the cleanup step', () => {
   const { game, events } = startGame();
-  advanceTo(game, { turn: 2, phase: PHASE.ENDING });
-  passRound(game); // leave the end step with 8 cards in hand
+  advanceTo(game, { turn: 4, phase: PHASE.ENDING });
+  passRound(game); // leave the end step with 9 cards in hand
 
   const state = game.getState();
   assert.equal(state.step, STEP.CLEANUP);
   assert.equal(state.priorityPlayerId, null);
   assert.deepEqual(state.pendingDecision, { type: 'discardToHandSize', playerId: 'p2', count: 1 });
-  assert.equal(state.validActions.length, 8);
+  assert.equal(state.validActions.length, 9);
   assert.ok(state.validActions.every((a) => a.type === ACTION.DISCARD && a.playerId === 'p2'));
   assert.equal(game.dispatch(passPriority('p2')).ok, false);
   assert.equal(game.dispatch(discard('p1', player(game, 'p1').hand[0].id)).ok, false);
@@ -336,8 +335,8 @@ test('the active player discards down to 7 in the cleanup step', () => {
   const cardId = state.validActions[3].cardId;
   assert.deepEqual(game.dispatch(discard('p2', cardId)), { ok: true });
   assert.deepEqual(player(game, 'p2').graveyard.map((c) => c.id), [cardId]);
-  assert.equal(player(game, 'p2').hand.length, 7);
-  assert.equal(game.getState().turn, 3);
+  assert.equal(player(game, 'p2').hand.length, 8);
+  assert.equal(game.getState().turn, 5);
   assert.ok(events.some((e) => e.name === 'cardDiscarded' && e.payload.cardId === cardId));
 });
 

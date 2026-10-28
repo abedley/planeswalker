@@ -860,7 +860,7 @@ emblems and starting life. The example ladder has four tiers:
 
 **Banter:** each opponent talks, in its own voice, in a speech bubble under its portrait.
 Its `banter` lists lines (one picked at random, none repeated until all are said) for each
-moment: `start` (the match begins), `win` and `lose` (the match ends, conceding included), and
+moment: `start` (the match begins, once both hands are kept), `win` and `lose` (the match ends, conceding included), and
 the big swings, `comeback` (it was losing and now it's winning) and `collapse` (the other way).
 Swings come from `src/campaign/banter.js`: once a turn the app scores the board from the CPU's
 side with `evaluate` (seeing the player's hand only as a count), averages the last two scores so

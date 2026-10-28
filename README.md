@@ -95,7 +95,13 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 - **Tap** a card in hand to see it big, at any time, even while the opponent is thinking or
   playing. A **Play** button appears when it can be played, and the preview stays open, updating,
   until you tap anywhere else (or the card again). **Drag** it
-  up to play it, or, for a spell with a target, drag out an arrow and release on the target.
+  up to play it, or, for a spell with a target, drag out an arrow and release on the target: the
+  arrow snaps to a valid target under your finger and turns red. While you choose a target,
+  each valid one wears a reticle and everything else dims.
+- **The hand** sits low, its cards' lower halves off the bottom edge, to leave the board more
+  room: you see each card's name, cost and the top of its art. A card partly covered by the next
+  one fits its name into the strip that shows (or, if it can't at a readable size, leaves it to
+  the preview).
 - **Mana is automatic:** a play is one tap. The app dry-runs it on a copy of the game, taps
   lands (and Elves, then Treasure) the way the AI would, and asks only about real choices: the
   target, or which creature to sacrifice. You can still tap a creature (or other permanent) for
@@ -120,17 +126,34 @@ defeat (retry or skip) → … → run won or over. There's also Quick Match, an
 - **Long-press** any card to inspect it: real cards show their full Scryfall image, artist
   included. Tap anywhere to close it.
 - **The opponent** thinks visibly (a ring around its portrait) only at moments that give nothing
-  away, as described under *Search AI*.
+  away, as described under *Search AI*. Its spells are shown big in the middle of the board on
+  their way to the stack, so you see what it cast.
+- **Weight:** a creature rises and slams down onto the battlefield (a big one shakes the board).
+  In combat each attacker lunges at what it hits, blockers strike back, and the damage, life
+  totals and deaths land with the blow. A spell's damage flies to its target as a bolt in the
+  spell's color. Buffs and life gain sparkle. The board doesn't shake when the system asks for
+  reduced motion.
 
 **Screen limits:** fights use `GAME_LIMITS` (7 cards in hand, 10 creatures, 8 other permanents)
 and planeswalkers have at most 4 abilities, so a whole board always fits. Lands are shown grouped
-("Forest ×5, 3 ready"), and a side with more than five creatures switches to two rows.
+("Forest ×5, 3 ready"); a side with three creatures or fewer shows them bigger, and one with more
+than five switches to two rows of smaller ones.
+
+**No text is cut off:** names, type lines, rules text, ability labels and prompts that don't fit
+their box are set smaller until they do (`app/fit.js`), rather than ending in "…".
 
 **Art:** imported cards use Scryfall's images (`image.art` on the board and in hand, `image.card`
 when inspecting). Tokens use the art of a matching printed Scryfall token (see *Importing token
 art*). Cards without art, such as the samples, get generated art: a gradient in their color with
-their type's emblem, and their name on the board. Planeswalkers and opponents
-can have `art` and `color`; otherwise they get a monogram crest.
+their type's emblem, and their name on the board. Planeswalkers and opponents have a `portrait`:
+a printed card's Scryfall art crop, framed on the face (`x`, `y`, `zoom`), with the card and
+artist it comes from (see `src/campaign/realCampaign.js`). One without gets a hooded figure in its
+`color`.
+
+**Fonts** stand in for the ones printed on cards: Faustina for Beleren (names, type lines and the
+interface) and Crimson Pro for MPlantin (rules text), both SIL OFL and vendored in `app/vendor/`
+(Latin only, about 125 KB); Cinzel, from Google Fonts, is for titles and banners. Card faces have
+light name and type plates with dark text, like a printed card's.
 
 **Attacking and blocking restrictions:** a creature that can't attack, can't block, or can't be
 blocked wears a badge on the board ("Can't attack" and "Can't block" in red; "Unblockable",
@@ -151,14 +174,17 @@ color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
 - **Rules text:** `app/symbols.js` turns "{T}: Add {G}." into symbols, and sets reminder text in
   italics.
 - **Adding sets or glyphs:** run `npm run vendor-fonts` (`tools/vendor-fonts.js`), which needs
-  fonttools: `pip install fonttools brotli`.
+  fonttools: `pip install fonttools brotli`. `npm run vendor-fonts -- --text` fetches only the
+  text fonts.
 
 **Performance**, especially for older iPhones:
 - **Animation:** everything animates only `transform` and `opacity` (Web Animations), and glows
   are pseudo-elements whose opacity changes.
 - **Rendering:** each card keeps one element for its whole life and moves between zones with
   FLIP.
-- **Updates:** each state is one render with one layout read.
+- **Updates:** each state is one render with one layout read; text fitting measures only the
+  faces that were redrawn, in one batch on the next frame.
+- **Effects** (impacts, sparks, bolts) are a handful of small elements each, removed when done.
 - **The AI** thinks in a Web Worker.
 - **Catching up:** the board plays the engine's events back as a queue, which speeds up when it
   falls behind and skips ahead when far behind.
@@ -174,10 +200,11 @@ color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
 - `app/battle/`:
   - `Battle.js`: the game, input and the animation queue
   - `BoardView.js`: rendering and FLIP
-  - `fx.js`: effects
+  - `fx.js`: effects (moves, slams, lunges, bolts, impacts, banners)
   - `play.js`: one-tap plays
   - `autopass.js`: smart stops and the main button
-- `app/cardView.js` and `app/art.js`: how cards look
+- `app/cardView.js` and `app/art.js`: how cards look, and portraits
+- `app/fit.js`: text that shrinks to fit its box
 - `app/overlays.js`: sheets, inspect, deck viewer and settings
 - `app/audio.js`: synthesized sound
 

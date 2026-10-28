@@ -7,6 +7,7 @@ import { icon } from './icons.js';
 import { fullCard } from './cardView.js';
 import { manaValue } from '../src/cards/cards.js';
 import { symbolText } from './symbols.js';
+import { fit } from './fit.js';
 
 export function createOverlays(app) {
   let open = null;
@@ -42,6 +43,7 @@ export function createOverlays(app) {
       });
     }
     app.root.append(el);
+    fit(el);
     el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 });
     content.animate([{ transform: 'translateY(24px) scale(.97)' }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2,.9,.3,1.2)' });
     open = { el, onClose };

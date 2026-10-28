@@ -123,7 +123,10 @@ export class Battle {
     this.#intro.started = true;
     const { meInfo, oppInfo, subtitle, setup } = this.#intro;
     const defs = this.#app.definitions;
-    const urls = [...setup.game.decks[this.#me], ...setup.game.decks[this.#opp]].map((id) => defs[id]?.image?.art);
+    // The decks' art, the portraits, and the tokens' (few) art, so tokens don't arrive blank.
+    const tokens = Object.keys(defs).filter((id) => id.startsWith('token:'));
+    const urls = [...setup.game.decks[this.#me], ...setup.game.decks[this.#opp], ...tokens].map((id) => defs[id]?.image?.art)
+      .concat(meInfo.portrait?.art, oppInfo.portrait?.art);
     const intro = h('div.versus',
       h('div.vs-side.vs-opp', crest(oppInfo, { size: 'lg' }), h('div.vs-name', oppInfo.name), subtitle ? h('div.vs-sub', subtitle) : null),
       h('div.vs-mark', 'VS'),
@@ -144,6 +147,7 @@ export class Battle {
     clearTimeout(this.#autoTimer);
     this.#unsubscribe.forEach((off) => off());
     this.#cpu.detach();
+    this.#view.destroy();
   }
 
   // ---------------------------------------------------------------------------
@@ -699,16 +703,22 @@ export class Battle {
     const handTop = relRect(this.#view.parts.hand, this.el).y;
     const point = { x: event.clientX - this.el.getBoundingClientRect().left, y: event.clientY - this.el.getBoundingClientRect().top };
     if (option.targets.length && point.y < handTop - 20) {
-      // Aiming: the card waits in the hand while an arrow follows the finger.
+      // Aiming: the card waits in the hand while an arrow follows the finger, and
+      // snaps onto a valid target under it.
       el.style.transform = 'translateY(-30px)';
       const r = relRect(el, this.el);
-      this.#view.drawArrow({ x: r.cx, y: r.y }, point);
+      const aimed = this.#targetUnder(event, option.targets);
+      const aimedEl = aimed ? this.#view.elementFor(aimed) : null;
+      const on = aimedEl ? relRect(aimedEl, this.el) : null;
+      this.#view.drawArrow({ x: r.cx, y: r.y }, on ? { x: on.cx, y: on.cy } : point, { locked: Boolean(on) });
+      this.#view.setAimed(aimedEl ? aimed : null);
       if (this.#mode.kind !== 'targeting') {
         this.#mode = { kind: 'targeting', targets: new Set(option.targets), sourceId: option.sourceId, prompt: 'Release on a target', pick: (id) => this.#commit(option, id) };
         this.#refresh();
       }
     } else {
       this.#view.drawArrow(null);
+      this.#view.setAimed(null);
       el.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx * 0.03}deg)`;
     }
   }
@@ -724,6 +734,7 @@ export class Battle {
       el.classList.remove('dragging');
       el.style.willChange = '';
       this.#view.drawArrow(null);
+      this.#view.setAimed(null);
       const handTop = relRect(this.#view.parts.hand, this.el).y;
       const y = event.clientY - this.el.getBoundingClientRect().top;
       const released = y < handTop - 20;
@@ -734,12 +745,13 @@ export class Battle {
       };
       if (option.targets.length) {
         snapBack();
-        const under = document.elementFromPoint(event.clientX, event.clientY);
-        const target = this.#targetOf(under);
-        const id = target?.kind === 'player' ? target.id
-          : target?.kind === 'card' ? (target.stackId && option.targets.includes(target.stackId) ? target.stackId : target.id) : null;
-        if (released && id && option.targets.includes(id)) this.#commit(option, id);
-        else this.#cancel();
+        const id = this.#targetUnder(event, option.targets);
+        if (released && id) {
+          this.#view.lockOn(id);
+          this.#commit(option, id);
+        } else {
+          this.#cancel();
+        }
       } else if (released) {
         el.style.transform = '';
         this.#commit(option, null);
@@ -751,12 +763,21 @@ export class Battle {
     this.#tap(g.target);
   }
 
+  /** The valid target (one of `targets`) under the pointer, or null. */
+  #targetUnder(event, targets) {
+    const target = this.#targetOf(document.elementFromPoint(event.clientX, event.clientY));
+    const id = target?.kind === 'player' ? target.id
+      : target?.kind === 'card' ? (target.stackId && targets.includes(target.stackId) ? target.stackId : target.id) : null;
+    return id && targets.includes(id) ? id : null;
+  }
+
   #endGesture() {
     if (this.#gesture) clearTimeout(this.#gesture.timer);
     if (this.#gesture?.drag) {
       this.#gesture.drag.el.style.transform = '';
       this.#gesture.drag.el.classList.remove('dragging');
       this.#view.drawArrow(null);
+      this.#view.setAimed(null);
     }
     this.#gesture = null;
   }
@@ -806,6 +827,7 @@ export class Battle {
         : target.kind === 'card' ? (target.stackId && mode.targets.has(target.stackId) ? target.stackId : target.id) : null;
       if (id && mode.targets.has(id)) {
         this.#mode = { kind: 'idle' };
+        this.#view.lockOn(id);
         mode.pick(id);
       } else if (mode.cancel !== false) {
         this.#cancel();

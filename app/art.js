@@ -94,11 +94,21 @@ export function preloadImages(urls) {
   }));
 }
 
-/** A crest for a planeswalker or opponent: their art, or a monogram in their color. */
+/**
+ * A planeswalker's or opponent's portrait in a gilded ring: their `portrait` (a card's
+ * art, framed on the face), their `art`, or a hooded figure in their color.
+ */
 export function crest(person, { size = 'md' } = {}) {
   const color = person.color ?? ['green', 'blue', 'red', 'black', 'white'][hash(person.name ?? '') % 5];
-  const inner = person.art
-    ? h('img', { src: person.art, alt: '', draggable: 'false', decoding: 'async' })
-    : h('span.monogram', (person.name ?? '?').replace(/^The /, '').slice(0, 1));
+  const { portrait } = person;
+  const inner = portrait
+    ? h('div.portrait', {
+      role: 'img',
+      'aria-label': person.name,
+      style: { backgroundImage: `url("${portrait.art}")`, backgroundPosition: `${portrait.x}% ${portrait.y}%`, backgroundSize: `${portrait.zoom}% auto` },
+    })
+    : person.art
+      ? h('img', { src: person.art, alt: '', draggable: 'false', decoding: 'async' })
+      : h('span.silhouette', icon('hooded'));
   return h(`div.crest.crest-${size}.f-${color}`, inner);
 }

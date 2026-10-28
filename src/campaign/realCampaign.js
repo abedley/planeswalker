@@ -22,6 +22,15 @@ const sorcery = ACTIVATION_TIMING.SORCERY;
 const untap = { target: TARGET.CREATURE, effects: [{ type: EFFECT.UNTAP }], timing: sorcery };
 const spellsOf = (...decks) => [...new Set(decks.flat().filter((id) => !LANDS.has(id)))];
 
+/**
+ * A portrait: a card's art crop on Scryfall's CDN (`path` after art_crop/front/), with
+ * where the face is (`x`, `y`: background-position percentages) and how far to zoom in
+ * (`zoom`: background-size percentage), and the card and artist it comes from.
+ */
+const portrait = (path, x, y, zoom, card, artist) => ({
+  art: `https://cards.scryfall.io/art_crop/front/${path}`, x, y, zoom, card, artist,
+});
+
 export const CAMPAIGN = deepFreeze({
   rules: {
     lives: 3,
@@ -60,18 +69,21 @@ export const CAMPAIGN = deepFreeze({
 
   planeswalkers: {
     warden: {
+      portrait: portrait('8/d/8d64871b-6ee5-426b-9828-125cb9c7746d.jpg?1783931145', 50, 22, 240, 'Nissa, Steward of Elements', 'Howard Lyon'),
       ...SAMPLE_CAMPAIGN.planeswalkers.warden,
       text: 'A keeper of the deep forests. Big creatures, bigger counters.',
       colors: ['G'],
       decks: ['greenStompy'],
     },
     sage: {
+      portrait: portrait('c/8/c8817585-0d32-4d56-9142-0d29512e86a9.jpg?1783930196', 50, 14, 240, 'Jace, the Mind Sculptor', 'Jason Chan'),
       ...SAMPLE_CAMPAIGN.planeswalkers.sage,
       text: 'A scholar of the skies. Flyers, walls and counterspells.',
       colors: ['U'],
       decks: ['blueSkies'],
     },
     pathfinder: {
+      portrait: portrait('8/3/83b4a09f-ea53-42b4-a41a-4299192a6fd3.jpg?1783908890', 40, 6, 260, 'Imperious Perfect', 'Scott M. Fischer'),
       name: 'The Pathfinder',
       color: 'green',
       text: 'Speaks for the elves of the canopy. A wide board, lords and mana.',
@@ -94,6 +106,7 @@ export const CAMPAIGN = deepFreeze({
   opponents: {
     // Outskirts: lighter builds, basic AI.
     shieldMaiden: {
+      portrait: portrait('a/1/a11f77e4-edb6-43c6-b8ca-d4f62d26d0c0.jpg?1783915725', 30, 22, 250, 'Danitha Capashen, Paragon', 'Chris Rallis'),
       name: 'Shield-Maiden', color: 'white', deck: REAL_DECKS.whiteRecruits, ai: { kind: AI_KIND.BASIC },
       banter: {
         start: ['Shields up! I\'ve trained my whole life for this.', 'For the village! Um, and for honor!', 'Stand and fight, walker. I won\'t run.'],
@@ -104,6 +117,7 @@ export const CAMPAIGN = deepFreeze({
       },
     },
     graveRobber: {
+      portrait: portrait('4/4/44d7906e-8a89-4644-acb5-46fbe97ab39f.jpg?1783915675', 63, 22, 250, 'Ghoulcaller Gisa', 'Karla Ortiz'),
       name: 'Grave Robber', color: 'black', deck: REAL_DECKS.blackRabble, ai: { kind: AI_KIND.BASIC },
       banter: {
         start: ['Nice boots. You won\'t be needing them much longer.', 'Shh. The dead don\'t like a racket.', 'Every grave\'s a treasure chest, if you dig deep enough.'],
@@ -114,6 +128,7 @@ export const CAMPAIGN = deepFreeze({
       },
     },
     raider: {
+      portrait: portrait('3/d/3d726dff-2904-4a82-adaa-29c57a5c2aed.jpg?1783907068', 52, 25, 200, 'Legion Warboss', 'Alex Konstad'),
       name: 'Goblin Raider', color: 'red', deck: REAL_DECKS.redRaiders, ai: { kind: AI_KIND.BASIC },
       banter: {
         start: ['SMASH TIME! Wait, is it smash time? IT\'S SMASH TIME!', 'Me raid! You cry! Good deal!', 'Ooh, shiny planeswalker. Me take it.'],
@@ -125,6 +140,7 @@ export const CAMPAIGN = deepFreeze({
     },
     // Deep Wilds: full builds, searching.
     knightCaptain: {
+      portrait: portrait('8/4/8400f1a7-ebf0-49b2-a51d-3b2056c05b61.jpg?1783917184', 57, 12, 260, 'Knight Exemplar', 'Jason Chan'),
       name: 'Knight-Captain', color: 'white', deck: REAL_DECKS.whiteWeenie, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' },
       banter: {
         start: ['Company, form ranks! We ride at my word.', 'You face the Order now, walker. Kneel, or be ridden down.', 'Banners high. Let this be an honest fight.'],
@@ -135,6 +151,7 @@ export const CAMPAIGN = deepFreeze({
       },
     },
     nightStalker: {
+      portrait: portrait('5/6/561d616c-df11-4144-acec-f9fe47efa5c7.jpg?1783908076', 53, 0, 330, 'Olivia Voldaren', 'Eric Deschamps'),
       name: 'Night Stalker', color: 'black', deck: REAL_DECKS.blackRemoval, ai: { kind: AI_KIND.SEARCH, budgetMs: 500 },
       banter: {
         start: ['How kind of you to come to me. I do hate hunting on an empty stomach.', 'The moon is up. You should have stayed indoors.', 'Every heartbeat is so loud from here.'],
@@ -145,6 +162,7 @@ export const CAMPAIGN = deepFreeze({
       },
     },
     pyromancer: {
+      portrait: portrait('2/c/2cabfcfe-012e-4cab-bba2-24052eac0946.jpg?1783932984', 50, 18, 240, 'Chandra, Acolyte of Flame', 'Anna Steinbauer'),
       name: 'Pyromancer', color: 'red', deck: REAL_DECKS.redBurn, ai: { kind: AI_KIND.SEARCH, budgetMs: 500, weights: 'aggro' },
       banter: {
         start: ['Ooh, you look flammable!', 'Let\'s keep this quick. I\'m on a tight burn schedule.', 'Mind the sparks. Actually, don\'t.'],
@@ -156,6 +174,7 @@ export const CAMPAIGN = deepFreeze({
     },
     // Citadel: the other planeswalkers' colors, thinking harder, with an emblem.
     beastLord: {
+      portrait: portrait('7/9/79cfc0d7-fccb-47fb-87b6-08dd32528be6.jpg?1783927534', 34, 18, 230, 'Garruk, Primal Hunter', 'D. Alexander Gregory'),
       name: 'Beast Lord', color: 'green', deck: REAL_DECKS.greenStompy, emblems: ['planeswalker'],
       ai: { kind: AI_KIND.SEARCH, budgetMs: 1500 },
       banter: {
@@ -167,6 +186,7 @@ export const CAMPAIGN = deepFreeze({
       },
     },
     stormCaller: {
+      portrait: portrait('1/b/1be3ed47-072e-481a-b3d9-dc232ac4b24f.jpg?1783911937', 57, 8, 280, 'Talrand, Sky Summoner', 'Svetlin Velinov'),
       name: 'Storm Caller', color: 'blue', deck: REAL_DECKS.blueSkies, emblems: ['planeswalker'],
       ai: { kind: AI_KIND.SEARCH, budgetMs: 1500, weights: 'control' },
       banter: {
@@ -179,6 +199,7 @@ export const CAMPAIGN = deepFreeze({
     },
     // Throne: the boss.
     dragonlord: {
+      portrait: portrait('0/6/06f90d62-6d21-47b1-a427-eb25a42f4dcb.jpg?1783907070', 72, 24, 210, 'Glorybringer', 'Sam Burley'),
       name: 'The Dragonlord', color: 'red', deck: REAL_DECKS.dragonlord, emblems: ['bossDominion', 'planeswalker'], startingLife: 25,
       ai: { kind: AI_KIND.SEARCH, budgetMs: 2500 },
       banter: {

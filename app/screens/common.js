@@ -4,8 +4,10 @@ import { icon } from '../icons.js';
 import { AI_KIND } from '../../src/campaign/campaign.js';
 import { symbolText, inlineSymbols } from '../symbols.js';
 
-/** Name, color and art for a planeswalker or opponent (for crests). */
-export const personInfo = (person, fallbackName) => ({ name: person?.name ?? fallbackName, color: person?.color, art: person?.art });
+/** Name, color and portrait for a planeswalker or opponent (for crests). */
+export const personInfo = (person, fallbackName) => ({
+  name: person?.name ?? fallbackName, color: person?.color, art: person?.art, portrait: person?.portrait,
+});
 
 /** 1–4: how hard an opponent is, from its AI and life. */
 export function difficultyOf(opponent, boss = false) {

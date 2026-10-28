@@ -44,11 +44,12 @@ export function fullCard(cardIn, definitions, { big = false } = {}) {
     return h('div.card-face.real', h('img', { src: card.image.card, alt: card.name, draggable: 'false', decoding: 'async' }));
   }
   const isCreature = card.types?.includes('Creature');
+  // Names, type lines and rules text shrink to fit their boxes (fit.js) rather than being cut off.
   return h(`div.card-face.f-${frameOf(card)}${big ? '.big' : ''}`,
-    h('div.cf-top', h('span.cf-name', card.name), manaPips(card.manaCost)),
+    h('div.cf-top', h('span.cf-name.fit', card.name), manaPips(card.manaCost)),
     cardArt(card),
-    h('div.cf-type', h('span.cf-typeline', typeLine(card)), card.set ? setSymbol(card.set, card.rarity) : null),
-    big ? h('div.cf-text', symbolText(rulesText(card))) : keywordIcons(card.keywords),
+    h('div.cf-type', h('span.cf-typeline.fit', typeLine(card)), card.set ? setSymbol(card.set, card.rarity) : null),
+    big ? h('div.cf-text.fit', { dataset: { min: 7 } }, symbolText(rulesText(card))) : keywordIcons(card.keywords),
     isCreature ? h('div.cf-pt', `${card.power}/${card.toughness}`) : null,
     card.token ? h('div.cf-token', 'Token') : null);
 }
@@ -76,7 +77,7 @@ export function restrictionBadges(card, attachments = []) {
     ...attachments.flatMap((a) => (a.staticAbilities ?? []).flatMap((e) => e.keywords ?? [])),
   ]);
   const badges = RESTRICTIONS.filter(([keyword]) => card.keywords?.includes(keyword))
-    .map(([keyword, label, kind]) => h(`span.rb.${kind}${lasting.has(keyword) ? '' : '.now'}`, label));
+    .map(([keyword, label, kind]) => h(`span.rb.fit.${kind}${lasting.has(keyword) ? '' : '.now'}`, label));
   return badges.length ? h('div.restrict', badges) : null;
 }
 
@@ -95,7 +96,7 @@ export function boardCard(permanent, definitions, { attachments = [] } = {}) {
   return h(`div.board-face.f-${frameOf(card)}`,
     cardArt(card),
     // Without real art, cards would look alike: name them.
-    card.image?.art ? null : h('div.board-name', card.name),
+    card.image?.art ? null : h('div.board-name.fit', card.name),
     keywordIcons(card.keywords),
     restrictionBadges(card, attachments),
     attachments.length ? h('div.attach', attachments.map((a) => h(`span.tab.f-${frameOf(a)}`, icon(a.types.includes('Artifact') ? 'artifact' : 'enchantment')))) : null,
@@ -110,4 +111,4 @@ export function chipFace(permanent, definitions) {
   return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card));
 }
 
-export const cardBack = () => h('div.card-back', h('div.back-sigil', icon('star')));
+export const cardBack = () => h('div.card-back', h('div.back-oval', h('div.back-sigil', icon('star'))));

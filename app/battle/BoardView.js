@@ -483,7 +483,8 @@ export class BoardView {
       // A selected card rises only into the hand's own gap (its preview shows it whole), clear of the bar.
       const y = selected ? -6 : Math.abs(offset) ** 2 * 1.1;
       el.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
-      el.style.rotate = selected ? '0deg' : `${(offset * 1.8).toFixed(2)}deg`;
+      // It keeps its tilt too: straightened, it would slide under the next card's edge.
+      el.style.rotate = `${(offset * 1.8).toFixed(2)}deg`;
       // A selected card keeps its place in the fan: lifted over the next card it would hide that card's name.
       el.style.zIndex = i + 1;
       const covered = i < n - 1 && spread < cardWidth - 4;

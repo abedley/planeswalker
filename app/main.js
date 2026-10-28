@@ -8,6 +8,7 @@ import { TOKEN_PRESENTATION } from '../src/cards/tokenArt.js';
 import { CAMPAIGN } from '../src/campaign/realCampaign.js';
 import { h, wait } from './dom.js';
 import { installIcons } from './icons.js';
+import { fit } from './fit.js';
 import { unlockAudio, setSoundEnabled, play } from './audio.js';
 import { createOverlays } from './overlays.js';
 import { titleScreen } from './screens/title.js';
@@ -91,6 +92,7 @@ function createApp(root) {
       next.name = name;
       next.el.classList.add('screen', `screen-${name}`);
       stage.append(next.el);
+      fit(next.el);
       next.el.animate([{ opacity: 0, transform: 'scale(1.02)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' });
       if (previous) {
         previous.destroy?.();

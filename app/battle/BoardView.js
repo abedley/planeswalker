@@ -9,15 +9,20 @@
  */
 import { h, setText, toggle, reconcile } from '../dom.js';
 import { icon } from '../icons.js';
-import { crest } from '../art.js';
+import { crest, frameOf } from '../art.js';
+import { fit } from '../fit.js';
 import { symbolText, inlineSymbols } from '../symbols.js';
 import { fullCard, boardCard, chipFace, boardSignature, manaPips, cardBack } from '../cardView.js';
 import { isCreature, isLand } from '../../src/cards/cards.js';
 import { DECISION } from '../../src/engine/Game.js';
-import { TURN_PIPS } from './describe.js';
+import { TURN_PIPS, findCard } from './describe.js';
 import {
   relRect, flip, floatText, shake, pop, flyAway, crumble, banner, enter,
+  impact, shakeScreen, lunge, LUNGE_MS, LUNGE_HIT, projectile, sparkle, slam, showcase, FX_COLORS,
 } from './fx.js';
+
+/** How long a spell's bolt takes to reach its target (ms, before `speed`). */
+const BOLT_MS = 300;
 
 const DEATH_EVENTS = new Set(['creatureDied', 'permanentDestroyed', 'permanentSacrificed', 'cardBurned', 'spellCountered']);
 
@@ -42,6 +47,9 @@ export class BoardView {
   #lineTimer = null;
   #previewKey = null;
   #speech = null;
+  #aimed = null;
+  #handPeek = '';
+  #nameObserver = null;
 
   constructor(app, { me, opp, meInfo, oppInfo }) {
     this.#app = app;
@@ -49,26 +57,37 @@ export class BoardView {
     this.#opp = opp;
     this.#info = { [me]: meInfo, [opp]: oppInfo };
     this.el = this.#build(meInfo, oppInfo);
+    // A name's room changes with the abilities and the main button beside it: fit it again.
+    if (typeof ResizeObserver === 'function') {
+      this.#nameObserver = new ResizeObserver((entries) => entries.forEach((entry) => fit(entry.target)));
+      for (const side of ['me', 'opp']) this.#nameObserver.observe(this.#parts[side].avatar.parentElement.querySelector('.who'));
+    }
+  }
+
+  /** Stops watching the bars (when the battle ends). */
+  destroy() {
+    this.#nameObserver?.disconnect();
   }
 
   get parts() { return this.#parts; }
 
+  /** A player's bar: portrait with the life total on it, name and card counts, abilities (and for us, the main button). */
   #bar(side, info) {
-    const life = h('div.life', { dataset: { player: side === 'me' ? this.#me : this.#opp } }, h('span.life-n', '20'));
-    const avatar = h('div.avatar', { dataset: { player: side === 'me' ? this.#me : this.#opp } }, crest(info, { size: 'sm' }), h('div.think-ring'));
+    const player = side === 'me' ? this.#me : this.#opp;
+    const life = h('div.life', { dataset: { player } }, h('span.life-n', '20'));
+    const avatar = h('div.avatar', { dataset: { player } }, crest(info, { size: 'sm' }), h('div.think-ring'), life);
     const counts = h('div.counts',
       h('span.count.hand-count', icon('hand'), h('b', '0')),
       h('span.count.lib-count', icon('library'), h('b', '0')),
       h('span.count.grave-count', icon('grave'), h('b', '0')));
     const abilities = h('div.abilities');
     const parts = { life, avatar, counts, abilities };
+    const who = h('div.who', h('div.name.fit', { dataset: { min: 9 } }, info.name), counts);
     if (side === 'me') {
       parts.main = h('button.main-btn', { disabled: true }, h('span.main-label', '…'), h('span.spinner'), h('span.full-badge', 'Full control'));
-      const bar = h('div.bar.bar-me', avatar, h('div.who', h('div.name', info.name), counts), abilities, life, parts.main);
-      return { bar, parts };
+      return { bar: h('div.bar.bar-me', avatar, who, abilities, parts.main), parts };
     }
-    const bar = h('div.bar.bar-opp', avatar, h('div.who', h('div.name', info.name), counts), abilities, life);
-    return { bar, parts };
+    return { bar: h('div.bar.bar-opp', avatar, who, abilities), parts };
   }
 
   #build(meInfo, oppInfo) {
@@ -194,8 +213,8 @@ export class BoardView {
     const thumb = owner && this.#info[owner.id] ? crest(this.#info[owner.id], { size: 'sm' })
       : permanent ? chipFace(permanent, defs) : null;
     return h('div.card-face.ability-face',
-      h('div.af-head', thumb ? h('div.af-src', thumb) : null, h('span.af-name', object.sourceName)),
-      h('div.af-text', withCost(symbolText(effect), cost)));
+      h('div.af-head', thumb ? h('div.af-src', thumb) : null, h('span.af-name.fit', object.sourceName)),
+      h('div.af-text.fit', withCost(symbolText(effect), cost)));
   }
 
   #signature(zone, entry, state) {
@@ -229,6 +248,7 @@ export class BoardView {
       anchorsBefore.oppHand = relRect(this.#parts.opp.counts.querySelector('.hand-count'), root);
       anchorsBefore.meLib = relRect(this.#parts.me.counts.querySelector('.lib-count'), root);
     }
+    const zoneBefore = new Map([...this.#cards].map(([id, record]) => [id, record.zone]));
 
     // Cards leaving the screen: lift them into the effects layer where they were.
     const leaving = [];
@@ -252,6 +272,7 @@ export class BoardView {
     // Place every card in its zone.
     const wanted = new Map();
     const created = [];
+    const redrawn = [];
     for (const [id, entry] of zones) {
       let record = this.#cards.get(id);
       if (!record) {
@@ -265,6 +286,7 @@ export class BoardView {
         record.el.replaceChildren(this.#face(entry.zone, entry, state));
         record.zone = entry.zone;
         record.sig = sig;
+        redrawn.push(record.el);
       }
       record.el.dataset.zone = entry.zone;
       if (entry.object) record.el.dataset.stackId = entry.object.id;
@@ -287,8 +309,12 @@ export class BoardView {
     this.#layoutStack();
     this.#updateBoardDensity();
     const landPops = this.#renderLands(state, previous);
-    this.#renderBars(state, previous, { animate, speed });
+    // Damage lands when the blow or the bolt does: life totals change then.
+    const hitDelay = animate && previous ? hitDelayOf(events, speed) : 0;
+    this.#renderBars(state, previous, { animate, speed, delay: hitDelay });
     this.#renderPips(state);
+    if (!previous) fit(this.el);
+    else redrawn.forEach(fit);
 
     if (!animate || !previous) {
       this.#drawLines(state);
@@ -297,30 +323,62 @@ export class BoardView {
 
     // FLIP the cards that moved, and bring in new ones.
     if (moved) {
+      const size = relRect(root, root);
       for (const [id, record] of this.#cards) {
         const first = firstRects.get(id);
         const isNew = created.includes(id);
         if (!first && !isNew) continue;
         const last = relRect(record.el, root);
-        if (first) {
+        const arrives = record.zone.startsWith('creatures') && zoneBefore.get(id) !== record.zone;
+        if (arrives && (isNew || ['stack', 'hand'].includes(zoneBefore.get(id)))) {
+          // A creature coming onto the battlefield: it rises, then slams down.
+          const card = state.battlefield.find((p) => p.id === id);
+          blocking.push(slam(record.el, first ?? null, last, { speed, onLand: () => this.#landed(record.el, card, speed) }));
+        } else if (first) {
           const fromHand = record.zone === 'stack' && first.y > last.y;
-          blocking.push(flip(record.el, first, last, { speed, duration: fromHand ? 300 : 360 }));
+          const moved = flip(record.el, first, last, { speed, duration: fromHand ? 300 : 360 });
+          blocking.push(moved);
+          if (fromHand) {
+            // A spell cast from the hand lands on the stack in a burst of its color.
+            const { card } = zones.get(id);
+            const color = (card && FX_COLORS[frameOf(card)]) ?? FX_COLORS.gold;
+            moved.then(() => impact(this.#parts.fx, last.cx, last.cy, { speed, strength: 0.7, color, sparks: 6 }));
+          }
         } else if (record.zone === 'hand') {
           const lib = anchorsBefore.meLib ?? relRect(this.#parts.me.counts, root);
           blocking.push(flip(record.el, { x: lib.x, y: lib.y, w: 20, h: 28 }, last, { speed, duration: 420, delay: 40 * created.indexOf(id) }));
         } else if (record.zone === 'stack') {
           const object = zones.get(id).object;
-          const source = object.kind !== 'spell' ? this.elementFor(object.sourceId) : null;
-          const from = source ? relRect(source, root) : (anchorsBefore.oppHand ?? last);
-          blocking.push(flip(record.el, { ...from, w: from.w || 20, h: from.h || 28 }, last, { speed, duration: 380, flipFace: object.controllerId !== this.#me && object.kind === 'spell' }));
+          if (object.kind === 'spell' && object.controllerId !== this.#me) {
+            // The opponent's spell: shown big in the middle on its way to the stack, so you see what it is.
+            const from = anchorsBefore.oppHand ?? relRect(this.#parts.opp.avatar, root);
+            const center = { cx: size.w / 2, cy: size.h * 0.42 };
+            const scale = Math.min(2.4, (size.w * 0.52) / (last.w || 88));
+            this.#parts.stack.classList.add('showcasing');
+            const shown = showcase(record.el, from, last, center, { speed, scale })
+              .then(() => this.#parts.stack.classList.remove('showcasing'));
+            blocking.push(shown);
+          } else {
+            const source = object.kind !== 'spell' ? this.elementFor(object.sourceId) : null;
+            const from = source ? relRect(source, root) : (anchorsBefore.oppHand ?? last);
+            blocking.push(flip(record.el, { ...from, w: from.w || 20, h: from.h || 28 }, last, { speed, duration: 380 }));
+          }
         } else {
           blocking.push(enter(record.el, { speed }));
         }
       }
     }
-    for (const group of landPops) blocking.push(pop(group, { speed, scale: 1.15 }));
+    for (const group of landPops) {
+      blocking.push(pop(group, { speed, scale: 1.15 }));
+      const r = relRect(group, root);
+      impact(this.#parts.fx, r.x + 15, r.cy, { speed, strength: 0.4, color: FX_COLORS.dust, sparks: 5 });
+    }
 
-    // Cards that left: break apart, or fly to where they went.
+    // Damage, life, buffs and banners; the blows land after `hitDelay`.
+    const leavingById = new Map(leaving.map((l) => [l.id, l]));
+    this.#effects(events, state, previous, speed, blocking, { leavingById, hitDelay });
+
+    // Cards that left: break apart (once the blow has landed), or fly to where they went.
     const dying = new Map();
     for (const event of events) {
       if (DEATH_EVENTS.has(event.name)) dying.set(event.payload.cardId, event.name);
@@ -329,17 +387,32 @@ export class BoardView {
     for (const { id, el } of leaving) {
       if (dying.has(id)) {
         const kind = dying.get(id) === 'cardBurned' ? 'burn' : dying.get(id) === 'exile' ? 'exile' : 'die';
-        blocking.push(crumble(el, this.#parts.fx, { speed, kind }));
+        const breakUp = () => {
+          const r = { cx: parseFloat(el.style.left) + el.offsetWidth / 2, cy: parseFloat(el.style.top) + el.offsetHeight / 2 };
+          if (kind === 'die') impact(this.#parts.fx, r.cx, r.cy, { speed, strength: 0.8, color: '#9b8cff', sparks: 6 });
+          return crumble(el, this.#parts.fx, { speed, kind });
+        };
+        blocking.push(hitDelay ? new Promise((resolve) => { setTimeout(resolve, hitDelay + 60 * speed); }).then(breakUp) : breakUp());
       } else {
         blocking.push(flyAway(el, this.#destination(state, id), { speed }));
       }
     }
 
-    this.#effects(events, state, speed, blocking);
     this.#drawLines(state);
     clearTimeout(this.#lineTimer);
     this.#lineTimer = setTimeout(() => this.#drawLines(this.#state), 380 * speed);
     return Promise.all(blocking);
+  }
+
+  /** A creature has hit the battlefield: dust, and for a big one, the board shakes. */
+  #landed(el, card, speed) {
+    if (!el.isConnected) return;
+    this.#app.sound('enter');
+    const r = relRect(el, this.el);
+    const power = card?.power ?? 1;
+    const strength = Math.min(2, 0.55 + power / 4);
+    impact(this.#parts.fx, r.cx, r.y + r.h * 0.85, { speed, strength, color: FX_COLORS.dust, sparks: power >= 4 ? 9 : 6 });
+    if (power >= 4) shakeScreen(this.el, { speed, strength: Math.min(1.6, (power - 2) / 3) });
   }
 
   /** Where a card that left the screen went: a land group, a graveyard, a hand. */
@@ -402,16 +475,30 @@ export class BoardView {
     const width = this.#handWidth;
     const cardWidth = parseFloat(getComputedStyle(this.#parts.hand).getPropertyValue('--hand-w')) || 88;
     // Overlap as needed to keep the fan (and its tilt) on screen.
-    const spread = n > 1 ? Math.min(cardWidth * 0.82, (width - cardWidth - 12) / (n - 1)) : 0;
+    const spread = n > 1 ? Math.min(cardWidth * 0.8, (width - cardWidth - 12) / (n - 1)) : 0;
     cards.forEach((el, i) => {
       const offset = i - (n - 1) / 2;
       const selected = el.dataset.id === this.#selectedHandId;
       const x = width / 2 - cardWidth / 2 + offset * spread;
-      const y = selected ? -38 : Math.abs(offset) ** 2 * 1.3;
+      // A selected card rises only into the hand's own gap (its preview shows it whole), clear of the bar.
+      const y = selected ? -6 : Math.abs(offset) ** 2 * 1.1;
       el.style.translate = `${x.toFixed(1)}px ${y.toFixed(1)}px`;
-      el.style.rotate = selected ? '0deg' : `${(offset * 2.4).toFixed(2)}deg`;
-      el.style.zIndex = selected ? 50 : i + 1;
+      // It keeps its tilt too: straightened, it would slide under the next card's edge.
+      el.style.rotate = `${(offset * 1.8).toFixed(2)}deg`;
+      // A selected card keeps its place in the fan: lifted over the next card it would hide that card's name.
+      el.style.zIndex = i + 1;
+      const covered = i < n - 1 && spread < cardWidth - 4;
+      toggle(el, 'covered', covered);
+      if (covered) el.dataset.fitHide = '';
+      else delete el.dataset.fitHide;
     });
+    // Names fit the strip of each card the next one leaves uncovered.
+    const peek = `${Math.round(spread)}|${n}`;
+    if (this.#handPeek !== peek) {
+      this.#handPeek = peek;
+      this.#parts.hand.style.setProperty('--peek', `${Math.round(spread)}px`);
+      fit(this.#parts.hand);
+    }
   }
 
   #layoutStack() {
@@ -426,9 +513,13 @@ export class BoardView {
     toggle(this.el, 'stacked', cards.length > 0);
   }
 
-  /** Two rows of smaller cards once a side has more than five creatures. */
+  /** Bigger cards when a side has three creatures or fewer; two rows of smaller ones past five. */
   #updateBoardDensity() {
-    for (const zone of [this.#parts.meCreatures, this.#parts.oppCreatures]) toggle(zone, 'dense', zone.querySelectorAll(':scope > .z-creatures').length > 5);
+    for (const zone of [this.#parts.meCreatures, this.#parts.oppCreatures]) {
+      const n = zone.querySelectorAll(':scope > .z-creatures').length;
+      toggle(zone, 'roomy', n <= 3);
+      toggle(zone, 'dense', n > 5);
+    }
   }
 
   #renderLands(state, previous) {
@@ -472,18 +563,23 @@ export class BoardView {
     return pops;
   }
 
-  #renderBars(state, previous, { animate, speed }) {
+  #renderBars(state, previous, { animate, speed, delay = 0 }) {
     for (const player of state.players) {
       const side = player.id === this.#me ? 'me' : 'opp';
       const parts = this.#parts[side];
-      setText(parts.life.querySelector('.life-n'), player.life);
       const before = this.#lastLife[player.id];
-      if (animate && before !== undefined && before !== player.life) {
-        parts.life.classList.toggle('gain', player.life > before);
-        pop(parts.life, { speed, scale: 1.35 });
-      }
+      const changed = animate && before !== undefined && before !== player.life;
+      const show = () => {
+        setText(parts.life.querySelector('.life-n'), player.life);
+        toggle(parts.life, 'low', player.life <= 5);
+        if (!changed) return;
+        toggle(parts.life, 'gain', player.life > before);
+        pop(parts.life, { speed, scale: 1.45 });
+      };
+      // A newer state shows its own total.
+      if (changed && delay) setTimeout(() => { if (this.#state === state) show(); }, delay);
+      else show();
       this.#lastLife[player.id] = player.life;
-      toggle(parts.life, 'low', player.life <= 5);
       const [hand, lib, grave] = parts.counts.querySelectorAll('b');
       setText(hand, player.hand.length);
       setText(lib, player.library.length);
@@ -507,12 +603,16 @@ export class BoardView {
       const label = ability.name ?? (emblem.abilities.length === 1 ? emblem.name.replace(/^.*['’]s\s+/, '') : ability.text.replace(/^[^:]*:\s*/, ''));
       const button = h(`button.ability-btn.${side}`, { dataset: { emblem: emblem.id, ability: ability.id } },
         h('span.ab-cost', cost.mana ? manaPips(cost.mana) : cost.life ? `−${cost.life}♥` : '0'),
-        side === 'me' ? h('span.ab-text', label) : null,
+        side === 'me' ? h('span.ab-text.fit', { dataset: { min: 6.5 } }, label) : null,
         left !== null ? h('span.ab-uses', '•'.repeat(Math.max(0, left))) : null);
       this.#abilityButtons.set(`${emblem.id}/${ability.id}`, button);
       return button;
     });
     parts.abilities.replaceChildren(...buttons);
+    // With several, they show just their costs (a long press tells what each does).
+    toggle(parts.abilities, 'many', buttons.length > 1);
+    // The name has the room the abilities leave.
+    fit(parts.abilities.parentElement);
   }
 
   #renderPips(state) {
@@ -558,7 +658,8 @@ export class BoardView {
       if (a && b) {
         const [x1, y1] = center(a);
         const [x2, y2] = center(b);
-        paths.push(`<line class="block-line" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`);
+        const line = `x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"`;
+        paths.push(`<line class="block-glow" ${line} /><line class="block-line" ${line} />`);
       }
     }
     const top = state.stack.at(-1);
@@ -578,51 +679,111 @@ export class BoardView {
         const [x2, y2] = center(target);
         const mx = (x1 + x2) / 2 + (y2 - y1) * 0.2;
         const my = (y1 + y2) / 2 - Math.abs(x2 - x1) * 0.2;
-        paths.push(`<path class="target-line ${top.controllerId === this.#me ? 'mine' : 'theirs'}" d="M${x1},${y1} Q${mx},${my} ${x2},${y2}" marker-end="url(#arrow)" />`);
+        const d = `M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+        const side = top.controllerId === this.#me ? 'mine' : 'theirs';
+        paths.push(`<path class="target-glow ${side}" d="${d}" /><path class="target-line ${side}" d="${d}" marker-end="url(#arrow-${side})" />`
+          + `<circle class="target-ring ${side}" cx="${x2.toFixed(1)}" cy="${y2.toFixed(1)}" r="13" />`);
       }
     }
     const html = paths.join('');
     if (svg.dataset.html === html) return;
     svg.dataset.html = html;
-    svg.innerHTML = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>${html}`;
+    svg.innerHTML = `${ARROW_DEFS}${html}`;
   }
 
-  /** Damage numbers, life changes, stat pops and turn banners. */
-  #effects(events, state, speed, blocking) {
+  /**
+   * Damage numbers, life changes, stat pops and turn banners. In combat each creature
+   * lunges at what it hits; a spell's damage flies to its target as a bolt. Hits land
+   * after `hitDelay` (see hitDelayOf). `leavingById`: cards that left the board this
+   * state (still drawn where they were, in the effects layer).
+   */
+  #effects(events, state, previous, speed, blocking, { leavingById, hitDelay }) {
     const root = this.el;
+    const fx = this.#parts.fx;
     const sound = this.#app.sound;
+    // Where an id is: a player's portrait, a card (or one that just left), a stack object.
     const at = (id) => {
-      const el = id === this.#me ? this.#parts.me.life : id === this.#opp ? this.#parts.opp.life : this.elementFor(id);
-      return el ? { el, rect: relRect(el, root) } : null;
+      const el = id === this.#me ? this.#parts.me.avatar : id === this.#opp ? this.#parts.opp.avatar
+        : leavingById.get(id)?.el ?? this.elementFor(id);
+      if (!el) return null;
+      return { el, rect: relRect(el, root) };
     };
-    const hit = (targetId, amount) => {
+    const later = (ms, fn) => (ms > 0 ? setTimeout(fn, ms) : fn());
+    const hit = (targetId, amount, color = FX_COLORS.hit) => {
       const target = at(targetId);
       if (!target) return;
+      const player = targetId === this.#me || targetId === this.#opp;
       // A buzz when you're hit, where phones support it (not iOS).
       if (targetId === this.#me) navigator.vibrate?.(40);
-      floatText(this.#parts.fx, target.rect.cx, target.rect.cy, `−${amount}`, 'damage', { speed });
+      floatText(fx, target.rect.cx, target.rect.cy, `−${amount}`, 'damage', { speed });
+      impact(fx, target.rect.cx, target.rect.cy, { speed, strength: Math.min(2, 0.5 + amount / 3), color });
       shake(target.el, { speed });
+      if (player) {
+        target.el.classList.remove('hurt');
+        void target.el.offsetWidth;
+        target.el.classList.add('hurt');
+      }
     };
     for (const { name, payload } of events) {
       switch (name) {
-        case 'combatDamageDealt':
-          sound('hit');
-          for (const d of payload.damage) hit(d.targetPlayerId ?? d.targetCardId, d.amount);
+        case 'combatDamageDealt': {
+          // Attackers (and blockers, less far) throw themselves at what they hit.
+          const attackers = new Set((previous ?? state).combat.attackers.map((a) => a.cardId));
+          const lunged = new Set();
+          let toPlayers = 0;
+          for (const d of payload.damage) {
+            const targetId = d.targetPlayerId ?? d.targetCardId;
+            if (d.targetPlayerId) toPlayers += d.amount;
+            const source = at(d.sourceId);
+            const target = at(targetId);
+            if (source && target && !lunged.has(d.sourceId)) {
+              lunged.add(d.sourceId);
+              blocking.push(lunge(source.el, source.rect, target.rect, { speed, reach: attackers.has(d.sourceId) ? 0.72 : 0.3 }));
+            }
+            later(hitDelay, () => hit(targetId, d.amount));
+          }
+          later(hitDelay, () => {
+            sound('hit');
+            if (toPlayers) shakeScreen(root, { speed, strength: Math.min(1.8, 0.4 + toPlayers / 4) });
+          });
           break;
-        case 'damageDealt':
-          sound('hit');
-          hit(payload.targetPlayerId ?? payload.targetCardId, payload.amount);
+        }
+        case 'damageDealt': {
+          const targetId = payload.targetPlayerId ?? payload.targetCardId;
+          const source = at(payload.sourceId);
+          const target = at(targetId);
+          const card = findCard(previous ?? state, payload.sourceId) ?? findCard(state, payload.sourceId);
+          const color = FX_COLORS[card ? frameOf(card) : 'red'] ?? FX_COLORS.red;
+          if (source && target && source.el !== target.el) {
+            blocking.push(projectile(fx, source.rect, target.rect, { speed, color, duration: BOLT_MS }));
+            later(hitDelay, () => {
+              sound('hit');
+              hit(targetId, payload.amount, color);
+            });
+          } else {
+            sound('hit');
+            hit(targetId, payload.amount, color);
+          }
           break;
+        }
         case 'lifeGained': {
           sound('gain');
           const target = at(payload.playerId);
-          if (target) floatText(this.#parts.fx, target.rect.cx, target.rect.cy, `+${payload.amount}`, 'heal', { speed });
+          if (target) {
+            later(hitDelay, () => {
+              floatText(fx, target.rect.cx, target.rect.cy, `+${payload.amount}`, 'heal', { speed });
+              sparkle(fx, target.rect, { speed, color: FX_COLORS.heal, count: 7 });
+            });
+          }
           break;
         }
         case 'lifeLost': {
           sound('lose');
           const target = at(payload.playerId);
-          if (target) floatText(this.#parts.fx, target.rect.cx, target.rect.cy, `−${payload.amount}`, 'damage', { speed });
+          if (target) {
+            floatText(fx, target.rect.cx, target.rect.cy, `−${payload.amount}`, 'damage', { speed });
+            impact(fx, target.rect.cx, target.rect.cy, { speed, strength: 0.6, color: FX_COLORS.black, sparks: 5 });
+          }
           break;
         }
         case 'countersAdded':
@@ -630,8 +791,10 @@ export class BoardView {
           const target = at(payload.cardId ?? payload.targetId);
           if (target) {
             pop(target.el, { speed });
+            const down = name === 'temporaryEffectCreated' && ((payload.power ?? 0) < 0 || (payload.toughness ?? 0) < 0);
             const text = name === 'countersAdded' ? `+${payload.count}` : `${payload.power >= 0 ? '+' : ''}${payload.power ?? 0}/${payload.toughness >= 0 ? '+' : ''}${payload.toughness ?? 0}`;
-            floatText(this.#parts.fx, target.rect.cx, target.rect.y, text, 'buff', { speed });
+            floatText(fx, target.rect.cx, target.rect.y, text, down ? 'debuff' : 'buff', { speed });
+            sparkle(fx, target.rect, { speed, color: down ? FX_COLORS.black : FX_COLORS.gold });
           }
           break;
         }
@@ -639,13 +802,13 @@ export class BoardView {
           sound('burn');
           if (payload.playerId === this.#me) {
             const r = relRect(this.#parts.hand, root);
-            floatText(this.#parts.fx, r.cx, r.y, `${payload.cardName} burned — hand full`, 'warn', { speed: speed * 1.6 });
+            floatText(fx, r.cx, r.y, `${payload.cardName} burned — hand full`, 'warn', { speed: speed * 1.6 });
           }
           break;
         case 'tokensLimited':
           if (payload.playerId === this.#me) {
             const r = relRect(this.#parts.meCreatures, root);
-            floatText(this.#parts.fx, r.cx, r.cy, 'Board full', 'warn', { speed });
+            floatText(fx, r.cx, r.cy, 'Board full', 'warn', { speed });
           }
           break;
         case 'cardsDrawn':
@@ -654,14 +817,26 @@ export class BoardView {
         case 'landPlayed': sound('land'); break;
         case 'spellCast': sound('cast'); break;
         case 'abilityActivated': if (payload.usesStack) sound('cast'); break;
-        case 'permanentEntered': if (isCreature(payload.card)) sound('enter'); break;
-        case 'tokenCreated': sound('enter'); break;
-        case 'creatureDied': case 'permanentDestroyed': case 'permanentExiled': sound('die'); break;
-        case 'attackersDeclared': if (payload.attackers.length) sound('attack'); break;
+        // Creatures sound as they land (#landed).
+        case 'creatureDied': case 'permanentDestroyed': case 'permanentExiled': later(hitDelay, () => sound('die')); break;
+        case 'attackersDeclared': {
+          if (!payload.attackers.length) break;
+          sound('attack');
+          // A war cry: each attacker rears up.
+          payload.attackers.forEach((id, i) => {
+            const attacker = at(id);
+            if (!attacker) return;
+            attacker.el.animate([
+              { transform: 'none' }, { transform: 'translateY(-5px) scale(1.12) rotate(-2deg)', offset: 0.35 }, { transform: 'none' },
+            ], { duration: 360 * speed, delay: i * 50 * speed, easing: 'cubic-bezier(.3,.7,.3,1)' });
+            impact(fx, attacker.rect.cx, attacker.rect.cy, { speed, strength: 0.5, color: '#ff5d4a', sparks: 0 });
+          });
+          break;
+        }
         case 'turnStarted': {
           const mine = payload.activePlayerId === this.#me;
           sound('turn');
-          blocking.push(banner(this.#parts.fx, mine ? 'Your turn' : 'Opponent\'s turn', mine ? 'mine' : 'theirs', { speed, hold: mine ? 520 : 320 }));
+          blocking.push(banner(fx, mine ? 'Your turn' : 'Opponent\'s turn', mine ? 'mine' : 'theirs', { speed, hold: mine ? 520 : 320 }));
           break;
         }
         default:
@@ -708,7 +883,10 @@ export class BoardView {
     toggle(main, 'waiting', Boolean(ctx.main?.waiting));
     toggle(main, 'go', Boolean(ctx.main?.go));
     toggle(main, 'full', Boolean(ctx.main?.fullControl));
-    setText(this.#parts.prompt, ctx.prompt ?? '');
+    if (this.#parts.prompt.textContent !== (ctx.prompt ?? '')) {
+      setText(this.#parts.prompt, ctx.prompt ?? '');
+      fit(this.#parts.prompt);
+    }
     toggle(this.el, 'targeting', Boolean(ctx.targetable?.size));
     if (this.#selectedHandId !== (ctx.selectedHand ?? null)) {
       this.#selectedHandId = ctx.selectedHand ?? null;
@@ -753,30 +931,73 @@ export class BoardView {
       }, a.label, a.sub ? h('small', a.sub) : null))),
     );
     preview.classList.add('open');
+    fit(preview);
     // Only animate when a card is first shown, not when its buttons change.
     if (!wasOpen) preview.animate([{ opacity: 0, transform: 'translateY(16px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' });
   }
 
-  /** A targeting arrow from a point to the finger (for dragged spells). */
-  drawArrow(from, to) {
+  /**
+   * The aiming arrow from a point to the finger (for dragged spells): a glowing
+   * curve with a head and a reticle at its end. `locked`: the finger is on a valid
+   * target, and the arrow snaps to it.
+   */
+  drawArrow(from, to, { locked = false } = {}) {
     const svg = this.#parts.lines;
-    let path = svg.querySelector('.drag-line');
+    let group = svg.querySelector('.aim');
     if (!from) {
-      path?.remove();
+      group?.remove();
       return;
     }
-    if (!path) {
-      path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('class', 'drag-line');
-      path.setAttribute('marker-end', 'url(#arrow)');
-      if (!svg.querySelector('#arrow')) {
-        svg.insertAdjacentHTML('afterbegin', '<defs><marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>');
-      }
-      svg.append(path);
+    if (!group) {
+      if (!svg.querySelector('#arrow-mine')) svg.insertAdjacentHTML('afterbegin', ARROW_DEFS);
+      group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.setAttribute('class', 'aim');
+      group.innerHTML = '<path class="aim-glow"/><path class="aim-line"/><path class="aim-head" d="M-9,-11 L9,0 L-9,11 L-4,0 z"/>'
+        + '<g class="aim-reticle"><circle r="15"/><path d="M0,-22v8M0,14v8M-22,0h8M14,0h8"/></g>';
+      svg.append(group);
     }
+    group.classList.toggle('locked', locked);
+    // A curve that bows up, ending a little short of the point so the head sits on it.
     const mx = (from.x + to.x) / 2;
-    const my = Math.min(from.y, to.y) - 40;
-    path.setAttribute('d', `M${from.x},${from.y} Q${mx},${my} ${to.x},${to.y}`);
+    const my = Math.min(from.y, to.y) - 30 - Math.abs(to.x - from.x) * 0.15;
+    const angle = Math.atan2(to.y - my, to.x - mx);
+    const ex = to.x - Math.cos(angle) * 16;
+    const ey = to.y - Math.sin(angle) * 16;
+    const d = `M${from.x.toFixed(1)},${from.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}`;
+    group.querySelector('.aim-glow').setAttribute('d', d);
+    group.querySelector('.aim-line').setAttribute('d', d);
+    group.querySelector('.aim-head').setAttribute('transform', `translate(${ex.toFixed(1)},${ey.toFixed(1)}) rotate(${(angle * 180 / Math.PI).toFixed(1)})`);
+    group.querySelector('.aim-reticle').setAttribute('transform', `translate(${to.x.toFixed(1)},${to.y.toFixed(1)})`);
+  }
+
+  /** Marks the target the finger is on while aiming (`id`, or null for none). */
+  setAimed(id) {
+    if (this.#aimed === id) return;
+    if (this.#aimed) {
+      const old = this.#aimElement(this.#aimed);
+      old?.classList.remove('aimed');
+    }
+    this.#aimed = id;
+    if (id) this.#aimElement(id)?.classList.add('aimed');
+  }
+
+  #aimElement(id) {
+    return id === this.#me || id === this.#opp ? this.elementFor(id) : this.#stackObjects.get(id) ?? this.elementFor(id);
+  }
+
+  /** A target was picked: a ring closes in on it. */
+  lockOn(id) {
+    const el = this.#aimElement(id);
+    if (!el) return;
+    const r = relRect(el, this.el);
+    const ring = h('div.fx-lock');
+    Object.assign(ring.style, { left: `${r.cx}px`, top: `${r.cy}px`, width: `${Math.max(r.w, r.h) + 26}px`, height: `${Math.max(r.w, r.h) + 26}px` });
+    this.#parts.fx.append(ring);
+    ring.animate([
+      { transform: 'translate(-50%,-50%) scale(1.5) rotate(-40deg)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) scale(.9) rotate(0deg)', opacity: 1, offset: 0.6 },
+      { transform: 'translate(-50%,-50%) scale(.8)', opacity: 0 },
+    ], { duration: 420, easing: 'cubic-bezier(.2,.8,.2,1)' }).finished.catch(() => {}).then(() => ring.remove());
   }
 
   /** A short message over the board. */
@@ -819,6 +1040,7 @@ export class BoardView {
     for (let el = this.el.parentElement; el; el = el.parentElement) if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
     if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
     this.#handWidth = 0;
+    this.#handPeek = '';
     this.#layoutHand();
     this.#drawLines(this.#state);
   }
@@ -826,6 +1048,21 @@ export class BoardView {
   cardBack() {
     return cardBack();
   }
+}
+
+/** Arrowheads for target lines: yours and the opponent's. */
+const ARROW_DEFS = '<defs>'
+  + ['mine', 'theirs'].map((side) => `<marker id="arrow-${side}" class="arrow-${side}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 L3,5 z" fill="currentColor"/></marker>`).join('')
+  + '</defs>';
+
+/**
+ * How long until this state's blows land (ms, with `speed`): a combat creature's
+ * lunge, or a spell's bolt. Life totals and deaths wait for it.
+ */
+function hitDelayOf(events, speed) {
+  if (events.some((e) => e.name === 'combatDamageDealt' && e.payload.damage.length)) return LUNGE_MS * LUNGE_HIT * speed;
+  if (events.some((e) => e.name === 'damageDealt')) return BOLT_MS * speed;
+  return 0;
 }
 
 /** Rules-text paragraphs with an ability's cost as a badge at the start of the first. */

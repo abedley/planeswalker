@@ -678,6 +678,19 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 19px var(--dis
 .sheet-options { display: flex; flex-direction: column; gap: 8px; }
 .btn.option { text-align: left; display: flex; flex-direction: column; }
 .btn.option .sub { font-weight: 400; font-size: 12px; opacity: .8; }
+/* The play history (battle menu): each turn's plays, yours edged in green */
+.history { display: flex; flex-direction: column; gap: 12px; }
+.history-turn h4 { margin: 0 0 6px; font: 700 13px var(--display); letter-spacing: .06em; color: var(--gold2); text-align: center; }
+.history-turn { display: flex; flex-direction: column; gap: 6px; }
+.history-entry { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, .05); border-left: 3px solid #c0504d; font-size: 14px; }
+.history-entry.me { border-left-color: #4f9d69; }
+.history-who { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: #9aa1c4; }
+.history-verb { color: #9aa1c4; }
+.history-note { color: #e07a5f; font-size: 12px; }
+.history-text { font-size: 12px; color: #c7cce0; }
+.history-text p { margin: 2px 0 0; }
+.history-text .ms-cost { font-size: .95em; vertical-align: -.2em; }
+.history-targets { font-size: 12px; color: var(--gold); }
 /* Combat damage choices: the blockers, the damage each takes, and who dies */
 .dmg-row { display: flex; align-items: flex-end; gap: 14px; padding: 6px 2px 8px; }
 .dmg-card { position: relative; width: 52px; height: 70px; flex: none; transition: opacity .2s; }

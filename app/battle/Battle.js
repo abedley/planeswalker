@@ -24,6 +24,7 @@ import {
 import { shouldAutoPass, primaryAction } from './autopass.js';
 import { promptFor, variantLabel, nameOf, findCard } from './describe.js';
 import { damagePlans } from './damage.js';
+import { PlayHistory, historyView } from './history.js';
 import { boardCard, fullCard, typeLine } from '../cardView.js';
 import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
@@ -69,6 +70,8 @@ export class Battle {
   #said = new Set();
   #swing = new SwingWatch();
   #outlookTurn = 0;
+  #history = new PlayHistory();
+  #oppName;
 
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
@@ -80,6 +83,7 @@ export class Battle {
     this.#onEnd = onEnd;
     this.#me = setup.game.players[0].id;
     this.#opp = setup.cpu.playerId;
+    this.#oppName = oppInfo.name;
     this.#game = new Game(setup.game);
     this.#view = new BoardView(app, { me: this.#me, opp: this.#opp, meInfo, oppInfo });
     this.el = this.#view.el;
@@ -150,6 +154,7 @@ export class Battle {
       this.#pending.push({ name, payload });
       return;
     }
+    this.#history.record(this.#pending, payload);
     this.#queue.push({ events: this.#pending, state: payload });
     this.#pending = [];
     this.#pump();
@@ -589,8 +594,20 @@ export class Battle {
 
   #menu() {
     this.#app.overlays.settings({
-      extra: [{ label: 'Concede', danger: true, onPick: () => this.#concede() }],
+      extra: [
+        { label: 'Play history', onPick: () => this.#showHistory() },
+        { label: 'Concede', danger: true, onPick: () => this.#concede() },
+      ],
     });
+  }
+
+  #showHistory() {
+    const nameOfPlayer = (id) => (id === this.#me ? 'You' : this.#oppName);
+    const body = historyView(this.#history.entries, { me: this.#me, nameOfPlayer });
+    this.#app.overlays.sheet({ title: 'Play history', body, options: [], cancel: 'Close' });
+    // Newest at the bottom: start there.
+    const sheet = body.closest('.sheet');
+    if (sheet) sheet.scrollTop = sheet.scrollHeight;
   }
 
   async #concede() {

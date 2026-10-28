@@ -8,6 +8,7 @@ import {
 } from '../app/battle/play.js';
 import { shouldAutoPass, primaryAction, blockHint } from '../app/battle/autopass.js';
 import { promptFor } from '../app/battle/describe.js';
+import { PlayHistory } from '../app/battle/history.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const cards = { ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS };
@@ -260,4 +261,26 @@ test('the main button and prompt for modes, optional targets, graveyard cards an
     'You may choose a target: Reclamation Sage');
   const lure = { id: 'x', name: 'Taunting Elf', keywords: [KEYWORD.LURE] };
   assert.equal(blockHint({ ...base, battlefield: [lure], combat: { attackers: [{ cardId: 'x' }] } }), 'Every creature able to block Taunting Elf must');
+});
+
+test('the play history records lands, spells and their targets, by turn', () => {
+  const game = setup(['sampleShock', 'forest']);
+  const history = new PlayHistory();
+  let pending = [];
+  game.onAny((name, payload) => {
+    if (name !== 'state') pending.push({ name, payload });
+    else {
+      history.record(pending, payload);
+      pending = [];
+    }
+  });
+  withForests(game, 1);
+  const shock = handCard(game, 'sampleShock');
+  const option = playOptions(game, 'p1').find((o) => o.sourceId === shock.id);
+  assert.deepEqual(perform(game, 'p1', option, variantsFor(option, 'p2')[0]), { ok: true });
+  const turn = state(game).turn;
+  assert.deepEqual(history.entries.map(({ turn: t, playerId, kind, source, targets }) => ({ t, playerId, kind, source, targets })), [
+    { t: turn, playerId: 'p1', kind: 'land', source: 'Forest', targets: [] },
+    { t: turn, playerId: 'p1', kind: 'spell', source: 'Sample Shock', targets: [{ playerId: 'p2' }] },
+  ]);
 });

@@ -72,6 +72,7 @@ export class Battle {
   #outlookTurn = 0;
   #history = new PlayHistory();
   #oppName;
+  #greeted = false;
 
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
@@ -136,7 +137,6 @@ export class Battle {
     performance.mark('game:start');
     this.#game.start();
     performance.mark('game:started');
-    this.#say(BANTER.START);
   }
 
   destroy() {
@@ -177,6 +177,7 @@ export class Battle {
       const speed = this.#app.settings.speed * (this.#queue.length > 3 ? 0.5 : 1);
       this.#state = batch.state;
       await timed('render', () => this.#view.render(batch.state, { events: batch.events, speed, animate }));
+      this.#greet(batch.state);
       this.#watchSwing(batch.state);
     }
     this.#presenting = false;
@@ -306,6 +307,14 @@ export class Battle {
     const line = pickLine(this.#banter, kind, { used: this.#said });
     if (line) this.#view.say(line);
     return Boolean(line);
+  }
+
+  /** The opening line, once both players have kept their hands. */
+  #greet(state) {
+    if (this.#greeted || state.status !== GAME_STATUS.IN_PROGRESS) return;
+    if ([DECISION.MULLIGAN, DECISION.PUT_ON_BOTTOM].includes(state.pendingDecision?.type)) return;
+    this.#greeted = true;
+    this.#say(BANTER.START);
   }
 
   /** Once a turn, as the board shows it: a big swing in the opponent's outlook gets a line. */

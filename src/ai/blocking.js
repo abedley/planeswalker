@@ -54,10 +54,12 @@ const LL = 16;
 const MENACE = 32;
 /** "Can't be blocked by more than one creature." */
 const MAX_ONE = 64;
+/** "Can't be blocked except by three or more creatures." */
+const MIN_THREE = 128;
 
 /** The flags of combatFlags(). */
 export const COMBAT_FLAG = Object.freeze({
-  FIRST_STRIKE: FS, DOUBLE_STRIKE: DS, DEATHTOUCH: DT, TRAMPLE: TR, LIFELINK: LL, MENACE, MAX_ONE,
+  FIRST_STRIKE: FS, DOUBLE_STRIKE: DS, DEATHTOUCH: DT, TRAMPLE: TR, LIFELINK: LL, MENACE, MAX_ONE, MIN_THREE,
 });
 
 /** A creature's combat keywords, as flags. */
@@ -66,7 +68,7 @@ export function combatFlags(creature) {
   return (has(KEYWORD.FIRST_STRIKE) ? FS : 0) | (has(KEYWORD.DOUBLE_STRIKE) ? DS : 0)
     | (has(KEYWORD.DEATHTOUCH) ? DT : 0) | (has(KEYWORD.TRAMPLE) ? TR : 0)
     | (has(KEYWORD.LIFELINK) ? LL : 0) | (has(KEYWORD.MENACE) ? MENACE : 0)
-    | (has(KEYWORD.MAX_ONE_BLOCKER) ? MAX_ONE : 0);
+    | (has(KEYWORD.MAX_ONE_BLOCKER) ? MAX_ONE : 0) | (has(KEYWORD.MIN_THREE_BLOCKERS) ? MIN_THREE : 0);
 }
 
 /**
@@ -327,7 +329,7 @@ const top = new Float64Array(4);
  * An option's `classes` are its blockers' classes, and `delta` adds them to a state.
  */
 function attackerOptions(a, legal, groupMax, safe, radix, lifeWeight) {
-  const minSize = a.flags & MENACE ? 2 : 1;
+  const minSize = a.flags & MIN_THREE ? 3 : a.flags & MENACE ? 2 : 1;
   const toughnessLeft = a.toughness - a.damage;
   const options = [];
   const members = [];

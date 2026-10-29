@@ -150,7 +150,7 @@ function distributions(amount, ids) {
  */
 const IMMUTABLE_FIELDS = new Set([
   'abilities', 'triggeredAbilities', 'staticAbilities', 'spell', 'manaCost', 'types', 'subtypes', 'supertypes', 'additionalCost',
-  'colors', 'effects', 'handAbilities', 'costReduction', 'modes',
+  'colors', 'effects', 'handAbilities', 'graveyardAbilities', 'costReduction', 'modes',
 ]);
 
 /**
@@ -1033,6 +1033,13 @@ export class Game extends EventEmitter {
       // Abilities activated from the hand, such as cycling (702.29).
       ...(definition.handAbilities ? {
         handAbilities: definition.handAbilities.map(({ id, text, ...ability }) => ({
+          id, text, isManaAbility: false, cost: structuredClone(ability.cost), effects: structuredClone(abilityEffects(ability)),
+          timing: ability.timing ?? ACTIVATION_TIMING.INSTANT, target: ability.target ?? null,
+        })),
+      } : {}),
+      // Abilities activated from the graveyard (Gollum, Patient Plotter).
+      ...(definition.graveyardAbilities ? {
+        graveyardAbilities: definition.graveyardAbilities.map(({ id, text, ...ability }) => ({
           id, text, isManaAbility: false, cost: structuredClone(ability.cost), effects: structuredClone(abilityEffects(ability)),
           timing: ability.timing ?? ACTIVATION_TIMING.INSTANT, target: ability.target ?? null,
         })),
@@ -2166,7 +2173,8 @@ export class Game extends EventEmitter {
       case EFFECT.ADD_MANA: {
         for (const playerId of players) {
           const zone = this.#zones.get(playerId);
-          if (effect.anyCombination) {
+          if (effect.anyCombination !== undefined) {
+            if (effect.anyCombination <= 0) continue;
             // Mana in any combination of colors, or only for some spells, is kept as mana of any color.
             zone.specialMana.push({ amount: effect.anyCombination, restriction: effect.restriction ?? null });
             this.#emitEvent('manaAdded', { playerId, mana: { any: effect.anyCombination }, manaPool: { ...zone.manaPool }, specialMana: structuredClone(zone.specialMana) });

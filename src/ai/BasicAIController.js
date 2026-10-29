@@ -1,10 +1,10 @@
 import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
-import { DECISION } from '../engine/Game.js';
+import { DECISION, CHOICE } from '../engine/Game.js';
 import { STEP, PHASE } from '../engine/turnStructure.js';
 import {
   isCreature, isLand, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, isHarmfulEffect,
-  castsAtInstantSpeed,
+  castsAtInstantSpeed, targetList, withX, colorsOf, COLORS_OF_MANA, flattenEffects,
 } from '../cards/cards.js';
 import { manaPoolTotal, canPayMana } from '../engine/mana.js';
 import {
@@ -14,7 +14,7 @@ import {
   creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING, legalBlocks,
 } from './combat.js';
 import {
-  scoreEffects, bestScore, costScore, candidateTargets, permanentValue, wastedDamage,
+  scoreEffects, bestScore, costScore, candidateTargets, permanentValue, wastedDamage, targetCombos, sacrificeCandidates,
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import { BLOCK_PLAN } from './blocking.js';
@@ -206,6 +206,16 @@ export class BasicAIController extends EventEmitter {
         const keep = (card) => keepValue(state, me, card);
         return bestBy(mine, (a) => -keep(state.players.find((p) => p.id === me).hand.find((c) => c.id === a.cardId)));
       }
+      case DECISION.CHOOSE:
+        return bestBy(mine, (a) => choiceScore(state, me, decision, a.choice));
+      case DECISION.CHOOSE_MANY: {
+        // Toggle towards the wanted selection (in order), then confirm.
+        const wanted = wantedSelection(state, me, decision);
+        const extra = decision.selected.find((id) => !wanted.includes(id));
+        const next = extra ?? wanted.find((id) => !decision.selected.includes(id));
+        const toggle = next !== undefined && find(ACTION.TOGGLE_CHOICE, (a) => a.choice === next);
+        return toggle || find(ACTION.CONFIRM_CHOICE) || mine[0];
+      }
       case undefined:
         break;
       default:
@@ -335,14 +345,23 @@ export class BasicAIController extends EventEmitter {
         }
         continue;
       }
-      if (card.spell.targets) {
-        // Several targets (a fight): the best combination.
-        const best = bestTargets(state, me, card.spell.effects, card.spell.targets, card.id, preCombat);
-        if (best && best.score > 0 && windowAllows(window, card.spell.effects, instant, best.targets.at(-1), state, me)) {
-          const matches = (a) => a.type === ACTION.CAST_SPELL && a.cardId === card.id && a.targets?.join() === best.targets.join();
-          add({ score: best.score, manaCost, cost, sourceId: card.id, now: true, matches });
-        } else if (best && best.score > 0 && instant && window === WINDOW.MAIN) {
-          add({ score: 0.6 * best.score, manaCost, cost, sourceId: card.id, now: false, matches: () => false });
+      // {X}: as big as the mana available allows (107.3).
+      const x = card.manaCost?.X ? Math.max(0, available - manaValue(manaCost)) : undefined;
+      const xCost = x !== undefined ? withX(card.manaCost, x) : manaCost;
+      const sameX = (a) => x === undefined || a.x === x;
+      // A modal spell (700.2): each mode is an idea of its own; several targets: the best combination.
+      const modes = card.spell.modes ? card.spell.modes.map((m, i) => [i, m]) : [[undefined, card.spell]];
+      if (card.spell.modes || card.spell.targets || x !== undefined) {
+        for (const [mode, holder] of modes) {
+          const best = bestTargets(state, me, holder.effects, targetList(holder), card.id, preCombat, x);
+          const targetId = best?.targets.filter(Boolean).at(-1) ?? null;
+          if (best && best.score > 0 && windowAllows(window, holder.effects, instant, targetId, state, me)) {
+            const matches = (a) => a.type === ACTION.CAST_SPELL && a.cardId === card.id && a.mode === mode && sameX(a)
+              && (a.targets ?? []).join() === best.targets.join();
+            add({ score: best.score, manaCost: xCost, cost, sourceId: card.id, now: true, matches });
+          } else if (best && best.score > 0 && instant && window === WINDOW.MAIN) {
+            add({ score: 0.6 * best.score, manaCost: xCost, cost, sourceId: card.id, now: false, matches: () => false });
+          }
         }
         continue;
       }
@@ -362,11 +381,13 @@ export class BasicAIController extends EventEmitter {
       }
     }
 
-    // Activated abilities of our permanents and emblems (mana abilities are only for paying).
+    // Activated abilities of our permanents and emblems (mana abilities are only for paying),
+    // and of cards in our graveyard.
     const permanents = state.battlefield.filter((p) => p.controllerId === me);
-    for (const source of [...permanents, ...player.emblems]) {
+    const graveyard = player.graveyard.filter((c) => c.graveyardAbilities);
+    for (const source of [...permanents, ...player.emblems, ...graveyard]) {
       if (source.emblemId && source.activationsThisTurn >= source.activationsPerTurn) continue;
-      for (const ability of source.abilities ?? []) {
+      for (const ability of (graveyard.includes(source) ? source.graveyardAbilities : source.abilities) ?? []) {
         if (ability.isManaAbility) continue;
         if (ability.timing === 'sorcery' && window !== WINDOW.MAIN) continue;
         if (ability.cost.tap && (source.tapped || (isCreature(source) && source.summoningSick && !hasKeyword(source, KEYWORD.HASTE)))) continue;
@@ -382,6 +403,19 @@ export class BasicAIController extends EventEmitter {
         }
         // A creature that could attack shouldn't tap for an ability before combat.
         if (ability.cost.tap && preCombat && isCreature(source) && !cantAttack(source)) continue;
+        if (ability.targets || manaCost.X) {
+          // Several targets (Ioreth), or {X} (Ent-Draught Basin): the best combination, for each X we could pay.
+          const xs = manaCost.X ? Array.from({ length: Math.max(0, available - manaValue(manaCost)) + 1 }, (_, i) => i) : [undefined];
+          for (const x of xs) {
+            const best = bestTargets(state, me, ability.effects, targetList(ability), source.id, preCombat, x);
+            if (!best || best.score <= 0 || !windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targets.filter(Boolean).at(-1), state, me)) continue;
+            const matches = (a) => a.type === ACTION.ACTIVATE_ABILITY && a.cardId === source.id && a.abilityId === ability.id
+              && (x === undefined || a.x === x) && (a.targets ?? []).join() === best.targets.join();
+            const score = best.score + costScore(state, me, ability.cost, {}, source.id) + cheapestSacrifice(state, me, ability.cost, source.id, fodder);
+            add({ score, manaCost: x === undefined ? manaCost : withX(manaCost, x), cost: ability.cost, sourceId: source.id, now: true, matches });
+          }
+          continue;
+        }
         const best = bestTarget(state, me, ability.effects, ability.target, source.id, window, preCombat, doomed);
         if (!best || !(windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targetId, state, me)
           || cashesInDoomed(state, me, ability.cost, source.id, window, fodder))) continue;
@@ -439,7 +473,8 @@ export function windowOf(state, me) {
 }
 
 /** Whether these effects are worth using in this window (rather than waiting for a better one). */
-function windowAllows(window, effects, instantSpeed, targetId, state, me) {
+function windowAllows(window, given, instantSpeed, targetId, state, me) {
+  const effects = flattenEffects(given);
   const counters = effects.some((e) => e.type === EFFECT.COUNTER_SPELL);
   if (window === WINDOW.RESPONSE) return counters;
   if (counters) return false;
@@ -490,17 +525,13 @@ function legendValue(state, id) {
 }
 
 /**
- * The best combination of targets for a spell with several (a fight), `{ targets, score }`,
- * or null if there's none.
+ * The best combination of targets for a spell or ability with several (a fight, "up to
+ * two"), or none, `{ targets, score }`, or null if there's none. `x` is X, if it has one.
  */
-function bestTargets(state, me, effects, kinds, sourceId, preCombat) {
-  let options = [[]];
-  for (const kind of kinds) {
-    options = options.flatMap((chosen) => candidateTargets(state, me, kind).filter((id) => !chosen.includes(id)).map((id) => [...chosen, id]));
-  }
+function bestTargets(state, me, effects, kinds, sourceId, preCombat, x) {
   let best = null;
-  for (const targets of options) {
-    const score = scoreEffects(state, me, effects, targets, sourceId, { preCombat });
+  for (const targets of targetCombos(state, me, kinds, sourceId, 200, x)) {
+    const score = scoreEffects(state, me, effects, targets, sourceId, { preCombat, x });
     if (!best || score > best.score) best = { targets, score };
   }
   return best;
@@ -558,7 +589,7 @@ function combatSwing(state, me, effects, targetId, sourceId) {
   const weight = { damageWeight: damageWeight(defender.life) };
   const before = combatValue(pairs((c) => c), weight);
   const affected = new Set(targetId ? [targetId] : []);
-  const pumps = effects.filter((e) => e.type === EFFECT.PUMP);
+  const pumps = flattenEffects(effects).filter((e) => e.type === EFFECT.PUMP);
   for (const e of pumps) {
     if (e.affected === 'eachCreatureYouControl') state.battlefield.filter((p) => p.controllerId === me && isCreature(p)).forEach((p) => affected.add(p.id));
     if (e.affected === 'source') affected.add(sourceId);
@@ -632,8 +663,8 @@ function equipOptions(state, me, equipment, preCombat) {
 }
 
 /** What a "sacrifice a ..." cost could take. */
-const sacrificeFodder = (state, me, cost, sourceId) => state.battlefield.filter((p) => p.controllerId === me
-  && p.id !== sourceId && (cost.sacrifice !== 'creature' || isCreature(p)));
+const sacrificeFodder = (state, me, cost, sourceId) => sacrificeCandidates(state, me, cost.sacrifice, sourceId)
+  .filter((p) => p.id !== sourceId);
 
 /** The cost of the cheapest thing a "sacrifice a ..." cost could take (zero or negative). */
 function cheapestSacrifice(state, me, cost, sourceId, doomed = null) {
@@ -675,6 +706,116 @@ function knapsack(candidates, capacity) {
   };
   visit(0, [], 0, 0);
   return best;
+}
+
+/** How good a choice made while something resolves would be for `me` (DECISION.CHOOSE). */
+function choiceScore(state, me, decision, choice) {
+  const permanent = (id) => state.battlefield.find((p) => p.id === id);
+  const hand = state.players.find((p) => p.id === me).hand;
+  const cardIn = (cards, id) => cards?.find((c) => c.id === id);
+  const lifeOf = (id) => state.players.find((p) => p.id === id).life;
+  switch (decision.kind) {
+    case CHOICE.RING_BEARER: {
+      // An evasive, hard-hitting creature that can attack, and not a second copy of a legend.
+      const p = permanent(choice);
+      const twin = state.battlefield.some((o) => o.id !== p.id && o.controllerId === me && o.name === p.name);
+      const evasion = hasKeyword(p, KEYWORD.FLYING) || hasKeyword(p, KEYWORD.CANT_BE_BLOCKED) ? 3 : hasKeyword(p, KEYWORD.MENACE) ? 1 : 0;
+      const current = state.players.find((q) => q.id === me).ring?.bearerId === choice ? 0.5 : 0;
+      return creatureValue(p) + evasion + current + (cantAttack(p) ? -4 : 0) + (twin ? -6 : 0);
+    }
+    case CHOICE.ARMY:
+      return permanent(choice)?.power ?? 0;
+    case CHOICE.SACRIFICE: {
+      const p = permanent(choice);
+      return -(isCreature(p) ? (p.token ? creatureValue(p) : permanentValue(p)) : p.token ? 1 : isLand(p) ? 3 : permanentValue(p));
+    }
+    case CHOICE.DISCARD:
+    case CHOICE.BOTTOM_FROM_HAND:
+      return -keepValue(state, me, cardIn(hand, choice));
+    case CHOICE.REVEALED_CARD: {
+      const card = cardIn(decision.cards, choice);
+      return card ? (isCreature(card) ? permanentValue(card) : 3) + manaValue(card.manaCost ?? {}) : 0;
+    }
+    case CHOICE.KEYWORD: {
+      const creature = permanent(decision.ids?.[0]);
+      const fighting = creature && state.combat.attackers.some((a) => a.cardId === creature.id || a.blockerIds.includes(creature.id));
+      const threatened = creature && state.stack.some((o) => o.controllerId !== me && (o.targets ?? []).includes(creature.id));
+      const scores = {
+        [KEYWORD.FIRST_STRIKE]: fighting ? 3 : 1,
+        [KEYWORD.VIGILANCE]: fighting ? 0 : 2,
+        [KEYWORD.INDESTRUCTIBLE]: fighting || threatened ? 3 : 1,
+        [KEYWORD.LIFELINK]: fighting ? 2 : 1.5,
+      };
+      return scores[choice] ?? 0;
+    }
+    case CHOICE.MAY: {
+      if (choice === 'no') return 0;
+      // Gorbag: sacrificing the creature that hit is worth a card only if it's a small one.
+      const sacrifices = (decision.effects ?? []).some((e) => e.type === EFFECT.SACRIFICE);
+      const subject = permanent(state.resolving?.context.subject?.id);
+      if (sacrifices) return subject && (subject.token || creatureValue(subject) < 4) ? 1 : -1;
+      return 1;
+    }
+    case CHOICE.OPTIONAL_COST: {
+      if (choice === 'decline') return 0;
+      // The effect it pays for is worth about a card; a sacrifice costs what it takes, mana a little.
+      const [index, ids] = String(choice).split(':');
+      const cost = decision.costs[Number(index)];
+      const lost = (ids ? ids.split(',') : []).map(permanent).filter(Boolean)
+        .reduce((sum, p) => sum + (p.token ? (isCreature(p) ? creatureValue(p) : 1) : permanentValue(p)), 0);
+      const opponentsCreatures = state.battlefield.some((p) => p.controllerId !== me && isCreature(p));
+      return (opponentsCreatures || !cost.sacrifice ? 3 : 1.5) - lost - (cost.mana ? 0.5 : 0);
+    }
+    case CHOICE.PAY: {
+      if (choice === 'decline') return 0;
+      // Life to keep a creature (Morgul-Knife Wound): only with life to spare. Mana (ward): worth it.
+      if (decision.cost?.life) return lifeOf(me) - decision.cost.life > 6 ? 1 : -1;
+      return 1;
+    }
+    case CHOICE.CREATURE_TYPE: {
+      const library = state.players.find((p) => p.id === me).library ?? [];
+      const count = (cards) => cards.filter((c) => isCreature(c) && (c.subtypes ?? []).includes(choice)).length;
+      return 3 * count(hand) + 0.1 * count(library);
+    }
+    case CHOICE.GRAVEYARD_CARD:
+    case CHOICE.HAND_CARD: {
+      if (choice === 'decline') return 0;
+      const card = cardIn(state.players.find((p) => p.id === me).graveyard, choice) ?? cardIn(hand, choice);
+      return card ? 1 + (isCreature(card) ? permanentValue(card) : 3) : 0;
+    }
+    default:
+      return 0;
+  }
+}
+
+/** What to select for a DECISION.CHOOSE_MANY, in order. */
+function wantedSelection(state, me, decision) {
+  const player = state.players.find((p) => p.id === me);
+  const cards = decision.cards ?? [];
+  const card = (id) => cards.find((c) => c.id === id);
+  const lands = state.battlefield.filter((p) => p.controllerId === me && isLand(p)).length + player.hand.filter(isLand).length;
+  switch (decision.kind) {
+    case CHOICE.SCRY: {
+      // Keep what we'd want to draw next: lands while short of them, spells we can cast soon.
+      const wanted = (c) => (isLand(c) ? lands < 6 : manaValue(c.manaCost ?? {}) <= lands + 2);
+      return decision.options.filter((id) => card(id) && wanted(card(id)))
+        .sort((a, b) => keepValue(state, me, card(b)) - keepValue(state, me, card(a)));
+    }
+    case CHOICE.SEARCH: {
+      // Lands of the colors our hand needs most, else the most valuable cards.
+      const needs = new Map(COLORS_OF_MANA.map((c) => [c, 0]));
+      for (const c of player.hand) for (const color of colorsOf(c)) needs.set(color, needs.get(color) + 1);
+      const value = (c) => (isLand(c)
+        ? 5 + Math.max(0, ...(c.abilities ?? []).flatMap((ab) => ab.effects ?? []).flatMap((e) => Object.keys(e.mana ?? {})).map((t) => needs.get(t) ?? 0))
+        : keepValue(state, me, c));
+      return [...decision.options].filter((id) => card(id)).sort((a, b) => value(card(b)) - value(card(a))).slice(0, decision.max);
+    }
+    case CHOICE.GRAVEYARD_CARDS:
+      // The Bath Song: everything goes back (a bigger library, and our spells to draw again).
+      return [...decision.options];
+    default:
+      return decision.selected;
+  }
 }
 
 /** How much a card in hand is worth keeping (for discarding down to hand size). */

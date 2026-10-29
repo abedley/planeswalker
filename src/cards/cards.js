@@ -373,6 +373,13 @@ export const isCurse = (card) => isAura(card) && (card.staticAbilities ?? []).so
   return size < 0 || keywords.includes(KEYWORD.CANT_ATTACK) || (size <= 0 && keywords.includes(KEYWORD.CANT_BLOCK));
 });
 
+/**
+ * Effects with the branches of "if" and "you may" effects spread out, for questions
+ * such as "does this pump a creature?" (AI decisions).
+ */
+export const flattenEffects = (effects) => effects.flatMap((e) => (e.type === EFFECT.IF ? flattenEffects([...e.then, ...(e.else ?? [])])
+  : e.type === EFFECT.MAY ? flattenEffects(e.effects) : [e]));
+
 /** An ability's effects, whether written as `effects` or a single `effect`. */
 export const abilityEffects = (ability) => ability.effects ?? (ability.effect ? [ability.effect] : []);
 

@@ -4977,6 +4977,62 @@ export const IMPORTED_CARDS = {
     "scryfallId": "d26ffb2c-f7a5-4a4f-9b99-c8de9dfd49da",
     "scryfallUri": "https://scryfall.com/card/ltr/200/elrond-master-of-healing?utm_source=api"
   },
+  "elvenChorus": {
+    "id": "elvenChorus",
+    "name": "Elven Chorus",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "staticAbilities": [
+      {
+        "rule": "lookAtLibraryTop"
+      },
+      {
+        "rule": "castCreaturesFromLibraryTop"
+      },
+      {
+        "affected": "eachCreatureYouControl",
+        "grantAbilities": [
+          {
+            "id": "chorusMana",
+            "text": "{T}: Add one mana of any color.",
+            "cost": {
+              "tap": true
+            },
+            "effects": [
+              {
+                "type": "addMana",
+                "anyColor": 1
+              }
+            ],
+            "isManaAbility": true
+          }
+        ]
+      }
+    ],
+    "text": "You may look at the top card of your library any time.\nYou may cast creature spells from the top of your library.\nCreatures you control have \"{T}: Add one mana of any color.\"",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/1/616cfb94-3faf-44fe-bf04-e90643765e48.jpg?1783916271",
+      "card": "https://cards.scryfall.io/normal/front/6/1/616cfb94-3faf-44fe-bf04-e90643765e48.jpg?1783916271"
+    },
+    "artist": "Anato Finnstark",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "160",
+    "typeLine": "Enchantment",
+    "oracleText": "You may look at the top card of your library any time.\nYou may cast creature spells from the top of your library.\nCreatures you control have \"{T}: Add one mana of any color.\"",
+    "scryfallId": "616cfb94-3faf-44fe-bf04-e90643765e48",
+    "scryfallUri": "https://scryfall.com/card/ltr/160/elven-chorus?utm_source=api"
+  },
   "elvenFarsight": {
     "id": "elvenFarsight",
     "name": "Elven Farsight",
@@ -5686,6 +5742,73 @@ export const IMPORTED_CARDS = {
     "oracleText": "Haste\nWhenever Éomer attacks, if you control a creature with the greatest power among creatures on the battlefield, create a 1/1 white Human Soldier creature token.",
     "scryfallId": "d920fcaf-4988-4186-962d-cdda25d79e7b",
     "scryfallUri": "https://scryfall.com/card/ltr/121/%C3%A9omer-of-the-riddermark?utm_source=api"
+  },
+  "eowynFearlessKnight": {
+    "id": "eowynFearlessKnight",
+    "name": "Éowyn, Fearless Knight",
+    "manaCost": {
+      "generic": 2,
+      "R": 1,
+      "W": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Knight"
+    ],
+    "power": 3,
+    "toughness": 4,
+    "keywords": [
+      "haste"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield1",
+        "trigger": "entersBattlefield",
+        "text": "When Éowyn enters, exile target creature an opponent controls with greater power. Legendary creatures you control gain protection from each of that creature's colors until end of turn.",
+        "effects": [
+          {
+            "type": "exile"
+          },
+          {
+            "type": "pump",
+            "affected": "eachCreatureYouControl",
+            "filter": {
+              "supertypes": [
+                "Legendary"
+              ]
+            },
+            "protectionFromColorsOfTarget": 0
+          }
+        ],
+        "target": {
+          "kind": "creatureOpponentControls",
+          "greaterPowerThanSource": true
+        }
+      }
+    ],
+    "text": "Haste\nWhen Éowyn enters, exile target creature an opponent controls with greater power. Legendary creatures you control gain protection from each of that creature's colors until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/d/adffb389-c9a3-41c4-b078-292a2bcf870d.jpg?1783916259",
+      "card": "https://cards.scryfall.io/normal/front/a/d/adffb389-c9a3-41c4-b078-292a2bcf870d.jpg?1783916259"
+    },
+    "artist": "Magali Villeneuve",
+    "colors": [
+      "R",
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "201",
+    "typeLine": "Legendary Creature — Human Knight",
+    "oracleText": "Haste\nWhen Éowyn enters, exile target creature an opponent controls with greater power. Legendary creatures you control gain protection from each of that creature's colors until end of turn.",
+    "scryfallId": "adffb389-c9a3-41c4-b078-292a2bcf870d",
+    "scryfallUri": "https://scryfall.com/card/ltr/201/%C3%A9owyn-fearless-knight?utm_source=api"
   },
   "eowynLadyOfRohan": {
     "id": "eowynLadyOfRohan",
@@ -8541,6 +8664,94 @@ export const IMPORTED_CARDS = {
     "oracleText": "Target creature gets +3/+2 until end of turn. If it's legendary, it also gains trample until end of turn.",
     "scryfallId": "efde011d-8732-49b3-9204-8b114a3d81ba",
     "scryfallUri": "https://scryfall.com/card/ltr/131/gimlis-fury?utm_source=api"
+  },
+  "glamdring": {
+    "id": "glamdring",
+    "name": "Glamdring",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {3}",
+        "cost": {
+          "mana": {
+            "generic": 3
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "equippedDealsCombatDamageToPlayer1",
+        "trigger": "equippedDealsCombatDamageToPlayer",
+        "text": "Whenever equipped creature deals combat damage to a player, you may cast an instant or sorcery spell from your hand with mana value less than or equal to that damage without paying its mana cost.",
+        "effects": [
+          {
+            "type": "castFree",
+            "filter": {
+              "types": [
+                "Instant",
+                "Sorcery"
+              ]
+            },
+            "maxManaValue": {
+              "of": "eventCount"
+            }
+          }
+        ]
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "first strike"
+        ]
+      },
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "per": {
+          "of": "cards",
+          "filter": {
+            "types": [
+              "Instant",
+              "Sorcery"
+            ]
+          }
+        }
+      }
+    ],
+    "text": "Equipped creature has first strike and gets +1/+0 for each instant and sorcery card in your graveyard.\nWhenever equipped creature deals combat damage to a player, you may cast an instant or sorcery spell from your hand with mana value less than or equal to that damage without paying its mana cost.\nEquip {3}",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/2/8296ebf7-45ed-4b38-acf2-b48d9fb3e706.jpg?1783916240",
+      "card": "https://cards.scryfall.io/normal/front/8/2/8296ebf7-45ed-4b38-acf2-b48d9fb3e706.jpg?1783916240"
+    },
+    "artist": "Andrea Piparo",
+    "colors": [],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "239",
+    "typeLine": "Legendary Artifact — Equipment",
+    "oracleText": "Equipped creature has first strike and gets +1/+0 for each instant and sorcery card in your graveyard.\nWhenever equipped creature deals combat damage to a player, you may cast an instant or sorcery spell from your hand with mana value less than or equal to that damage without paying its mana cost.\nEquip {3}",
+    "scryfallId": "8296ebf7-45ed-4b38-acf2-b48d9fb3e706",
+    "scryfallUri": "https://scryfall.com/card/ltr/239/glamdring?utm_source=api"
   },
   "gloinDwarfEmissary": {
     "id": "gloinDwarfEmissary",
@@ -13455,6 +13666,64 @@ export const IMPORTED_CARDS = {
     "scryfallId": "5ae08177-48ee-4404-834d-d3cd7482ae81",
     "scryfallUri": "https://scryfall.com/card/ltr/98/morgul-knife-wound?utm_source=api"
   },
+  "moriaMarauder": {
+    "id": "moriaMarauder",
+    "name": "Moria Marauder",
+    "manaCost": {
+      "R": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Goblin",
+      "Warrior"
+    ],
+    "power": 1,
+    "toughness": 1,
+    "keywords": [
+      "double strike"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "creatureDealsCombatDamageToPlayer1",
+        "trigger": "creatureDealsCombatDamageToPlayer",
+        "text": "Whenever a Goblin or Orc you control deals combat damage to a player, exile the top card of your library. You may play that card this turn.",
+        "effects": [
+          {
+            "type": "exileTop"
+          },
+          {
+            "type": "mayPlayFromExile",
+            "turn": "this"
+          }
+        ],
+        "filter": {
+          "subtypes": [
+            "Goblin",
+            "Orc"
+          ]
+        }
+      }
+    ],
+    "text": "Double strike\nWhenever a Goblin or Orc you control deals combat damage to a player, exile the top card of your library. You may play that card this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/3/f33d5394-2248-4654-bec5-33b144752586.jpg?1783916282",
+      "card": "https://cards.scryfall.io/normal/front/f/3/f33d5394-2248-4654-bec5-33b144752586.jpg?1783916282"
+    },
+    "artist": "Andrea Piparo",
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "138",
+    "typeLine": "Creature — Goblin Warrior",
+    "oracleText": "Double strike\nWhenever a Goblin or Orc you control deals combat damage to a player, exile the top card of your library. You may play that card this turn.",
+    "scryfallId": "f33d5394-2248-4654-bec5-33b144752586",
+    "scryfallUri": "https://scryfall.com/card/ltr/138/moria-marauder?utm_source=api"
+  },
   "mountain": {
     "id": "mountain",
     "name": "Mountain",
@@ -15221,6 +15490,71 @@ export const IMPORTED_CARDS = {
     "scryfallId": "ac6d60fe-681b-495e-813c-c8418f3f29e5",
     "scryfallUri": "https://scryfall.com/card/ltr/248/phial-of-galadriel?utm_source=api"
   },
+  "pippinGuardOfTheCitadel": {
+    "id": "pippinGuardOfTheCitadel",
+    "name": "Pippin, Guard of the Citadel",
+    "manaCost": {
+      "W": 1,
+      "U": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Soldier"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "keywords": [
+      "vigilance",
+      "ward"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}: Another target creature you control gains protection from the card type of your choice until end of turn.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "pump",
+            "protectionFromChosenType": true
+          }
+        ],
+        "target": {
+          "kind": "creatureYouControl",
+          "other": true
+        }
+      }
+    ],
+    "ward": {
+      "mana": {
+        "generic": 1
+      }
+    },
+    "text": "Vigilance, ward {1}\n{T}: Another target creature you control gains protection from the card type of your choice until end of turn. (It can't be blocked, targeted, dealt damage, enchanted, or equipped by anything of that type.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/8/08b7a4d8-1183-430e-8ea4-016844f33200.jpg?1783916249",
+      "card": "https://cards.scryfall.io/normal/front/0/8/08b7a4d8-1183-430e-8ea4-016844f33200.jpg?1783916249"
+    },
+    "artist": "Bartłomiej Gaweł",
+    "colors": [
+      "U",
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "218",
+    "typeLine": "Legendary Creature — Halfling Soldier",
+    "oracleText": "Vigilance, ward {1}\n{T}: Another target creature you control gains protection from the card type of your choice until end of turn. (It can't be blocked, targeted, dealt damage, enchanted, or equipped by anything of that type.)",
+    "scryfallId": "08b7a4d8-1183-430e-8ea4-016844f33200",
+    "scryfallUri": "https://scryfall.com/card/ltr/218/pippin-guard-of-the-citadel?utm_source=api"
+  },
   "pippinsBravery": {
     "id": "pippinsBravery",
     "name": "Pippin's Bravery",
@@ -15451,6 +15785,59 @@ export const IMPORTED_CARDS = {
     "oracleText": "Creatures you control get +10/+10 and gain vigilance until end of turn.",
     "scryfallId": "acb65189-60e4-42e0-9fb1-da6b716b91d7",
     "scryfallUri": "https://scryfall.com/card/fdn/109/preposterous-proportions?utm_source=api"
+  },
+  "pressTheEnemy": {
+    "id": "pressTheEnemy",
+    "name": "Press the Enemy",
+    "manaCost": {
+      "generic": 2,
+      "U": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "returnToHand"
+      },
+      {
+        "type": "castFree",
+        "filter": {
+          "types": [
+            "Instant",
+            "Sorcery"
+          ]
+        },
+        "maxManaValue": {
+          "of": "manaValueOf",
+          "index": 0
+        }
+      }
+    ],
+    "target": {
+      "kind": "spellOrNonlandPermanent",
+      "filter": {
+        "controller": "opponent"
+      }
+    },
+    "text": "Return target spell or nonland permanent an opponent controls to its owner's hand. You may cast an instant or sorcery spell with equal or lesser mana value from your hand without paying its mana cost.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/f/dfa5380a-480c-4c61-ac52-5debc49c5df9.jpg?1783916313",
+      "card": "https://cards.scryfall.io/normal/front/d/f/dfa5380a-480c-4c61-ac52-5debc49c5df9.jpg?1783916313"
+    },
+    "artist": "Valera Lutfullina",
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "65",
+    "typeLine": "Instant",
+    "oracleText": "Return target spell or nonland permanent an opponent controls to its owner's hand. You may cast an instant or sorcery spell with equal or lesser mana value from your hand without paying its mana cost.",
+    "scryfallId": "dfa5380a-480c-4c61-ac52-5debc49c5df9",
+    "scryfallUri": "https://scryfall.com/card/ltr/65/press-the-enemy?utm_source=api"
   },
   "priestOfTitania": {
     "id": "priestOfTitania",
@@ -17331,6 +17718,107 @@ export const IMPORTED_CARDS = {
     "scryfallId": "034e0929-b2c7-4b5f-94f2-8eaf4fb1a2a1",
     "scryfallUri": "https://scryfall.com/card/ltr/224/sauron-the-dark-lord?utm_source=api"
   },
+  "sauronTheNecromancer": {
+    "id": "sauronTheNecromancer",
+    "name": "Sauron, the Necromancer",
+    "manaCost": {
+      "generic": 3,
+      "B": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Avatar",
+      "Horror"
+    ],
+    "power": 4,
+    "toughness": 4,
+    "keywords": [
+      "menace"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "attacks1",
+        "trigger": "attacks",
+        "text": "Whenever Sauron attacks, exile target creature card from your graveyard. Create a tapped and attacking token that's a copy of that card, except it's a 3/3 black Wraith with menace. At the beginning of the next end step, exile that token unless Sauron is your Ring-bearer.",
+        "effects": [
+          {
+            "type": "exileFromGraveyard"
+          },
+          {
+            "type": "createCopyToken",
+            "of": "target",
+            "tapped": true,
+            "attacking": true,
+            "except": {
+              "power": 3,
+              "toughness": 3,
+              "colors": [
+                "B"
+              ],
+              "subtypes": [
+                "Wraith"
+              ],
+              "addKeywords": [
+                "menace"
+              ]
+            }
+          },
+          {
+            "type": "delayedTrigger",
+            "at": "endStep",
+            "whose": "any",
+            "text": "Exile that token unless Sauron is your Ring-bearer.",
+            "effects": [
+              {
+                "type": "if",
+                "if": {
+                  "not": {
+                    "sourceIsRingBearer": true
+                  }
+                },
+                "then": [
+                  {
+                    "type": "exile",
+                    "affected": "subject"
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        ],
+        "target": {
+          "kind": "cardInYourGraveyard",
+          "filter": {
+            "types": [
+              "Creature"
+            ]
+          }
+        }
+      }
+    ],
+    "text": "Menace\nWhenever Sauron attacks, exile target creature card from your graveyard. Create a tapped and attacking token that's a copy of that card, except it's a 3/3 black Wraith with menace. At the beginning of the next end step, exile that token unless Sauron is your Ring-bearer.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/7/377d65d8-21c8-4292-97db-610e0173ba59.jpg?1783916297",
+      "card": "https://cards.scryfall.io/normal/front/3/7/377d65d8-21c8-4292-97db-610e0173ba59.jpg?1783916297"
+    },
+    "artist": "Yongjae Choi",
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "106",
+    "typeLine": "Legendary Creature — Avatar Horror",
+    "oracleText": "Menace\nWhenever Sauron attacks, exile target creature card from your graveyard. Create a tapped and attacking token that's a copy of that card, except it's a 3/3 black Wraith with menace. At the beginning of the next end step, exile that token unless Sauron is your Ring-bearer.",
+    "scryfallId": "377d65d8-21c8-4292-97db-610e0173ba59",
+    "scryfallUri": "https://scryfall.com/card/ltr/106/sauron-the-necromancer?utm_source=api"
+  },
   "savannahLions": {
     "id": "savannahLions",
     "name": "Savannah Lions",
@@ -17662,6 +18150,51 @@ export const IMPORTED_CARDS = {
     "scryfallId": "4c7d861d-7832-4c15-8d6c-8c07a9a57891",
     "scryfallUri": "https://scryfall.com/card/ltr/227/shadowfax-lord-of-horses?utm_source=api"
   },
+  "shadowOfTheEnemy": {
+    "id": "shadowOfTheEnemy",
+    "name": "Shadow of the Enemy",
+    "manaCost": {
+      "generic": 3,
+      "B": 3
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "exileGraveyardCards",
+        "filter": {
+          "types": [
+            "Creature"
+          ]
+        }
+      },
+      {
+        "type": "mayPlayFromExile",
+        "anyMana": true,
+        "castOnly": true
+      }
+    ],
+    "target": "player",
+    "text": "Exile all creature cards from target player's graveyard. You may cast spells from among those cards for as long as they remain exiled, and mana of any type can be spent to cast them.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/4/e47cab70-55cb-481c-b4cd-32a41251f210.jpg?1783916298",
+      "card": "https://cards.scryfall.io/normal/front/e/4/e47cab70-55cb-481c-b4cd-32a41251f210.jpg?1783916298"
+    },
+    "artist": "Shahab Alizadeh",
+    "colors": [
+      "B"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "107",
+    "typeLine": "Sorcery",
+    "oracleText": "Exile all creature cards from target player's graveyard. You may cast spells from among those cards for as long as they remain exiled, and mana of any type can be spent to cast them.",
+    "scryfallId": "e47cab70-55cb-481c-b4cd-32a41251f210",
+    "scryfallUri": "https://scryfall.com/card/ltr/107/shadow-of-the-enemy?utm_source=api"
+  },
   "shadowSummoning": {
     "id": "shadowSummoning",
     "name": "Shadow Summoning",
@@ -17779,6 +18312,116 @@ export const IMPORTED_CARDS = {
     "oracleText": "Whenever Shagrat attacks, attach up to one target Equipment to it. Then amass Orcs X, where X is the number of Equipment attached to Shagrat. (Control of the Equipment doesn't change. To amass Orcs X, put X +1/+1 counters on an Army you control. It's also an Orc. If you don't control an Army, create a 0/0 black Orc Army creature token first.)",
     "scryfallId": "0731f64a-15da-4814-82e9-3a42e1657f36",
     "scryfallUri": "https://scryfall.com/card/ltr/228/shagrat-loot-bearer?utm_source=api"
+  },
+  "shelobChildOfUngoliant": {
+    "id": "shelobChildOfUngoliant",
+    "name": "Shelob, Child of Ungoliant",
+    "manaCost": {
+      "generic": 4,
+      "B": 1,
+      "G": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Spider",
+      "Demon"
+    ],
+    "power": 8,
+    "toughness": 8,
+    "keywords": [
+      "deathtouch",
+      "ward"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "creatureDies1",
+        "trigger": "creatureDies",
+        "text": "Whenever another creature dealt damage this turn by a Spider you controlled dies, create a token that's a copy of that creature, except it's a Food artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life,\" and it loses all other card types.",
+        "effects": [
+          {
+            "type": "createCopyToken",
+            "of": "subject",
+            "except": {
+              "types": [
+                "Artifact"
+              ],
+              "subtypes": [
+                "Food"
+              ],
+              "addAbilities": [
+                {
+                  "id": "eat",
+                  "text": "{2}, {T}, Sacrifice this token: You gain 3 life.",
+                  "cost": {
+                    "mana": {
+                      "generic": 2
+                    },
+                    "tap": true,
+                    "sacrificeSelf": true
+                  },
+                  "effects": [
+                    {
+                      "type": "gainLife",
+                      "amount": 3
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "filter": {
+          "other": true,
+          "controller": "any",
+          "damagedBySpiderOfYou": true
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "keywords": [
+          "deathtouch",
+          "ward"
+        ],
+        "ward": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "other": true,
+        "subtypes": [
+          "Spider"
+        ]
+      }
+    ],
+    "ward": {
+      "mana": {
+        "generic": 2
+      }
+    },
+    "text": "Deathtouch, ward {2}\nOther Spiders you control have deathtouch and ward {2}.\nWhenever another creature dealt damage this turn by a Spider you controlled dies, create a token that's a copy of that creature, except it's a Food artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life,\" and it loses all other card types.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/1/a14c4b29-3363-45ce-9190-0f79e1a0ef7f.jpg?1783916243",
+      "card": "https://cards.scryfall.io/normal/front/a/1/a14c4b29-3363-45ce-9190-0f79e1a0ef7f.jpg?1783916243"
+    },
+    "artist": "Lorenzo Mastroianni",
+    "colors": [
+      "B",
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "230",
+    "typeLine": "Legendary Creature — Spider Demon",
+    "oracleText": "Deathtouch, ward {2}\nOther Spiders you control have deathtouch and ward {2}.\nWhenever another creature dealt damage this turn by a Spider you controlled dies, create a token that's a copy of that creature, except it's a Food artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life,\" and it loses all other card types.",
+    "scryfallId": "a14c4b29-3363-45ce-9190-0f79e1a0ef7f",
+    "scryfallUri": "https://scryfall.com/card/ltr/230/shelob-child-of-ungoliant?utm_source=api"
   },
   "shelobsAmbush": {
     "id": "shelobsAmbush",

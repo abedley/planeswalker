@@ -321,7 +321,10 @@ export class BasicAIController extends EventEmitter {
       }
     };
 
-    for (const card of player.hand) {
+    // Cards we may cast from exile (Moria Marauder, Shadow of the Enemy) or the top of our library (Elven Chorus).
+    const elsewhereIds = new Set(state.validActions.filter((a) => a.playerId === me && a.type === ACTION.CAST_SPELL && a.zone).map((a) => a.cardId));
+    const elsewhere = [...state.players.flatMap((p) => p.exile ?? []), ...(player.library ?? []).slice(0, 1)].filter((c) => elsewhereIds.has(c.id));
+    for (const card of [...player.hand, ...elsewhere]) {
       for (const ability of card.handAbilities ?? []) {
         // Cycling: a land we can spare, in our main phase or at the end of the opponent's turn.
         if (window !== WINDOW.MAIN && window !== WINDOW.END) continue;
@@ -736,6 +739,22 @@ function choiceScore(state, me, decision, choice) {
     case CHOICE.REVEALED_CARD: {
       const card = cardIn(decision.cards, choice);
       return card ? (isCreature(card) ? permanentValue(card) : 3) + manaValue(card.manaCost ?? {}) : 0;
+    }
+    case CHOICE.CARD_TYPE: {
+      // Pippin: protection from what threatens it most: the opponent's creatures, or their removal.
+      const theirCreatures = state.battlefield.filter((p) => p.controllerId !== me && isCreature(p)).length;
+      return choice === 'Creature' ? 1 + theirCreatures : choice === 'Instant' ? 1.5 : choice === 'Sorcery' ? 1 : 0;
+    }
+    case CHOICE.CAST_FREE: {
+      if (choice === 'decline') return 0;
+      const card = cardIn(hand, choice);
+      return card ? 1 + manaValue(card.manaCost ?? {}) : 0;
+    }
+    case CHOICE.CAST_FREE_VARIANT: {
+      const variant = decision.variants[Number(choice)];
+      const card = cardIn(hand, decision.cardId);
+      const holder = card?.spell?.modes && variant.mode !== undefined && !Array.isArray(variant.mode) ? card.spell.modes[variant.mode] : card?.spell;
+      return holder ? scoreEffects(state, me, holder.effects ?? [], variant.targets ?? [], decision.cardId) : 0;
     }
     case CHOICE.COUNTER:
     case CHOICE.KEYWORD: {

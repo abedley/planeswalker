@@ -13,9 +13,9 @@ import {
 
 const main = (turn = 1) => ({ turn, phase: PHASE.PRECOMBAT_MAIN });
 
-/** Plays the land `cardId` from p1's hand. */
-function playLand(game, cardId) {
-  ok(game, { type: ACTION.PLAY_LAND, playerId: 'p1', cardId: inHand(game, 'p1', cardId) });
+/** Plays the land `cardId` from a player's hand (p1's by default). */
+function playLand(game, cardId, playerId = 'p1') {
+  ok(game, { type: ACTION.PLAY_LAND, playerId, cardId: inHand(game, playerId, cardId) });
 }
 
 /** Declares `ids` as p1's attackers (on turn `turn`), then lets p2 block as `blocks` says. */
@@ -1025,4 +1025,171 @@ test('Fangorn: attacking Treefolk add green mana, which stays', () => {
   assert.ok(!byCard(game, 'treefolk')[0].tapped, 'vigilance');
   advanceTo(game, { turn: 3, phase: PHASE.POSTCOMBAT_MAIN });
   assert.equal(player(game, 'p1').manaPool.G, 4);
+});
+
+// Wave C: protection, casting without paying or from other zones, and copy tokens.
+
+test('Éowyn, Fearless Knight exiles a bigger creature; legends gain protection from its colors', () => {
+  const redGiant = { ...{ id: 'redGiant', name: 'Red Giant', manaCost: {}, types: ['Creature'], subtypes: ['Giant'], power: 5, toughness: 5, colors: ['R'] } };
+  const { game } = setup({ p1: ['eowynFearlessKnight', 'hero'], p2: ['redGiant', 'shock'], cards: ['eowynFearlessKnight'], extra: { redGiant } });
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'redGiant');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'hero');
+  cast(game, 'p1', 'eowynFearlessKnight');
+  assert.equal(byCard(game, 'redGiant').length, 0, 'exiled');
+  const hero = byCard(game, 'hero')[0];
+  assert.deepEqual(hero.protections, [{ colors: ['R'] }]);
+  // Shock is red (protection from red): it can't target the Hero.
+  passRound(game);
+  assert.ok(!state(game).validActions.some((a) => a.targets?.includes(hero.id)));
+});
+
+test('Pippin, Guard of the Citadel: protection from a chosen card type stops blocks and damage', () => {
+  const { game } = setup({ p1: ['pippinGuardOfTheCitadel', 'bear'], p2: ['giant', 'shock'], cards: ['pippinGuardOfTheCitadel'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'pippinGuardOfTheCitadel');
+  cast(game, 'p1', 'bear');
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'giant');
+  advanceTo(game, main(3));
+  const bear = byCard(game, 'bear')[0];
+  activate(game, 'p1', byCard(game, 'pippinGuardOfTheCitadel')[0].id, { targets: [bear.id] });
+  resolveAll(game);
+  assert.equal(decision(game).kind, CHOICE.CARD_TYPE);
+  ok(game, choose('p1', 'Creature'));
+  advanceTo(game, { turn: 3, phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT });
+  passRound(game);
+  ok(game, toggleAttacker('p1', bear.id));
+  ok(game, confirmAttackers('p1'));
+  passRound(game);
+  // The Giant (a creature) can't block it.
+  assert.ok(!state(game).validActions.some((a) => a.type === ACTION.SET_BLOCKER && a.attackerId === bear.id));
+});
+
+test('Glamdring: first strike, +1/+0 per instant and sorcery, and a free spell on combat damage', () => {
+  const { game } = setup({ p1: ['glamdring', 'bear', 'salve', 'shock'], cards: ['glamdring'], freeAbilities: true });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'glamdring');
+  cast(game, 'p1', 'bear');
+  cast(game, 'p1', 'salve');
+  const bear = byCard(game, 'bear')[0];
+  activate(game, 'p1', byCard(game, 'glamdring')[0].id, { targets: [bear.id] });
+  resolveAll(game);
+  assert.equal(permanent(game, bear.id).power, 3, 'one instant in the graveyard');
+  assert.ok(permanent(game, bear.id).keywords.includes(KEYWORD.FIRST_STRIKE));
+  attack(game, 3, [bear.id]);
+  const d = untilDecision(game);
+  assert.equal(d.kind, CHOICE.CAST_FREE);
+  ok(game, choose('p1', inHand(game, 'p1', 'shock')));
+  // Shock has two kinds of target: which one is asked next.
+  const v = decision(game);
+  assert.equal(v.kind, CHOICE.CAST_FREE_VARIANT);
+  const index = v.variants.findIndex((variant) => variant.targets[0] === 'p2');
+  ok(game, choose('p1', String(index)));
+  resolveAll(game);
+  assert.equal(player(game, 'p2').life, 20 - 3 - 2);
+});
+
+test('Press the Enemy bounces a permanent, then casts a cheaper instant for free', () => {
+  const { game } = setup({ p1: ['pressTheEnemy', 'salve'], p2: ['giant'], cards: ['pressTheEnemy'] });
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'giant');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'pressTheEnemy', { targets: [byCard(game, 'giant')[0].id] });
+  assert.ok(inHand(game, 'p2', 'giant'));
+  assert.equal(decision(game).kind, CHOICE.CAST_FREE);
+  ok(game, choose('p1', inHand(game, 'p1', 'salve')));
+  resolveAll(game);
+  assert.equal(player(game, 'p1').life, 23);
+});
+
+test('Moria Marauder: the exiled top card can be played this turn only', () => {
+  const { game } = setup({ p1: ['moriaMarauder'], cards: ['moriaMarauder'], library1: ['forest', 'mountain', 'bear'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'moriaMarauder');
+  attack(game, 3, [byCard(game, 'moriaMarauder')[0].id]);
+  advanceTo(game, { turn: 3, phase: PHASE.POSTCOMBAT_MAIN });
+  // Double strike: two hits, two cards exiled (the Mountain, then the Bear).
+  const exiled = player(game, 'p1').exile;
+  assert.deepEqual(exiled.map((c) => c.cardId), ['mountain', 'bear']);
+  assert.ok(state(game).validActions.some((a) => a.type === ACTION.PLAY_LAND && a.zone === 'exile'));
+  const bear = exiled.find((c) => c.cardId === 'bear');
+  ok(game, { ...castSpell('p1', bear.id), zone: 'exile' });
+  resolveAll(game);
+  assert.equal(byCard(game, 'bear').length, 1);
+  advanceTo(game, main(5));
+  assert.ok(!state(game).validActions.some((a) => a.zone === 'exile'), 'only that turn');
+});
+
+test('Shadow of the Enemy: cast their creatures from exile with mana of any type', () => {
+  const blueBird = { id: 'blueBird', name: 'Blue Bird', manaCost: { U: 1 }, types: ['Creature'], subtypes: ['Bird'], power: 1, toughness: 1 };
+  const millSelf = { id: 'millSelf', name: 'Mill Self', manaCost: {}, types: ['Sorcery'], effects: [{ type: 'mill', count: 1 }] };
+  const { game } = setup({ p1: ['shadowOfTheEnemy'], p2: ['millSelf'], library2: ['forest', 'blueBird'], cards: ['shadowOfTheEnemy'], extra: { blueBird, millSelf } });
+  advanceTo(game, main(1));
+  playLand(game, 'forest');
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'millSelf');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'shadowOfTheEnemy', { targets: ['p2'] });
+  const bird = player(game, 'p2').exile.find((c) => c.cardId === 'blueBird');
+  assert.ok(bird);
+  activate(game, 'p1', byCard(game, 'forest').find((p) => p.controllerId === 'p1').id);
+  // A Forest's {G} pays the Bird's {U}.
+  ok(game, { ...castSpell('p1', bird.id), zone: 'exile' });
+  resolveAll(game);
+  assert.equal(byCard(game, 'blueBird')[0].controllerId, 'p1');
+});
+
+test('Elven Chorus: cast creatures from the top of the library; creatures tap for any color', () => {
+  const { game } = setup({ p1: ['elvenChorus', 'bear'], cards: ['elvenChorus'], library1: ['forest', 'giant'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'elvenChorus');
+  cast(game, 'p1', 'bear');
+  advanceTo(game, main(3));
+  const view = game.getPlayerView('p1');
+  assert.equal(view.zones.p1.knownTop[0].cardId, 'giant');
+  const giant = state(game).players[0].library[0];
+  ok(game, { ...castSpell('p1', giant.id), zone: 'library' });
+  resolveAll(game);
+  assert.equal(byCard(game, 'giant').length, 1);
+  assert.ok(actionFor(game, ACTION.ACTIVATE_ABILITY, { cardId: byCard(game, 'bear')[0].id, abilityId: 'chorusMana' }));
+});
+
+test('Sauron, the Necromancer: a 3/3 Wraith copy attacks, then leaves unless he bears the Ring', () => {
+  const { game } = setup({ p1: ['sauronTheNecromancer', 'giant', 'shock', 'shock', 'shock'], cards: ['sauronTheNecromancer'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'giant');
+  for (let i = 0; i < 3; i++) cast(game, 'p1', 'shock', { targets: [byCard(game, 'giant')[0].id] });
+  cast(game, 'p1', 'sauronTheNecromancer');
+  attack(game, 3, [byCard(game, 'sauronTheNecromancer')[0].id]);
+  resolveAll(game);
+  const wraith = named(game, 'Giant').find((p) => p.token);
+  assert.deepEqual([wraith.power, wraith.toughness, wraith.subtypes], [3, 3, ['Wraith']]);
+  assert.ok(wraith.keywords.includes(KEYWORD.MENACE));
+  assert.ok(state(game).combat.attackers.some((a) => a.cardId === wraith.id));
+  advanceTo(game, main(4));
+  assert.equal(named(game, 'Giant').length, 0, 'exiled at the end step');
+});
+
+test('Shelob: a creature a Spider damaged comes back as a Food copy', () => {
+  const spider = { id: 'spider', name: 'Spider', manaCost: {}, types: ['Creature'], subtypes: ['Spider'], power: 1, toughness: 1 };
+  const { game } = setup({ p1: ['shelobChildOfUngoliant', 'spider'], p2: ['bear'], cards: ['shelobChildOfUngoliant'], extra: { spider } });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'shelobChildOfUngoliant');
+  cast(game, 'p1', 'spider');
+  assert.ok(byCard(game, 'spider')[0].keywords.includes(KEYWORD.DEATHTOUCH));
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'bear');
+  advanceTo(game, { turn: 4, phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT });
+  passRound(game);
+  ok(game, toggleAttacker('p2', byCard(game, 'bear')[0].id));
+  ok(game, confirmAttackers('p2'));
+  passRound(game);
+  ok(game, setBlocker('p1', byCard(game, 'spider')[0].id, byCard(game, 'bear')[0].id));
+  ok(game, confirmBlockers('p1'));
+  advanceTo(game, main(5));
+  const food = named(game, 'Bear').find((p) => p.token);
+  assert.ok(food && food.controllerId === 'p1');
+  assert.deepEqual([food.types, food.subtypes], [['Artifact'], ['Food']]);
 });

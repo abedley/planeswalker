@@ -251,3 +251,22 @@ The One Ring (LTR)
 The Watcher in the Water (LTR)
 Tom Bombadil (LTR)
 Éomer, Marshal of Rohan (LTR)
+Elven Chorus (LTR)
+Éowyn, Fearless Knight (LTR)
+Glamdring (LTR)
+Moria Marauder (LTR)
+Pippin, Guard of the Citadel (LTR)
+Press the Enemy (LTR)
+Sauron, the Necromancer (LTR)
+Shadow of the Enemy (LTR)
+Shelob, Child of Ungoliant (LTR)
+
+# Left out: they need rules this game doesn't model.
+# Display of Power (LTR) — copying spells (707.10)
+# Storm of Saruman (LTR) — copying spells (707.10)
+# Gandalf the Grey (LTR) — one of its modes copies a spell (707.10)
+# Saruman of Many Colors (LTR) — copying a card and casting the copy (707.12)
+# King of the Oathbreakers (LTR) — phasing (702.26)
+# Gandalf the White (LTR) — triggered abilities triggering an additional time (603.2d)
+# Sharkey, Tyrant of the Shire (LTR) — gaining other permanents' activated abilities
+# Sauron's Ransom (LTR) — an opponent splitting cards into a face-down and a face-up pile

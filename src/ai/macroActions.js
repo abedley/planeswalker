@@ -151,10 +151,11 @@ function priorityMacros(state, me, mine) {
     if (card.spell?.targets || card.spell?.modes || card.manaCost?.X) {
       // Several targets (a fight, "up to two"), modes, or {X} (as big as we can pay): the best few combinations.
       const x = card.manaCost?.X ? Math.max(0, available - manaValue(castCost(state, me, card) ?? {})) : undefined;
-      const modes = card.spell.modes ? card.spell.modes.map((m, i) => [i, m]) : [[undefined, card.spell]];
+      // A permanent spell with {X} (Spiteful Banditry) has no spell effects of its own here.
+      const modes = card.spell?.modes ? card.spell.modes.map((m, i) => [i, m]) : [[undefined, card.spell ?? { effects: [] }]];
       for (const [mode, holder] of modes) {
         targetCombos(state, me, targetList(holder), card.id, 200, x)
-          .map((targets) => ({ targets, score: scoreEffects(state, me, holder.effects, targets, card.id, { x }) }))
+          .map((targets) => ({ targets, score: scoreEffects(state, me, holder.effects ?? [], targets, card.id, { x }) }))
           .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
           .forEach(({ targets }) => macros.push(keyed({
             kind: 'cast', cardId: card.id, targetId: null, targets, ...(mode !== undefined ? { mode } : {}), ...(x !== undefined ? { x } : {}),

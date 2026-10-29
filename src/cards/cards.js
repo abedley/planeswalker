@@ -83,6 +83,8 @@ export const TARGET = Object.freeze({
   CARD_IN_YOUR_GRAVEYARD: 'cardInYourGraveyard',
   /** A card in an opponent's graveyard (Lobelia Sackville-Baggins). */
   CARD_IN_OPPONENT_GRAVEYARD: 'cardInOpponentGraveyard',
+  /** "target spell or nonland permanent" (Press the Enemy), usually with a controller filter. */
+  SPELL_OR_NONLAND_PERMANENT: 'spellOrNonlandPermanent',
 });
 
 /**
@@ -398,6 +400,22 @@ export const EFFECT = Object.freeze({
   EXTRA_COMBAT: 'extraCombat',
   /** `{ until: 'yourNextTurn' }`: you gain protection from everything (702.16j): damage to you is prevented and you can't be targeted. */
   PLAYER_PROTECTION: 'playerProtection',
+  /**
+   * `{ filter, maxManaValue? }`: you may cast a matching card from your hand without paying its mana cost, as
+   * this resolves (Glamdring, Press the Enemy). `maxManaValue` is a count spec (see `per`).
+   */
+  CAST_FREE: 'castFree',
+  /** "You may play that card this turn" / "for as long as it remains exiled": the affected cards in exile get a permission (`{ turn: 'this' | 'whileExiled', anyMana? }`). */
+  MAY_PLAY_FROM_EXILE: 'mayPlayFromExile',
+  /** "Exile the top card of your library." The exiled card is the context's `exiled`. */
+  EXILE_TOP: 'exileTop',
+  /** "Exile all creature cards from target player's graveyard": `{ filter }`; the exiled cards are the context's `exiled`. */
+  EXILE_GRAVEYARD_CARDS: 'exileGraveyardCards',
+  /**
+   * `{ of: 'target' | 'subject', except, tapped?, attacking? }`: create a token that's a copy of that card or creature (707.2),
+   * except for `except`'s characteristics (`types`, `subtypes`, `colors`, `power`, `toughness`, `addKeywords`, `addAbilities`).
+   */
+  CREATE_COPY_TOKEN: 'createCopyToken',
 });
 
 /** Effects that apply to the spell's or ability's target (unless `affected` says otherwise). */
@@ -406,6 +424,7 @@ export const TARGETED_EFFECTS = Object.freeze(new Set([
   EFFECT.UNTAP, EFFECT.PUMP, EFFECT.ADD_COUNTERS, EFFECT.COUNTER_SPELL, EFFECT.FIGHT, EFFECT.RETURN_FROM_GRAVEYARD,
   EFFECT.RETURN_SPELL_TO_HAND, EFFECT.PUT_INTO_LIBRARY, EFFECT.GAIN_CONTROL, EFFECT.FLICKER, EFFECT.EXILE_UNTIL_SOURCE_LEAVES,
   EFFECT.COUNTER_UNLESS_PAID, EFFECT.REVEAL_HAND_DISCARD, EFFECT.GOAD, EFFECT.MOVE_COUNTERS, EFFECT.EXILE_FROM_GRAVEYARD,
+  EFFECT.EXILE_GRAVEYARD_CARDS,
 ]));
 /** Effects that hurt whatever they affect, for AI decisions. */
 export const HARMFUL_EFFECTS = Object.freeze(new Set([
@@ -485,6 +504,8 @@ export const TRIGGER = Object.freeze({
   EQUIPPED_BLOCKS_OR_BLOCKED: 'equippedBlocksOrBlocked',
   /** On Equipment: "Whenever equipped creature attacks" (the subject is that creature). */
   EQUIPPED_ATTACKS: 'equippedAttacks',
+  /** On Equipment: "Whenever equipped creature deals combat damage to a player" (the subject's `count` is the damage). */
+  EQUIPPED_DEALS_COMBAT_DAMAGE_TO_PLAYER: 'equippedDealsCombatDamageToPlayer',
   /** "Whenever one or more creatures deal combat damage to you" (once per combat damage step). */
   COMBAT_DAMAGE_TO_YOU: 'combatDamageToYou',
   /** "Whenever you put one or more counters on Aragorn": the subject's `counters` are the kinds put on. */
@@ -715,7 +736,7 @@ export const isManaAbility = (ability) => !ability.target
   && abilityEffects(ability).some((effect) => effect.type === EFFECT.ADD_MANA);
 
 /** Target kinds that pick spells on the stack rather than permanents or players. */
-export const SPELL_TARGETS = Object.freeze(new Set([TARGET.SPELL, TARGET.CREATURE_SPELL, TARGET.NONCREATURE_SPELL]));
+export const SPELL_TARGETS = Object.freeze(new Set([TARGET.SPELL, TARGET.CREATURE_SPELL, TARGET.NONCREATURE_SPELL, TARGET.SPELL_OR_NONLAND_PERMANENT]));
 /** Target kinds that pick players (TARGET.ANY picks players or creatures). */
 export const PLAYER_TARGETS = Object.freeze(new Set([TARGET.PLAYER, TARGET.OPPONENT]));
 
@@ -740,7 +761,9 @@ export function matchesPermanentKind(permanent, kind, controllerId, combat = nul
     case TARGET.ENCHANTMENT: return isEnchantment(permanent);
     case TARGET.ARTIFACT_OR_ENCHANTMENT: return isArtifact(permanent) || isEnchantment(permanent);
     case TARGET.LAND: return isLand(permanent);
-    case TARGET.NONLAND_PERMANENT: return !isLand(permanent);
+    case TARGET.NONLAND_PERMANENT:
+    case TARGET.SPELL_OR_NONLAND_PERMANENT:
+      return !isLand(permanent);
     case TARGET.PERMANENT: return true;
     default: return false;
   }
@@ -795,6 +818,8 @@ export function matchesFilter(object, filter = {}, {
   if (filter.toughness && !inRange(object.toughness ?? 0, filter.toughness)) return false;
   if (filter.powerOrToughnessAtMost !== undefined
     && !((object.power ?? Infinity) <= filter.powerOrToughnessAtMost || (object.toughness ?? Infinity) <= filter.powerOrToughnessAtMost)) return false;
+  // Shelob: "dealt damage this turn by a Spider you controlled".
+  if (filter.damagedBySpiderOfYou && !object.damagedBySpiderOf?.includes(controllerId)) return false;
   // "a creature you control with a +1/+1 counter on it".
   if (filter.hasCounter && !(object.counters?.[filter.hasCounter] > 0)) return false;
   if (filter.enteredThisTurn && !object.enteredThisTurn) return false;

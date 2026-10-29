@@ -76,6 +76,7 @@ const frodoRogue = {
   text: 'Whenever this creature deals combat damage to a player, that player loses the game if the Ring has tempted you four or more times this game. Otherwise, the Ring tempts you.',
   effects: [ifThen({ temptedAtLeast: 4 }, [{ type: EFFECT.LOSE_GAME, affected: AFFECTED.SUBJECT_CONTROLLER }], [ringTempts])],
 };
+const eatFood = { id: 'eat', text: '{2}, {T}, Sacrifice this token: You gain 3 life.', cost: { mana: { generic: 2 }, tap: true, sacrificeSelf: true }, effects: [gainLife(3)] };
 const smaug = {
   name: 'Smaug', supertypes: ['Legendary'], colors: ['red'], subtypes: ['Dragon'], power: 6, toughness: 6, keywords: [KEYWORD.FLYING, KEYWORD.HASTE],
   triggeredAbilities: [{ id: 'smaugDies', trigger: TRIGGER.DIES, text: 'When Smaug dies, create fourteen Treasure tokens.', effects: [treasure(14)] }],
@@ -1346,6 +1347,76 @@ export const OVERRIDES = {
     triggeredAbilities: [when(TRIGGER.CREATURE_DIES, 'Whenever one or more other attacking legendary creatures you control die, untap all creatures you control. After this phase, there is an additional combat phase. This ability triggers only once each turn.', [
       { type: EFFECT.UNTAP, ...yourCreatures }, { type: EFFECT.EXTRA_COMBAT },
     ], { filter: { other: true, supertypes: ['Legendary'], attacking: true }, oncePerTurn: true })],
+  },
+  'Elven Chorus': {
+    staticAbilities: [
+      { rule: 'lookAtLibraryTop' },
+      { rule: 'castCreaturesFromLibraryTop' },
+      anthem({ grantAbilities: [{ ...tapForAny, id: 'chorusMana', isManaAbility: true }] }),
+    ],
+  },
+  'Éowyn, Fearless Knight': {
+    keywords: [KEYWORD.HASTE],
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, "When Éowyn enters, exile target creature an opponent controls with greater power. Legendary creatures you control gain protection from each of that creature's colors until end of turn.", [
+      { type: EFFECT.EXILE },
+      { type: EFFECT.PUMP, ...yourCreatures, filter: legendary, protectionFromColorsOfTarget: 0 },
+    ], { target: target(TARGET.CREATURE_OPPONENT_CONTROLS, null, { greaterPowerThanSource: true }) })],
+  },
+  Glamdring: {
+    staticAbilities: [attached({ keywords: [KEYWORD.FIRST_STRIKE] }), attached({ power: 1, per: { of: 'cards', filter: { types: [INSTANT, SORCERY] } } })],
+    triggeredAbilities: [when(TRIGGER.EQUIPPED_DEALS_COMBAT_DAMAGE_TO_PLAYER, 'Whenever equipped creature deals combat damage to a player, you may cast an instant or sorcery spell from your hand with mana value less than or equal to that damage without paying its mana cost.', [
+      { type: EFFECT.CAST_FREE, filter: { types: [INSTANT, SORCERY] }, maxManaValue: { of: 'eventCount' } },
+    ])],
+    abilities: [equip(3)],
+  },
+  'Moria Marauder': {
+    keywords: [KEYWORD.DOUBLE_STRIKE],
+    triggeredAbilities: [when(TRIGGER.CREATURE_DEALS_COMBAT_DAMAGE_TO_PLAYER, 'Whenever a Goblin or Orc you control deals combat damage to a player, exile the top card of your library. You may play that card this turn.', [
+      { type: EFFECT.EXILE_TOP }, { type: EFFECT.MAY_PLAY_FROM_EXILE, turn: 'this' },
+    ], { filter: goblinOrOrc })],
+  },
+  'Pippin, Guard of the Citadel': {
+    keywords: [KEYWORD.VIGILANCE, KEYWORD.WARD],
+    ward: { mana: { generic: 1 } },
+    abilities: [ability('{T}: Another target creature you control gains protection from the card type of your choice until end of turn.', { tap: true }, [
+      { type: EFFECT.PUMP, protectionFromChosenType: true },
+    ], { target: target(TARGET.CREATURE_YOU_CONTROL, null, { other: true }) })],
+  },
+  'Press the Enemy': {
+    target: target(TARGET.SPELL_OR_NONLAND_PERMANENT, { controller: 'opponent' }),
+    effects: [
+      { type: EFFECT.RETURN_TO_HAND },
+      { type: EFFECT.CAST_FREE, filter: { types: [INSTANT, SORCERY] }, maxManaValue: { of: 'manaValueOf', index: 0 } },
+    ],
+  },
+  'Sauron, the Necromancer': {
+    keywords: [KEYWORD.MENACE],
+    triggeredAbilities: [when(TRIGGER.ATTACKS, "Whenever Sauron attacks, exile target creature card from your graveyard. Create a tapped and attacking token that's a copy of that card, except it's a 3/3 black Wraith with menace. At the beginning of the next end step, exile that token unless Sauron is your Ring-bearer.", [
+      { type: EFFECT.EXILE_FROM_GRAVEYARD },
+      {
+        type: EFFECT.CREATE_COPY_TOKEN, of: 'target', tapped: true, attacking: true,
+        except: { power: 3, toughness: 3, colors: ['B'], subtypes: ['Wraith'], addKeywords: [KEYWORD.MENACE] },
+      },
+      {
+        type: EFFECT.DELAYED_TRIGGER, at: 'endStep', whose: 'any', text: 'Exile that token unless Sauron is your Ring-bearer.',
+        effects: [ifThen({ not: { sourceIsRingBearer: true } }, [{ type: EFFECT.EXILE, ...subject }])],
+      },
+    ], { target: target(TARGET.CARD_IN_YOUR_GRAVEYARD, { types: [CREATURE] }) })],
+  },
+  'Shadow of the Enemy': {
+    target: TARGET.PLAYER,
+    effects: [
+      { type: EFFECT.EXILE_GRAVEYARD_CARDS, filter: { types: [CREATURE] } },
+      { type: EFFECT.MAY_PLAY_FROM_EXILE, anyMana: true, castOnly: true },
+    ],
+  },
+  'Shelob, Child of Ungoliant': {
+    keywords: [KEYWORD.DEATHTOUCH, KEYWORD.WARD],
+    ward: { mana: { generic: 2 } },
+    staticAbilities: [anthem({ keywords: [KEYWORD.DEATHTOUCH, KEYWORD.WARD], ward: { mana: { generic: 2 } }, other: true, subtypes: ['Spider'] })],
+    triggeredAbilities: [when(TRIGGER.CREATURE_DIES, 'Whenever another creature dealt damage this turn by a Spider you controlled dies, create a token that\'s a copy of that creature, except it\'s a Food artifact with "{2}, {T}, Sacrifice this token: You gain 3 life," and it loses all other card types.', [
+      { type: EFFECT.CREATE_COPY_TOKEN, of: 'subject', except: { types: [ARTIFACT], subtypes: ['Food'], addAbilities: [eatFood] } },
+    ], { filter: { other: true, controller: 'any', damagedBySpiderOfYou: true } })],
   },
   'Witch-king of Angmar': {
     keywords: [KEYWORD.FLYING],

@@ -8,9 +8,12 @@
  * `keywords`, `abilities`, `triggeredAbilities`, `staticAbilities`, `effects`,
  * `target(s)`, `modes`, `handAbilities`, `graveyardAbilities`, `additionalCost`,
  * `costReduction`, `enchant`, `entersTapped`, `ward`, and `power`/`toughness` for
- * one whose printed values aren't numbers. Abilities get ids if they have none.
+ * one whose printed values aren't numbers. Abilities get ids if they have none. Any other
+ * field (`entersTappedUnless`, `entersWithCounters`, `cantBeCountered`, `chooseTwo`) is
+ * copied into the definition as it is.
  *
- * So far: the commons and uncommons of The Lord of the Rings: Tales of Middle-earth (LTR).
+ * So far: The Lord of the Rings: Tales of Middle-earth (LTR), except the cards listed as
+ * left out in cards/ltr-cards.txt.
  */
 import {
   EFFECT, TARGET, AFFECTED, TRIGGER, KEYWORD, COUNTER, TOKEN, CARD_TYPE, ACTIVATION_TIMING, equipAbility,
@@ -65,6 +68,11 @@ const chapter = (chapters, text, effects, extra = {}) => ({ trigger: TRIGGER.CHA
 const equip = (generic, text = `Equip {${generic}}`) => equipAbility({ generic }, text);
 const tapForC = { id: 'tapForC', text: '{T}: Add {C}.', cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, mana: { C: 1 } }] };
 const tapForAny = { id: 'tapForAnyColor', text: '{T}: Add one mana of any color.', cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, anyColor: 1 }] };
+const tapFor = (color) => ({ id: `tapFor${color}`, text: `{T}: Add {${color}}.`, cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, mana: { [color]: 1 } }] });
+const smaug = {
+  name: 'Smaug', supertypes: ['Legendary'], colors: ['red'], subtypes: ['Dragon'], power: 6, toughness: 6, keywords: [KEYWORD.FLYING, KEYWORD.HASTE],
+  triggeredAbilities: [{ id: 'smaugDies', trigger: TRIGGER.DIES, text: 'When Smaug dies, create fourteen Treasure tokens.', effects: [treasure(14)] }],
+};
 
 export const OVERRIDES = {
   "Arwen's Gift": {
@@ -835,5 +843,305 @@ export const OVERRIDES = {
   'You Cannot Pass!': {
     target: target(TARGET.CREATURE, { blockedByOrBlockedLegendaryThisTurn: true }),
     effects: [{ type: EFFECT.DESTROY }],
+  },
+  // Rares and mythics
+  'Andúril, Flame of the West': {
+    staticAbilities: [attached({ power: 3, toughness: 1 })],
+    triggeredAbilities: [when(TRIGGER.EQUIPPED_ATTACKS, 'Whenever equipped creature attacks, create two tapped 1/1 white Spirit creature tokens with flying. If that creature is legendary, instead create two of those tokens that are tapped and attacking.', [
+      ifThen({ subjectMatches: legendary }, [tokens(spirit, 2, { tapped: true, attacking: true })], [tokens(spirit, 2, { tapped: true })]),
+    ])],
+    abilities: [equip(2)],
+  },
+  'Aragorn, the Uniter': {
+    triggeredAbilities: [
+      when(TRIGGER.SPELL_CAST, 'Whenever you cast a white spell, create a 1/1 white Human Soldier creature token.', [tokens(soldier)], { filter: { colors: ['W'] } }),
+      when(TRIGGER.SPELL_CAST, 'Whenever you cast a blue spell, scry 2.', [scry(2)], { filter: { colors: ['U'] } }),
+      when(TRIGGER.SPELL_CAST, 'Whenever you cast a red spell, Aragorn deals 3 damage to target opponent.', [damage(3)], { filter: { colors: ['R'] }, target: TARGET.OPPONENT }),
+      when(TRIGGER.SPELL_CAST, 'Whenever you cast a green spell, target creature gets +4/+4 until end of turn.', [pump(4, 4)], { filter: { colors: ['G'] }, target: TARGET.CREATURE }),
+    ],
+  },
+  'Barad-dûr': {
+    entersTappedUnless: controlsLegendaryCreature,
+    abilities: [
+      tapFor('B'),
+      ability('{X}{X}{B}, {T}: Amass Orcs X. Activate only if a creature died this turn.', { mana: { X: 2, B: 1 }, tap: true }, [amass(1, { per: { of: 'x' } })], {
+        activationCondition: { anyCreatureDiedThisTurn: true },
+      }),
+    ],
+  },
+  'Boromir, Warden of the Tower': {
+    keywords: [KEYWORD.VIGILANCE],
+    triggeredAbilities: [when(TRIGGER.SPELL_CAST, 'Whenever an opponent casts a spell, if no mana was spent to cast it, counter that spell.', [
+      { type: EFFECT.COUNTER_SPELL, affected: AFFECTED.SUBJECT_SPELL },
+    ], { filter: { controller: 'opponent' }, condition: { noManaSpent: true } })],
+    abilities: [ability('Sacrifice Boromir: Creatures you control gain indestructible until end of turn. The Ring tempts you.', { sacrificeSelf: true }, [
+      grant([KEYWORD.INDESTRUCTIBLE], yourCreatures), ringTempts,
+    ])],
+  },
+  'Call of the Ring': {
+    triggeredAbilities: [
+      when(TRIGGER.UPKEEP, 'At the beginning of your upkeep, the Ring tempts you.', [ringTempts]),
+      when(TRIGGER.RING_TEMPTS, 'Whenever you choose a creature as your Ring-bearer, you may pay 2 life. If you do, draw a card.', [
+        { type: EFFECT.OPTIONAL_COST, options: [{ life: 2 }] }, draw(1, { condition: { paid: true } }),
+      ], { condition: { ringBearerChosen: true } }),
+    ],
+  },
+  'Dawn of a New Age': {
+    entersWithCounters: { counter: COUNTER.HOPE, per: { of: 'creatures' } },
+    triggeredAbilities: [when(TRIGGER.END_STEP, 'At the beginning of your end step, remove a hope counter from this enchantment. If you do, draw a card. Then if this enchantment has no hope counters on it, sacrifice it and you gain 4 life.', [
+      { type: EFFECT.REMOVE_COUNTERS, counter: COUNTER.HOPE, count: 1, ...source },
+      draw(1, { condition: { paid: true } }),
+      ifThen({ sourceCounters: { counter: COUNTER.HOPE, max: 0 } }, [{ type: EFFECT.SACRIFICE, affected: AFFECTED.YOU, sourceOnly: true, filter: {} }, gainLife(4)]),
+    ])],
+  },
+  'Delighted Halfling': {
+    abilities: [
+      tapForC,
+      ability("{T}: Add one mana of any color. Spend this mana only to cast a legendary spell, and that spell can't be countered.", { tap: true }, [
+        { type: EFFECT.ADD_MANA, anyCombination: 1, restriction: 'legendary', uncounterable: true },
+      ]),
+    ],
+  },
+  'Fall of Gil-galad': {
+    triggeredAbilities: [
+      chapter([1], 'I — Scry 2.', [scry(2)]),
+      chapter([2], 'II — Put two +1/+1 counters on target creature you control.', [counters(2)], { target: TARGET.CREATURE_YOU_CONTROL }),
+      chapter([3], 'III — Until end of turn, target creature you control gains "When this creature dies, draw two cards." Then that creature fights up to one other target creature.', [
+        { type: EFFECT.PUMP, targetIndex: 0, grantTriggers: [{ id: 'gilGaladDraw', trigger: TRIGGER.DIES, text: 'When this creature dies, draw two cards.', effects: [draw(2)] }] },
+        { type: EFFECT.FIGHT },
+      ], { targets: [TARGET.CREATURE_YOU_CONTROL, upTo(TARGET.CREATURE)] }),
+    ],
+  },
+  'Flame of Anor': {
+    modes: [
+      { text: 'Target player draws two cards.', target: TARGET.PLAYER, effects: [draw(2, { affected: AFFECTED.TARGET })] },
+      { text: 'Destroy target artifact.', target: TARGET.ARTIFACT, effects: [{ type: EFFECT.DESTROY }] },
+      { text: 'Flame of Anor deals 5 damage to target creature.', target: TARGET.CREATURE, effects: [damage(5)] },
+    ],
+    chooseTwo: youControl({ subtypes: ['Wizard'] }),
+  },
+  'Flowering of the White Tree': {
+    staticAbilities: [
+      anthem({ power: 2, toughness: 1, keywords: [KEYWORD.WARD], ward: { mana: { generic: 1 } }, filter: legendary }),
+      anthem({ power: 1, toughness: 1, filter: { nonlegendary: true } }),
+    ],
+  },
+  'Galadriel of Lothlórien': {
+    triggeredAbilities: [
+      when(TRIGGER.RING_TEMPTS, 'Whenever the Ring tempts you, if you chose a creature other than Galadriel as your Ring-bearer, scry 3.', [scry(3)], {
+        condition: { chosenOtherThanSource: true },
+      }),
+      when(TRIGGER.SCRY, 'Whenever you scry, you may reveal the top card of your library. If a land card is revealed this way, put it onto the battlefield tapped.', [
+        { type: EFFECT.REVEAL_TOP }, { type: EFFECT.PUT_REVEALED_ONTO_BATTLEFIELD, tapped: true, condition: { revealedMatches: { types: [LAND] } } },
+      ], { optional: true }),
+    ],
+  },
+  'Gimli, Mournful Avenger': {
+    staticAbilities: [self({ keywords: [KEYWORD.INDESTRUCTIBLE], condition: { creaturesDiedThisTurn: 2 } })],
+    triggeredAbilities: [when(TRIGGER.CREATURE_DIES, "Whenever another creature you control dies, put a +1/+1 counter on Gimli. When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.", [
+      counters(1, source),
+      reflexive({
+        text: "When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.",
+        target: upTo(TARGET.CREATURE_OPPONENT_CONTROLS),
+        effects: [{ type: EFFECT.FIGHT, withSource: true }],
+      }, { condition: { resolvedThisTurn: 3 } }),
+    ], { filter: { other: true } })],
+  },
+  'Glóin, Dwarf Emissary': {
+    triggeredAbilities: [when(TRIGGER.SPELL_CAST, 'Whenever you cast a historic spell, create a Treasure token. This ability triggers only once each turn.', [treasure()], {
+      filter: { historic: true }, oncePerTurn: true,
+    })],
+    abilities: [ability('{T}, Sacrifice a Treasure: Goad target creature.', { tap: true, sacrifice: { kind: TARGET.PERMANENT, filter: { subtypes: ['Treasure'] } } }, [
+      { type: EFFECT.GOAD },
+    ], { target: TARGET.CREATURE })],
+  },
+  'Horn of Gondor': {
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, 'When Horn of Gondor enters, create a 1/1 white Human Soldier creature token.', [tokens(soldier)])],
+    abilities: [ability('{3}, {T}: Create X 1/1 white Human Soldier creature tokens, where X is the number of Humans you control.', { mana: { generic: 3 }, tap: true }, [
+      tokens(soldier, 1, { per: { of: 'creatures', filter: { subtypes: ['Human'] } } }),
+    ])],
+  },
+  'Horn of the Mark': {
+    triggeredAbilities: [when(TRIGGER.ATTACKS_WITH, 'Whenever two or more creatures you control attack a player, look at the top five cards of your library. You may reveal a creature card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.', [
+      { type: EFFECT.LOOK_AT_TOP, count: 5, filter: { types: [CREATURE] }, max: 1 },
+    ], { filter: {}, minCount: 2 })],
+  },
+  "Isildur's Fateful Strike": {
+    target: TARGET.CREATURE,
+    effects: [{ type: EFFECT.DESTROY }, { type: EFFECT.EXILE_HAND_EXCESS, keep: 4, affected: AFFECTED.TARGET_CONTROLLER }],
+  },
+  'Last March of the Ents': {
+    cantBeCountered: true,
+    effects: [draw(1, { per: { of: 'greatestToughness' } }), { type: EFFECT.PUT_FROM_HAND_ONTO_BATTLEFIELD, filter: { types: [CREATURE] }, any: true }],
+  },
+  'Legolas, Master Archer': {
+    keywords: [KEYWORD.REACH],
+    triggeredAbilities: [
+      when(TRIGGER.SPELL_CAST, 'Whenever you cast a spell that targets Legolas, put a +1/+1 counter on Legolas.', [counters(1, source)], { filter: {}, targetsSource: true }),
+      when(TRIGGER.SPELL_CAST, "Whenever you cast a spell that targets a creature you don't control, Legolas deals damage equal to its power to up to one target creature.", [
+        damage(1, { per: { of: 'powerOf', who: 'source' } }),
+      ], { filter: {}, targetsCreatureYouDontControl: true, target: upTo(TARGET.CREATURE) }),
+    ],
+  },
+  'Lotho, Corrupt Shirriff': {
+    triggeredAbilities: [when(TRIGGER.SPELL_CAST, 'Whenever a player casts their second spell each turn, you lose 1 life and create a Treasure token.', [loseLife(1), treasure()], {
+      filter: { controller: 'any', nthThisTurn: 2 },
+    })],
+  },
+  'Merry, Esquire of Rohan': {
+    keywords: [KEYWORD.HASTE],
+    staticAbilities: [self({ keywords: [KEYWORD.FIRST_STRIKE], condition: { sourceEquipped: true } })],
+    triggeredAbilities: [when(TRIGGER.ATTACKS_WITH, 'Whenever you attack with Merry and another legendary creature, draw a card.', [draw(1)], {
+      filter: legendary, minCount: 2, includesSource: true,
+    })],
+  },
+  'Minas Tirith': {
+    entersTappedUnless: controlsLegendaryCreature,
+    abilities: [
+      tapFor('W'),
+      ability('{1}{W}, {T}: Draw a card. Activate only if you attacked with two or more creatures this turn.', { mana: { generic: 1, W: 1 }, tap: true }, [draw(1)], {
+        activationCondition: { attackedWithAtLeast: 2 },
+      }),
+    ],
+  },
+  'Mines of Moria': {
+    entersTappedUnless: controlsLegendaryCreature,
+    abilities: [
+      tapFor('R'),
+      ability('{3}{R}, {T}, Exile three cards from your graveyard: Create two Treasure tokens.', { mana: { generic: 3, R: 1 }, tap: true, exileFromGraveyard: 3 }, [treasure(2)]),
+    ],
+  },
+  'Mithril Coat': {
+    keywords: [KEYWORD.FLASH, KEYWORD.INDESTRUCTIBLE],
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, 'When Mithril Coat enters, attach it to target legendary creature you control.', [{ type: EFFECT.ATTACH }], {
+      target: target(TARGET.CREATURE_YOU_CONTROL, legendary),
+    })],
+    staticAbilities: [attached({ keywords: [KEYWORD.INDESTRUCTIBLE] })],
+    abilities: [equip(3)],
+  },
+  'Mount Doom': {
+    abilities: [
+      ability('{T}, Pay 1 life: Add {B} or {R}.', { tap: true, life: 1 }, [{ type: EFFECT.ADD_MANA, anyColor: 1, colorsFrom: ['B', 'R'] }]),
+      ability('{1}{B}{R}, {T}: Mount Doom deals 1 damage to each opponent.', { mana: { generic: 1, B: 1, R: 1 }, tap: true }, [damage(1, eachOpponent)]),
+      ability('{5}{B}{R}, {T}, Sacrifice Mount Doom and a legendary artifact: Choose up to two creatures, then destroy the rest. Activate only as a sorcery.', {
+        mana: { generic: 5, B: 1, R: 1 }, tap: true, sacrificeSelf: true, sacrifice: { kind: TARGET.ARTIFACT, filter: legendary },
+      }, [{ type: EFFECT.KEEP_AND_DESTROY_REST, keep: 2 }], { timing: SORCERY_SPEED }),
+    ],
+  },
+  'One Ring to Rule Them All': {
+    triggeredAbilities: [
+      chapter([1], "I — The Ring tempts you, then each player mills cards equal to your Ring-bearer's power.", [
+        ringTempts, { type: EFFECT.MILL, count: 1, affected: AFFECTED.EACH_PLAYER, per: { of: 'ringBearerPower' } },
+      ]),
+      chapter([2], 'II — Destroy all nonlegendary creatures.', [{ type: EFFECT.DESTROY, affected: AFFECTED.EACH_CREATURE, filter: { nonlegendary: true } }]),
+      chapter([3], "III — Each opponent loses 1 life for each creature card in that player's graveyard.", [
+        loseLife(1, { ...eachOpponent, perPlayer: { of: 'cards', filter: { types: [CREATURE] } } }),
+      ]),
+    ],
+  },
+  'Rangers of Ithilien': {
+    keywords: [KEYWORD.VIGILANCE],
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, 'When this creature enters, gain control of up to one target creature with lesser power for as long as you control this creature. Then the Ring tempts you.', [
+      { type: EFFECT.GAIN_CONTROL, whileSourceControlled: true }, ringTempts,
+    ], { target: target(TARGET.CREATURE, null, { optional: true, lesserPowerThanSource: true }) })],
+  },
+  Rivendell: {
+    entersTappedUnless: controlsLegendaryCreature,
+    abilities: [
+      tapFor('U'),
+      ability('{1}{U}, {T}: Scry 2. Activate only if you control a legendary creature.', { mana: { generic: 1, U: 1 }, tap: true }, [scry(2)], {
+        activationCondition: controlsLegendaryCreature,
+      }),
+    ],
+  },
+  'Samwise Gamgee': {
+    triggeredAbilities: [when(TRIGGER.CREATURE_ENTERS, 'Whenever another nontoken creature you control enters, create a Food token.', [food()], { filter: { other: true, token: false } })],
+    abilities: [ability('Sacrifice three Foods: Return target historic card from your graveyard to your hand.', { sacrifice: { ...foodSpec, count: 3 } }, [
+      { type: EFFECT.RETURN_FROM_GRAVEYARD },
+    ], { target: target(TARGET.CARD_IN_YOUR_GRAVEYARD, { historic: true }) })],
+  },
+  'Shagrat, Loot Bearer': {
+    triggeredAbilities: [when(TRIGGER.ATTACKS, 'Whenever Shagrat attacks, attach up to one target Equipment to it. Then amass Orcs X, where X is the number of Equipment attached to Shagrat.', [
+      { type: EFFECT.ATTACH, toSource: true }, amass(1, { per: { of: 'equipmentAttachedToSource' } }),
+    ], { target: upTo(TARGET.ARTIFACT, { subtypes: ['Equipment'] }) })],
+  },
+  'Sméagol, Helpful Guide': {
+    triggeredAbilities: [
+      when(TRIGGER.END_STEP, 'At the beginning of your end step, if a creature died under your control this turn, the Ring tempts you.', [ringTempts], {
+        condition: { creatureDiedThisTurn: true },
+      }),
+      when(TRIGGER.RING_TEMPTS, 'Whenever the Ring tempts you, target opponent reveals cards from the top of their library until they reveal a land card. Put that card onto the battlefield tapped under your control and the rest into their graveyard.', [
+        { type: EFFECT.REVEAL_UNTIL, affected: AFFECTED.TARGET, filter: { types: [LAND] }, count: 1, tapped: true, rest: 'graveyard' },
+      ], { target: TARGET.OPPONENT }),
+    ],
+  },
+  'Spiteful Banditry': {
+    triggeredAbilities: [
+      when(TRIGGER.ENTERS_BATTLEFIELD, 'When this enchantment enters, it deals X damage to each creature.', [damage(1, { affected: AFFECTED.EACH_CREATURE, per: { of: 'sourceX' } })]),
+      when(TRIGGER.CREATURE_DIES, 'Whenever one or more creatures your opponents control die, you create a Treasure token. This ability triggers only once each turn.', [treasure()], {
+        filter: { controller: 'opponent' }, oncePerTurn: true,
+      }),
+    ],
+  },
+  'Sting, the Glinting Dagger': {
+    staticAbilities: [
+      attached({ power: 1, toughness: 1, keywords: [KEYWORD.HASTE] }),
+      attached({ keywords: [KEYWORD.FIRST_STRIKE], condition: { hostBlockingOrBlockedBy: goblinOrOrc } }),
+    ],
+    triggeredAbilities: [when(TRIGGER.BEGINNING_OF_COMBAT, 'At the beginning of each combat, untap equipped creature.', [{ type: EFFECT.UNTAP, affected: AFFECTED.ATTACHED_PERMANENT }], {
+      eachTurn: true,
+    })],
+    abilities: [equip(2)],
+  },
+  "The Balrog, Durin's Bane": {
+    costReduction: { per: { of: 'permanentsSacrificedThisTurn' } },
+    keywords: [KEYWORD.HASTE, KEYWORD.BLOCKED_ONLY_BY_LEGENDARY],
+    triggeredAbilities: [when(TRIGGER.DIES, 'When The Balrog dies, destroy target artifact or creature an opponent controls.', [{ type: EFFECT.DESTROY }], {
+      target: target(TARGET.PERMANENT, { types: [ARTIFACT, CREATURE], controller: 'opponent' }),
+    })],
+  },
+  'The Battle of Bywater': {
+    effects: [{ type: EFFECT.DESTROY, affected: AFFECTED.EACH_CREATURE, filter: { power: { min: 3 } } }, food(1, { per: { of: 'creatures' } })],
+  },
+  'The Ring Goes South': {
+    effects: [
+      ringTempts,
+      { type: EFFECT.REVEAL_UNTIL, affected: AFFECTED.YOU, filter: { types: [LAND] }, count: 1, per: { of: 'creatures', filter: legendary }, tapped: true, rest: 'bottom' },
+    ],
+  },
+  'The Shire': {
+    entersTappedUnless: controlsLegendaryCreature,
+    abilities: [
+      tapFor('G'),
+      ability('{1}{G}, {T}, Tap an untapped creature you control: Create a Food token.', { mana: { generic: 1, G: 1 }, tap: true, tapCreatures: { count: 1 } }, [food()]),
+    ],
+  },
+  'There and Back Again': {
+    triggeredAbilities: [
+      chapter([1], "I — Up to one target creature can't block for as long as you control this Saga. The Ring tempts you.", [
+        grant([KEYWORD.CANT_BLOCK], { whileSourceControlled: true }), ringTempts,
+      ], { target: upTo(TARGET.CREATURE) }),
+      chapter([2], 'II — Search your library for a Mountain card, put it onto the battlefield, then shuffle.', [
+        { type: EFFECT.SEARCH_LIBRARY, filter: { subtypes: ['Mountain'] }, count: 1, destination: 'battlefield' },
+      ]),
+      chapter([3], 'III — Create Smaug, a legendary 6/6 red Dragon creature token with flying, haste, and "When Smaug dies, create fourteen Treasure tokens."', [tokens(smaug)]),
+    ],
+  },
+  'War of the Last Alliance': {
+    triggeredAbilities: [
+      chapter([1, 2], 'I, II — Search your library for a legendary creature card, reveal it, put it into your hand, then shuffle.', [
+        { type: EFFECT.SEARCH_LIBRARY, filter: legendaryCreature, count: 1, destination: 'hand' },
+      ]),
+      chapter([3], 'III — Creatures you control gain double strike until end of turn. The Ring tempts you.', [grant([KEYWORD.DOUBLE_STRIKE], yourCreatures), ringTempts]),
+    ],
+  },
+  'Witch-king of Angmar': {
+    keywords: [KEYWORD.FLYING],
+    triggeredAbilities: [when(TRIGGER.COMBAT_DAMAGE_TO_YOU, 'Whenever one or more creatures deal combat damage to you, each opponent sacrifices a creature of their choice that dealt combat damage to you this turn. The Ring tempts you.', [
+      { type: EFFECT.SACRIFICE, ...eachOpponent, dealtCombatDamageToYou: true }, ringTempts,
+    ])],
+    abilities: [ability('Discard a card: Witch-king of Angmar gains indestructible until end of turn. Tap him.', { discard: 1 }, [
+      grant([KEYWORD.INDESTRUCTIBLE], source), { type: EFFECT.TAP, ...source },
+    ])],
   },
 };

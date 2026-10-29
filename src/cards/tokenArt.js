@@ -111,6 +111,18 @@ export const TOKEN_PRESENTATION = {
     "typeLine": "Token Creature — Saproling",
     "scryfallId": "0bf3d41e-cd0a-46bd-8b89-8855906ea6b5"
   },
+  "token:Smaug:6/6:red:flying,haste": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/b/bb4ac08f-f6a5-49d6-91e9-38c4f217932b.jpg?1783916045",
+      "card": "https://cards.scryfall.io/normal/front/b/b/bb4ac08f-f6a5-49d6-91e9-38c4f217932b.jpg?1783916045"
+    },
+    "artist": "Jarel Threat",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "20",
+    "typeLine": "Token Legendary Creature — Dragon",
+    "scryfallId": "bb4ac08f-f6a5-49d6-91e9-38c4f217932b"
+  },
   "token:Soldier Token:1/1:white:": {
     "image": {
       "art": "https://cards.scryfall.io/art_crop/front/a/4/a491d9da-a58d-4423-b565-c5a99ef63132.jpg?1783932857",

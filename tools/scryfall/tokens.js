@@ -49,13 +49,20 @@ export function tokenMatches(card, token) {
   const name = token.name ?? subtypes.join(' ');
   const colors = (token.colors ?? []).map((c) => COLOR_LETTERS[c] ?? c).sort();
   const keywords = (token.keywords ?? []).map((k) => k.toLowerCase()).sort();
-  // Rules text other than its keywords (and their reminder text) means it does something else.
-  const textParts = (card.oracle_text ?? '').replace(/\([^)]*\)/g, '').split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  // Rules text other than its keywords (and their reminder text) and its own abilities (Smaug's "When Smaug
+  // dies, …") means it does something else.
+  let text = (card.oracle_text ?? '').replace(/\([^)]*\)/g, '');
+  const abilityTexts = (token.triggeredAbilities ?? []).map((a) => a.text.replace(name, 'this creature'));
+  for (const ability of abilityTexts) text = text.replace(ability, '');
+  // Scryfall lists keyword actions in an ability's text ("create … Treasure tokens") as keywords too.
+  const cardKeywords = (card.keywords ?? []).map((k) => k.toLowerCase()).filter((k) => !abilityTexts.some((t) => t.toLowerCase().includes(k)));
+  const textParts = text.split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const types = [...(token.supertypes ?? []), ...(token.types ?? ['Creature'])];
   return card.name === name
-    && card.type_line === `Token ${(token.types ?? ['Creature']).join(' ')} — ${subtypes.join(' ')}`
+    && card.type_line === `Token ${types.join(' ')} — ${subtypes.join(' ')}`
     && card.power === String(token.power) && card.toughness === String(token.toughness)
     && [...(card.colors ?? [])].sort().join() === colors.join()
-    && (card.keywords ?? []).map((k) => k.toLowerCase()).sort().join() === keywords.join()
+    && cardKeywords.sort().join() === keywords.join()
     && textParts.every((part) => keywords.includes(part));
 }
 

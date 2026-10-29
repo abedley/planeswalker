@@ -194,6 +194,119 @@ export const IMPORTED_CARDS = {
     "scryfallId": "fd210c45-57f3-4d7d-93ba-81fe4298ade3",
     "scryfallUri": "https://scryfall.com/card/scg/110/alpha-status?utm_source=api"
   },
+  "andurilFlameOfTheWest": {
+    "id": "andurilFlameOfTheWest",
+    "name": "Andúril, Flame of the West",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "equippedAttacks1",
+        "trigger": "equippedAttacks",
+        "text": "Whenever equipped creature attacks, create two tapped 1/1 white Spirit creature tokens with flying. If that creature is legendary, instead create two of those tokens that are tapped and attacking.",
+        "effects": [
+          {
+            "type": "if",
+            "if": {
+              "subjectMatches": {
+                "supertypes": [
+                  "Legendary"
+                ]
+              }
+            },
+            "then": [
+              {
+                "type": "createToken",
+                "count": 2,
+                "token": {
+                  "colors": [
+                    "white"
+                  ],
+                  "subtypes": [
+                    "Spirit"
+                  ],
+                  "power": 1,
+                  "toughness": 1,
+                  "keywords": [
+                    "flying"
+                  ]
+                },
+                "tapped": true,
+                "attacking": true
+              }
+            ],
+            "else": [
+              {
+                "type": "createToken",
+                "count": 2,
+                "token": {
+                  "colors": [
+                    "white"
+                  ],
+                  "subtypes": [
+                    "Spirit"
+                  ],
+                  "power": 1,
+                  "toughness": 1,
+                  "keywords": [
+                    "flying"
+                  ]
+                },
+                "tapped": true
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 3,
+        "toughness": 1
+      }
+    ],
+    "text": "Equipped creature gets +3/+1.\nWhenever equipped creature attacks, create two tapped 1/1 white Spirit creature tokens with flying. If that creature is legendary, instead create two of those tokens that are tapped and attacking.\nEquip {2}",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/e/7e7b9eea-a224-4db1-a089-cb385f7af20c.jpg?1783916241",
+      "card": "https://cards.scryfall.io/normal/front/7/e/7e7b9eea-a224-4db1-a089-cb385f7af20c.jpg?1783916241"
+    },
+    "artist": "Irvin Rodriguez",
+    "colors": [],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "236",
+    "typeLine": "Legendary Artifact — Equipment",
+    "oracleText": "Equipped creature gets +3/+1.\nWhenever equipped creature attacks, create two tapped 1/1 white Spirit creature tokens with flying. If that creature is legendary, instead create two of those tokens that are tapped and attacking.\nEquip {2}",
+    "scryfallId": "7e7b9eea-a224-4db1-a089-cb385f7af20c",
+    "scryfallUri": "https://scryfall.com/card/ltr/236/and%C3%BAril-flame-of-the-west?utm_source=api"
+  },
   "angelOfTheDawn": {
     "id": "angelOfTheDawn",
     "name": "Angel of the Dawn",
@@ -245,6 +358,127 @@ export const IMPORTED_CARDS = {
     "oracleText": "Flying\nWhen this creature enters, creatures you control get +1/+1 and gain vigilance until end of turn.",
     "scryfallId": "f4bae0e4-1143-4dc4-afb1-e6b4201ff101",
     "scryfallUri": "https://scryfall.com/card/m19/7/angel-of-the-dawn?utm_source=api"
+  },
+  "aragornTheUniter": {
+    "id": "aragornTheUniter",
+    "name": "Aragorn, the Uniter",
+    "manaCost": {
+      "R": 1,
+      "G": 1,
+      "W": 1,
+      "U": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Noble"
+    ],
+    "power": 5,
+    "toughness": 5,
+    "triggeredAbilities": [
+      {
+        "id": "spellCast1",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a white spell, create a 1/1 white Human Soldier creature token.",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": {
+              "colors": [
+                "white"
+              ],
+              "subtypes": [
+                "Human",
+                "Soldier"
+              ],
+              "power": 1,
+              "toughness": 1
+            }
+          }
+        ],
+        "filter": {
+          "colors": [
+            "W"
+          ]
+        }
+      },
+      {
+        "id": "spellCast2",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a blue spell, scry 2.",
+        "effects": [
+          {
+            "type": "scry",
+            "count": 2
+          }
+        ],
+        "filter": {
+          "colors": [
+            "U"
+          ]
+        }
+      },
+      {
+        "id": "spellCast3",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a red spell, Aragorn deals 3 damage to target opponent.",
+        "effects": [
+          {
+            "type": "dealDamage",
+            "amount": 3
+          }
+        ],
+        "filter": {
+          "colors": [
+            "R"
+          ]
+        },
+        "target": "opponent"
+      },
+      {
+        "id": "spellCast4",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a green spell, target creature gets +4/+4 until end of turn.",
+        "effects": [
+          {
+            "type": "pump",
+            "power": 4,
+            "toughness": 4
+          }
+        ],
+        "filter": {
+          "colors": [
+            "G"
+          ]
+        },
+        "target": "creature"
+      }
+    ],
+    "text": "Whenever you cast a white spell, create a 1/1 white Human Soldier creature token.\nWhenever you cast a blue spell, scry 2.\nWhenever you cast a red spell, Aragorn deals 3 damage to target opponent.\nWhenever you cast a green spell, target creature gets +4/+4 until end of turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/9/e98d5321-ec09-456c-a9ea-c8ca2cfc6205.jpg?1783916262",
+      "card": "https://cards.scryfall.io/normal/front/e/9/e98d5321-ec09-456c-a9ea-c8ca2cfc6205.jpg?1783916262"
+    },
+    "artist": "Javier Charro",
+    "colors": [
+      "G",
+      "R",
+      "U",
+      "W"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "192",
+    "typeLine": "Legendary Creature — Human Noble",
+    "oracleText": "Whenever you cast a white spell, create a 1/1 white Human Soldier creature token.\nWhenever you cast a blue spell, scry 2.\nWhenever you cast a red spell, Aragorn deals 3 damage to target opponent.\nWhenever you cast a green spell, target creature gets +4/+4 until end of turn.",
+    "scryfallId": "e98d5321-ec09-456c-a9ea-c8ca2cfc6205",
+    "scryfallUri": "https://scryfall.com/card/ltr/192/aragorn-the-uniter?utm_source=api"
   },
   "arcaneEncyclopedia": {
     "id": "arcaneEncyclopedia",
@@ -563,6 +797,82 @@ export const IMPORTED_CARDS = {
     "oracleText": "This spell costs {2} less to cast if it targets a tapped creature.\nExile target creature.",
     "scryfallId": "a4410076-e1fe-45f3-a0ca-a91ab0133ff4",
     "scryfallUri": "https://scryfall.com/card/ltr/1/banish-from-edoras?utm_source=api"
+  },
+  "baradDur": {
+    "id": "baradDur",
+    "name": "Barad-dûr",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForB",
+        "text": "{T}: Add {B}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "B": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{X}{X}{B}, {T}: Amass Orcs X. Activate only if a creature died this turn.",
+        "cost": {
+          "mana": {
+            "X": 2,
+            "B": 1
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "amass",
+            "count": 1,
+            "subtype": "Orc",
+            "per": {
+              "of": "x"
+            }
+          }
+        ],
+        "activationCondition": {
+          "anyCreatureDiedThisTurn": true
+        }
+      }
+    ],
+    "entersTappedUnless": {
+      "youControl": {
+        "types": [
+          "Creature"
+        ],
+        "supertypes": [
+          "Legendary"
+        ]
+      }
+    },
+    "text": "Barad-dûr enters tapped unless you control a legendary creature.\n{T}: Add {B}.\n{X}{X}{B}, {T}: Amass Orcs X. Activate only if a creature died this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/b/eb5038af-06b0-401e-8dea-a1a8483788ae.jpg?1783916238",
+      "card": "https://cards.scryfall.io/normal/front/e/b/eb5038af-06b0-401e-8dea-a1a8483788ae.jpg?1783916238"
+    },
+    "artist": "Sean Vo",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "253",
+    "typeLine": "Legendary Land",
+    "oracleText": "Barad-dûr enters tapped unless you control a legendary creature.\n{T}: Add {B}.\n{X}{X}{B}, {T}: Amass Orcs X. Activate only if a creature died this turn.",
+    "scryfallId": "eb5038af-06b0-401e-8dea-a1a8483788ae",
+    "scryfallUri": "https://scryfall.com/card/ltr/253/barad-d%C3%BBr?utm_source=api"
   },
   "barrowBlade": {
     "id": "barrowBlade",
@@ -1516,6 +1826,85 @@ export const IMPORTED_CARDS = {
     "scryfallId": "04dcef75-6f98-4233-ae32-6fe41724c8e0",
     "scryfallUri": "https://scryfall.com/card/ltr/116/book-of-mazarbul?utm_source=api"
   },
+  "boromirWardenOfTheTower": {
+    "id": "boromirWardenOfTheTower",
+    "name": "Boromir, Warden of the Tower",
+    "manaCost": {
+      "generic": 2,
+      "W": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Soldier"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "keywords": [
+      "vigilance"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "Sacrifice Boromir: Creatures you control gain indestructible until end of turn. The Ring tempts you.",
+        "cost": {
+          "sacrificeSelf": true
+        },
+        "effects": [
+          {
+            "type": "pump",
+            "keywords": [
+              "indestructible"
+            ],
+            "affected": "eachCreatureYouControl"
+          },
+          {
+            "type": "ringTempts"
+          }
+        ]
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "spellCast1",
+        "trigger": "spellCast",
+        "text": "Whenever an opponent casts a spell, if no mana was spent to cast it, counter that spell.",
+        "effects": [
+          {
+            "type": "counterSpell",
+            "affected": "subjectSpell"
+          }
+        ],
+        "filter": {
+          "controller": "opponent"
+        },
+        "condition": {
+          "noManaSpent": true
+        }
+      }
+    ],
+    "text": "Vigilance\nWhenever an opponent casts a spell, if no mana was spent to cast it, counter that spell.\nSacrifice Boromir: Creatures you control gain indestructible until end of turn. The Ring tempts you.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/6/f6bc3720-2892-4dda-8f30-079a1ac8e1e2.jpg?1783916338",
+      "card": "https://cards.scryfall.io/normal/front/f/6/f6bc3720-2892-4dda-8f30-079a1ac8e1e2.jpg?1783916338"
+    },
+    "artist": "Yigit Koroglu",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "4",
+    "typeLine": "Legendary Creature — Human Soldier",
+    "oracleText": "Vigilance\nWhenever an opponent casts a spell, if no mana was spent to cast it, counter that spell.\nSacrifice Boromir: Creatures you control gain indestructible until end of turn. The Ring tempts you.",
+    "scryfallId": "f6bc3720-2892-4dda-8f30-079a1ac8e1e2",
+    "scryfallUri": "https://scryfall.com/card/ltr/4/boromir-warden-of-the-tower?utm_source=api"
+  },
   "brandywineFarmer": {
     "id": "brandywineFarmer",
     "name": "Brandywine Farmer",
@@ -1769,6 +2158,72 @@ export const IMPORTED_CARDS = {
     "oracleText": "At the beginning of your end step, if you don't control a Food, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
     "scryfallId": "f3fd9ff1-278b-4e6a-b30b-90250d8b5762",
     "scryfallUri": "https://scryfall.com/card/ltr/197/butterbur-bree-innkeeper?utm_source=api"
+  },
+  "callOfTheRing": {
+    "id": "callOfTheRing",
+    "name": "Call of the Ring",
+    "manaCost": {
+      "generic": 1,
+      "B": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "triggeredAbilities": [
+      {
+        "id": "upkeep1",
+        "trigger": "upkeep",
+        "text": "At the beginning of your upkeep, the Ring tempts you.",
+        "effects": [
+          {
+            "type": "ringTempts"
+          }
+        ]
+      },
+      {
+        "id": "ringTempts2",
+        "trigger": "ringTempts",
+        "text": "Whenever you choose a creature as your Ring-bearer, you may pay 2 life. If you do, draw a card.",
+        "effects": [
+          {
+            "type": "optionalCost",
+            "options": [
+              {
+                "life": 2
+              }
+            ]
+          },
+          {
+            "type": "drawCards",
+            "count": 1,
+            "condition": {
+              "paid": true
+            }
+          }
+        ],
+        "condition": {
+          "ringBearerChosen": true
+        }
+      }
+    ],
+    "text": "At the beginning of your upkeep, the Ring tempts you.\nWhenever you choose a creature as your Ring-bearer, you may pay 2 life. If you do, draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/9/a92a2c5a-e450-494a-b23b-7ac0a6c50535.jpg?1783916310",
+      "card": "https://cards.scryfall.io/normal/front/a/9/a92a2c5a-e450-494a-b23b-7ac0a6c50535.jpg?1783916310"
+    },
+    "artist": "Anato Finnstark",
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "79",
+    "typeLine": "Enchantment",
+    "oracleText": "At the beginning of your upkeep, the Ring tempts you.\nWhenever you choose a creature as your Ring-bearer, you may pay 2 life. If you do, draw a card.",
+    "scryfallId": "a92a2c5a-e450-494a-b23b-7ac0a6c50535",
+    "scryfallUri": "https://scryfall.com/card/ltr/79/call-of-the-ring?utm_source=api"
   },
   "cancel": {
     "id": "cancel",
@@ -2653,6 +3108,85 @@ export const IMPORTED_CARDS = {
     "scryfallId": "3f9c1ba3-8b7c-413b-865d-0ca4b2f55903",
     "scryfallUri": "https://scryfall.com/card/m15/92/crippling-blight?utm_source=api"
   },
+  "dawnOfANewAge": {
+    "id": "dawnOfANewAge",
+    "name": "Dawn of a New Age",
+    "manaCost": {
+      "generic": 1,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "triggeredAbilities": [
+      {
+        "id": "endStep1",
+        "trigger": "endStep",
+        "text": "At the beginning of your end step, remove a hope counter from this enchantment. If you do, draw a card. Then if this enchantment has no hope counters on it, sacrifice it and you gain 4 life.",
+        "effects": [
+          {
+            "type": "removeCounters",
+            "counter": "hope",
+            "count": 1,
+            "affected": "source"
+          },
+          {
+            "type": "drawCards",
+            "count": 1,
+            "condition": {
+              "paid": true
+            }
+          },
+          {
+            "type": "if",
+            "if": {
+              "sourceCounters": {
+                "counter": "hope",
+                "max": 0
+              }
+            },
+            "then": [
+              {
+                "type": "sacrifice",
+                "affected": "you",
+                "sourceOnly": true,
+                "filter": {}
+              },
+              {
+                "type": "gainLife",
+                "amount": 4
+              }
+            ],
+            "else": []
+          }
+        ]
+      }
+    ],
+    "entersWithCounters": {
+      "counter": "hope",
+      "per": {
+        "of": "creatures"
+      }
+    },
+    "text": "This enchantment enters with a hope counter on it for each creature you control.\nAt the beginning of your end step, remove a hope counter from this enchantment. If you do, draw a card. Then if this enchantment has no hope counters on it, sacrifice it and you gain 4 life.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/b/cb966ee6-bf1b-4bb6-9277-8de6f3918ae2.jpg?1783916335",
+      "card": "https://cards.scryfall.io/normal/front/c/b/cb966ee6-bf1b-4bb6-9277-8de6f3918ae2.jpg?1783916335"
+    },
+    "artist": "Anato Finnstark",
+    "colors": [
+      "W"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "5",
+    "typeLine": "Enchantment",
+    "oracleText": "This enchantment enters with a hope counter on it for each creature you control.\nAt the beginning of your end step, remove a hope counter from this enchantment. If you do, draw a card. Then if this enchantment has no hope counters on it, sacrifice it and you gain 4 life.",
+    "scryfallId": "cb966ee6-bf1b-4bb6-9277-8de6f3918ae2",
+    "scryfallUri": "https://scryfall.com/card/ltr/5/dawn-of-a-new-age?utm_source=api"
+  },
   "dawnsLightArcher": {
     "id": "dawnsLightArcher",
     "name": "Dawn's Light Archer",
@@ -2858,6 +3392,71 @@ export const IMPORTED_CARDS = {
     "oracleText": "Target creature gets -3/-0 until end of turn.\nAmass Orcs 1. (Put a +1/+1 counter on an Army you control. It's also an Orc. If you don't control an Army, create a 0/0 black Orc Army creature token first.)",
     "scryfallId": "b2984bc6-7c12-46e4-8dd3-b23e29a7a7ec",
     "scryfallUri": "https://scryfall.com/card/ltr/47/deceive-the-messenger?utm_source=api"
+  },
+  "delightedHalfling": {
+    "id": "delightedHalfling",
+    "name": "Delighted Halfling",
+    "manaCost": {
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Citizen"
+    ],
+    "power": 1,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "tapForC",
+        "text": "{T}: Add {C}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "C": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{T}: Add one mana of any color. Spend this mana only to cast a legendary spell, and that spell can't be countered.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "anyCombination": 1,
+            "restriction": "legendary",
+            "uncounterable": true
+          }
+        ]
+      }
+    ],
+    "text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a legendary spell, and that spell can't be countered.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/1/71384418-173a-4f77-adab-56e52fa23692.jpg?1783916276",
+      "card": "https://cards.scryfall.io/normal/front/7/1/71384418-173a-4f77-adab-56e52fa23692.jpg?1783916276"
+    },
+    "artist": "Inka Schulz",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "158",
+    "typeLine": "Creature — Halfling Citizen",
+    "oracleText": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a legendary spell, and that spell can't be countered.",
+    "scryfallId": "71384418-173a-4f77-adab-56e52fa23692",
+    "scryfallUri": "https://scryfall.com/card/ltr/158/delighted-halfling?utm_source=api"
   },
   "denethorRulingSteward": {
     "id": "denethorRulingSteward",
@@ -5075,6 +5674,106 @@ export const IMPORTED_CARDS = {
     "scryfallId": "608f431b-a05c-4610-94f7-928d87b2c056",
     "scryfallUri": "https://scryfall.com/card/m19/233/explosive-apparatus?utm_source=api"
   },
+  "fallOfGilGalad": {
+    "id": "fallOfGilGalad",
+    "name": "Fall of Gil-galad",
+    "manaCost": {
+      "generic": 1,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Saga"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "chapter1",
+        "trigger": "chapter",
+        "chapters": [
+          1
+        ],
+        "text": "I — Scry 2.",
+        "effects": [
+          {
+            "type": "scry",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "id": "chapter2",
+        "trigger": "chapter",
+        "chapters": [
+          2
+        ],
+        "text": "II — Put two +1/+1 counters on target creature you control.",
+        "effects": [
+          {
+            "type": "addCounters",
+            "counter": "+1/+1",
+            "count": 2
+          }
+        ],
+        "target": "creatureYouControl"
+      },
+      {
+        "id": "chapter3",
+        "trigger": "chapter",
+        "chapters": [
+          3
+        ],
+        "text": "III — Until end of turn, target creature you control gains \"When this creature dies, draw two cards.\" Then that creature fights up to one other target creature.",
+        "effects": [
+          {
+            "type": "pump",
+            "targetIndex": 0,
+            "grantTriggers": [
+              {
+                "id": "gilGaladDraw",
+                "trigger": "dies",
+                "text": "When this creature dies, draw two cards.",
+                "effects": [
+                  {
+                    "type": "drawCards",
+                    "count": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "fight"
+          }
+        ],
+        "targets": [
+          "creatureYouControl",
+          {
+            "kind": "creature",
+            "optional": true
+          }
+        ]
+      }
+    ],
+    "text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Scry 2.\nII — Put two +1/+1 counters on target creature you control.\nIII — Until end of turn, target creature you control gains \"When this creature dies, draw two cards.\" Then that creature fights up to one other target creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/f/b/fbaab2c0-ea18-4b2f-b75b-506cbbea97e1.jpg?1783916271",
+      "card": "https://cards.scryfall.io/normal/front/f/b/fbaab2c0-ea18-4b2f-b75b-506cbbea97e1.jpg?1783916271"
+    },
+    "artist": "Craig Elliott",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "165",
+    "typeLine": "Enchantment — Saga",
+    "oracleText": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Scry 2.\nII — Put two +1/+1 counters on target creature you control.\nIII — Until end of turn, target creature you control gains \"When this creature dies, draw two cards.\" Then that creature fights up to one other target creature.",
+    "scryfallId": "fbaab2c0-ea18-4b2f-b75b-506cbbea97e1",
+    "scryfallUri": "https://scryfall.com/card/ltr/165/fall-of-gil-galad?utm_source=api"
+  },
   "fanaticalFirebrand": {
     "id": "fanaticalFirebrand",
     "name": "Fanatical Firebrand",
@@ -5547,6 +6246,134 @@ export const IMPORTED_CARDS = {
     "scryfallId": "484fbce6-71bd-40eb-a71b-86958a094708",
     "scryfallUri": "https://scryfall.com/card/fdn/674/fireshrieker?utm_source=api"
   },
+  "flameOfAnor": {
+    "id": "flameOfAnor",
+    "name": "Flame of Anor",
+    "manaCost": {
+      "generic": 1,
+      "U": 1,
+      "R": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "modes": [
+      {
+        "text": "Target player draws two cards.",
+        "target": "player",
+        "effects": [
+          {
+            "type": "drawCards",
+            "count": 2,
+            "affected": "target"
+          }
+        ]
+      },
+      {
+        "text": "Destroy target artifact.",
+        "target": "artifact",
+        "effects": [
+          {
+            "type": "destroy"
+          }
+        ]
+      },
+      {
+        "text": "Flame of Anor deals 5 damage to target creature.",
+        "target": "creature",
+        "effects": [
+          {
+            "type": "dealDamage",
+            "amount": 5
+          }
+        ]
+      }
+    ],
+    "chooseTwo": {
+      "youControl": {
+        "subtypes": [
+          "Wizard"
+        ]
+      }
+    },
+    "text": "Choose one. If you control a Wizard as you cast this spell, you may choose two instead.\n• Target player draws two cards.\n• Destroy target artifact.\n• Flame of Anor deals 5 damage to target creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/4/04779a7e-b453-48b9-b392-6d6fd0b8d283.jpg?1783916255",
+      "card": "https://cards.scryfall.io/normal/front/0/4/04779a7e-b453-48b9-b392-6d6fd0b8d283.jpg?1783916255"
+    },
+    "artist": "Yigit Koroglu",
+    "colors": [
+      "R",
+      "U"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "203",
+    "typeLine": "Instant",
+    "oracleText": "Choose one. If you control a Wizard as you cast this spell, you may choose two instead.\n• Target player draws two cards.\n• Destroy target artifact.\n• Flame of Anor deals 5 damage to target creature.",
+    "scryfallId": "04779a7e-b453-48b9-b392-6d6fd0b8d283",
+    "scryfallUri": "https://scryfall.com/card/ltr/203/flame-of-anor?utm_source=api"
+  },
+  "floweringOfTheWhiteTree": {
+    "id": "floweringOfTheWhiteTree",
+    "name": "Flowering of the White Tree",
+    "manaCost": {
+      "W": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "staticAbilities": [
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 2,
+        "toughness": 1,
+        "keywords": [
+          "ward"
+        ],
+        "ward": {
+          "mana": {
+            "generic": 1
+          }
+        },
+        "filter": {
+          "supertypes": [
+            "Legendary"
+          ]
+        }
+      },
+      {
+        "affected": "eachCreatureYouControl",
+        "power": 1,
+        "toughness": 1,
+        "filter": {
+          "nonlegendary": true
+        }
+      }
+    ],
+    "text": "Legendary creatures you control get +2/+1 and have ward {1}.\nNonlegendary creatures you control get +1/+1.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/2/2/2203b2cd-48e5-471a-85fe-dc81012e5d61.jpg?1783916332",
+      "card": "https://cards.scryfall.io/normal/front/2/2/2203b2cd-48e5-471a-85fe-dc81012e5d61.jpg?1783916332"
+    },
+    "artist": "Erikas Perl",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "15",
+    "typeLine": "Legendary Enchantment",
+    "oracleText": "Legendary creatures you control get +2/+1 and have ward {1}.\nNonlegendary creatures you control get +1/+1.",
+    "scryfallId": "2203b2cd-48e5-471a-85fe-dc81012e5d61",
+    "scryfallUri": "https://scryfall.com/card/ltr/15/flowering-of-the-white-tree?utm_source=api"
+  },
   "fogOnTheBarrowDowns": {
     "id": "fogOnTheBarrowDowns",
     "name": "Fog on the Barrow-Downs",
@@ -5995,6 +6822,82 @@ export const IMPORTED_CARDS = {
     "oracleText": "When this creature enters, scry 2.",
     "scryfallId": "f4603f59-f899-4caf-a874-bf234d2045fb",
     "scryfallUri": "https://scryfall.com/card/ltr/168/galadhrim-guide?utm_source=api"
+  },
+  "galadrielOfLothlorien": {
+    "id": "galadrielOfLothlorien",
+    "name": "Galadriel of Lothlórien",
+    "manaCost": {
+      "generic": 1,
+      "G": 1,
+      "U": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Noble"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "triggeredAbilities": [
+      {
+        "id": "ringTempts1",
+        "trigger": "ringTempts",
+        "text": "Whenever the Ring tempts you, if you chose a creature other than Galadriel as your Ring-bearer, scry 3.",
+        "effects": [
+          {
+            "type": "scry",
+            "count": 3
+          }
+        ],
+        "condition": {
+          "chosenOtherThanSource": true
+        }
+      },
+      {
+        "id": "scry2",
+        "trigger": "scry",
+        "text": "Whenever you scry, you may reveal the top card of your library. If a land card is revealed this way, put it onto the battlefield tapped.",
+        "effects": [
+          {
+            "type": "revealTop"
+          },
+          {
+            "type": "putRevealedOntoBattlefield",
+            "tapped": true,
+            "condition": {
+              "revealedMatches": {
+                "types": [
+                  "Land"
+                ]
+              }
+            }
+          }
+        ],
+        "optional": true
+      }
+    ],
+    "text": "Whenever the Ring tempts you, if you chose a creature other than Galadriel as your Ring-bearer, scry 3.\nWhenever you scry, you may reveal the top card of your library. If a land card is revealed this way, put it onto the battlefield tapped.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/6/a6e5c3b3-9a70-4a1c-bfb3-db27e51c4b8d.jpg?1783916254",
+      "card": "https://cards.scryfall.io/normal/front/a/6/a6e5c3b3-9a70-4a1c-bfb3-db27e51c4b8d.jpg?1783916254"
+    },
+    "artist": "Magali Villeneuve",
+    "colors": [
+      "G",
+      "U"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "206",
+    "typeLine": "Legendary Creature — Elf Noble",
+    "oracleText": "Whenever the Ring tempts you, if you chose a creature other than Galadriel as your Ring-bearer, scry 3.\nWhenever you scry, you may reveal the top card of your library. If a land card is revealed this way, put it onto the battlefield tapped.",
+    "scryfallId": "a6e5c3b3-9a70-4a1c-bfb3-db27e51c4b8d",
+    "scryfallUri": "https://scryfall.com/card/ltr/206/galadriel-of-lothl%C3%B3rien?utm_source=api"
   },
   "galewindMoose": {
     "id": "galewindMoose",
@@ -6568,6 +7471,92 @@ export const IMPORTED_CARDS = {
     "scryfallId": "28b41c48-0715-49d9-98e5-e82b706da816",
     "scryfallUri": "https://scryfall.com/card/ltr/129/gimli-counter-of-kills?utm_source=api"
   },
+  "gimliMournfulAvenger": {
+    "id": "gimliMournfulAvenger",
+    "name": "Gimli, Mournful Avenger",
+    "manaCost": {
+      "generic": 1,
+      "R": 1,
+      "G": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Dwarf",
+      "Warrior"
+    ],
+    "power": 3,
+    "toughness": 2,
+    "triggeredAbilities": [
+      {
+        "id": "creatureDies1",
+        "trigger": "creatureDies",
+        "text": "Whenever another creature you control dies, put a +1/+1 counter on Gimli. When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.",
+        "effects": [
+          {
+            "type": "addCounters",
+            "counter": "+1/+1",
+            "count": 1,
+            "affected": "source"
+          },
+          {
+            "type": "reflexiveTrigger",
+            "ability": {
+              "text": "When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.",
+              "target": {
+                "kind": "creatureOpponentControls",
+                "optional": true
+              },
+              "effects": [
+                {
+                  "type": "fight",
+                  "withSource": true
+                }
+              ]
+            },
+            "condition": {
+              "resolvedThisTurn": 3
+            }
+          }
+        ],
+        "filter": {
+          "other": true
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "source",
+        "keywords": [
+          "indestructible"
+        ],
+        "condition": {
+          "creaturesDiedThisTurn": 2
+        }
+      }
+    ],
+    "text": "Gimli has indestructible as long as two or more creatures died under your control this turn.\nWhenever another creature you control dies, put a +1/+1 counter on Gimli. When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/f/df4be38c-3f93-4ff4-bff4-94753b96f2f3.jpg?1783916254",
+      "card": "https://cards.scryfall.io/normal/front/d/f/df4be38c-3f93-4ff4-bff4-94753b96f2f3.jpg?1783916254"
+    },
+    "artist": "Bartłomiej Gaweł",
+    "colors": [
+      "G",
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "209",
+    "typeLine": "Legendary Creature — Dwarf Warrior",
+    "oracleText": "Gimli has indestructible as long as two or more creatures died under your control this turn.\nWhenever another creature you control dies, put a +1/+1 counter on Gimli. When this ability resolves for the third time this turn, Gimli fights up to one target creature you don't control.",
+    "scryfallId": "df4be38c-3f93-4ff4-bff4-94753b96f2f3",
+    "scryfallUri": "https://scryfall.com/card/ltr/209/gimli-mournful-avenger?utm_source=api"
+  },
   "gimlisAxe": {
     "id": "gimlisAxe",
     "name": "Gimli's Axe",
@@ -6683,6 +7672,83 @@ export const IMPORTED_CARDS = {
     "oracleText": "Target creature gets +3/+2 until end of turn. If it's legendary, it also gains trample until end of turn.",
     "scryfallId": "efde011d-8732-49b3-9204-8b114a3d81ba",
     "scryfallUri": "https://scryfall.com/card/ltr/131/gimlis-fury?utm_source=api"
+  },
+  "gloinDwarfEmissary": {
+    "id": "gloinDwarfEmissary",
+    "name": "Glóin, Dwarf Emissary",
+    "manaCost": {
+      "generic": 2,
+      "R": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Dwarf",
+      "Advisor"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}, Sacrifice a Treasure: Goad target creature.",
+        "cost": {
+          "tap": true,
+          "sacrifice": {
+            "kind": "permanent",
+            "filter": {
+              "subtypes": [
+                "Treasure"
+              ]
+            }
+          }
+        },
+        "effects": [
+          {
+            "type": "goad"
+          }
+        ],
+        "target": "creature"
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "spellCast1",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a historic spell, create a Treasure token. This ability triggers only once each turn.",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": "treasure"
+          }
+        ],
+        "filter": {
+          "historic": true
+        },
+        "oncePerTurn": true
+      }
+    ],
+    "text": "Whenever you cast a historic spell, create a Treasure token. This ability triggers only once each turn. (Artifacts, legendaries, and Sagas are historic.)\n{T}, Sacrifice a Treasure: Goad target creature. (Until your next turn, that creature attacks each combat if able and attacks a player other than you if able.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/6/868a2aa7-bcaf-409b-8802-d00ee1f2ae77.jpg?1783916283",
+      "card": "https://cards.scryfall.io/normal/front/8/6/868a2aa7-bcaf-409b-8802-d00ee1f2ae77.jpg?1783916283"
+    },
+    "artist": "Tomas Duchek",
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "132",
+    "typeLine": "Legendary Creature — Dwarf Advisor",
+    "oracleText": "Whenever you cast a historic spell, create a Treasure token. This ability triggers only once each turn. (Artifacts, legendaries, and Sagas are historic.)\n{T}, Sacrifice a Treasure: Goad target creature. (Until your next turn, that creature attacks each combat if able and attacks a player other than you if able.)",
+    "scryfallId": "868a2aa7-bcaf-409b-8802-d00ee1f2ae77",
+    "scryfallUri": "https://scryfall.com/card/ltr/132/gl%C3%B3in-dwarf-emissary?utm_source=api"
   },
   "glorfindelDauntlessRescuer": {
     "id": "glorfindelDauntlessRescuer",
@@ -8165,6 +9231,144 @@ export const IMPORTED_CARDS = {
     "scryfallId": "650a6831-c352-4ca7-9f8f-43ea99a1cf33",
     "scryfallUri": "https://scryfall.com/card/m12/23/honor-of-the-pure?utm_source=api"
   },
+  "hornOfGondor": {
+    "id": "hornOfGondor",
+    "name": "Horn of Gondor",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{3}, {T}: Create X 1/1 white Human Soldier creature tokens, where X is the number of Humans you control.",
+        "cost": {
+          "mana": {
+            "generic": 3
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": {
+              "colors": [
+                "white"
+              ],
+              "subtypes": [
+                "Human",
+                "Soldier"
+              ],
+              "power": 1,
+              "toughness": 1
+            },
+            "per": {
+              "of": "creatures",
+              "filter": {
+                "subtypes": [
+                  "Human"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield1",
+        "trigger": "entersBattlefield",
+        "text": "When Horn of Gondor enters, create a 1/1 white Human Soldier creature token.",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": {
+              "colors": [
+                "white"
+              ],
+              "subtypes": [
+                "Human",
+                "Soldier"
+              ],
+              "power": 1,
+              "toughness": 1
+            }
+          }
+        ]
+      }
+    ],
+    "text": "When Horn of Gondor enters, create a 1/1 white Human Soldier creature token.\n{3}, {T}: Create X 1/1 white Human Soldier creature tokens, where X is the number of Humans you control.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/1/b14eaeec-d7ce-462a-90d3-2ae5ff605fdb.jpg?1783916239",
+      "card": "https://cards.scryfall.io/normal/front/b/1/b14eaeec-d7ce-462a-90d3-2ae5ff605fdb.jpg?1783916239"
+    },
+    "artist": "Yigit Koroglu",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "240",
+    "typeLine": "Legendary Artifact",
+    "oracleText": "When Horn of Gondor enters, create a 1/1 white Human Soldier creature token.\n{3}, {T}: Create X 1/1 white Human Soldier creature tokens, where X is the number of Humans you control.",
+    "scryfallId": "b14eaeec-d7ce-462a-90d3-2ae5ff605fdb",
+    "scryfallUri": "https://scryfall.com/card/ltr/240/horn-of-gondor?utm_source=api"
+  },
+  "hornOfTheMark": {
+    "id": "hornOfTheMark",
+    "name": "Horn of the Mark",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [],
+    "triggeredAbilities": [
+      {
+        "id": "attacksWith1",
+        "trigger": "attacksWith",
+        "text": "Whenever two or more creatures you control attack a player, look at the top five cards of your library. You may reveal a creature card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+        "effects": [
+          {
+            "type": "lookAtTop",
+            "count": 5,
+            "filter": {
+              "types": [
+                "Creature"
+              ]
+            },
+            "max": 1
+          }
+        ],
+        "filter": {},
+        "minCount": 2
+      }
+    ],
+    "text": "Whenever two or more creatures you control attack a player, look at the top five cards of your library. You may reveal a creature card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/d/dd86b71f-d736-426f-bf15-013bc8da1a08.jpg?1783916240",
+      "card": "https://cards.scryfall.io/normal/front/d/d/dd86b71f-d736-426f-bf15-013bc8da1a08.jpg?1783916240"
+    },
+    "artist": "Anastasia Balakchina",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "241",
+    "typeLine": "Legendary Artifact",
+    "oracleText": "Whenever two or more creatures you control attack a player, look at the top five cards of your library. You may reveal a creature card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "scryfallId": "dd86b71f-d736-426f-bf15-013bc8da1a08",
+    "scryfallUri": "https://scryfall.com/card/ltr/241/horn-of-the-mark?utm_source=api"
+  },
   "horsesOfTheBruinen": {
     "id": "horsesOfTheBruinen",
     "name": "Horses of the Bruinen",
@@ -8654,6 +9858,48 @@ export const IMPORTED_CARDS = {
     "scryfallId": "03ab74cd-978a-49eb-9d38-bc8b472b3cef",
     "scryfallUri": "https://scryfall.com/card/ltr/56/ioreth-of-the-healing-house?utm_source=api"
   },
+  "isildursFatefulStrike": {
+    "id": "isildursFatefulStrike",
+    "name": "Isildur's Fateful Strike",
+    "manaCost": {
+      "generic": 2,
+      "B": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "destroy"
+      },
+      {
+        "type": "exileHandExcess",
+        "keep": 4,
+        "affected": "targetController"
+      }
+    ],
+    "target": "creature",
+    "text": "(You may cast a legendary instant only if you control a legendary creature or planeswalker.)\nDestroy target creature. If its controller has more than four cards in hand, they exile cards from their hand equal to the difference.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/4/b/4bf08071-fbf8-463e-9a57-59dbf0280dd8.jpg?1783916301",
+      "card": "https://cards.scryfall.io/normal/front/4/b/4bf08071-fbf8-463e-9a57-59dbf0280dd8.jpg?1783916301"
+    },
+    "artist": "John Di Giovanni",
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "91",
+    "typeLine": "Legendary Instant",
+    "oracleText": "(You may cast a legendary instant only if you control a legendary creature or planeswalker.)\nDestroy target creature. If its controller has more than four cards in hand, they exile cards from their hand equal to the difference.",
+    "scryfallId": "4bf08071-fbf8-463e-9a57-59dbf0280dd8",
+    "scryfallUri": "https://scryfall.com/card/ltr/91/isildurs-fateful-strike?utm_source=api"
+  },
   "island": {
     "id": "island",
     "name": "Island",
@@ -9042,6 +10288,54 @@ export const IMPORTED_CARDS = {
     "scryfallId": "812fee97-e145-4458-b495-bc6ad227335b",
     "scryfallUri": "https://scryfall.com/card/ltr/92/lash-of-the-balrog?utm_source=api"
   },
+  "lastMarchOfTheEnts": {
+    "id": "lastMarchOfTheEnts",
+    "name": "Last March of the Ents",
+    "manaCost": {
+      "generic": 6,
+      "G": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "drawCards",
+        "count": 1,
+        "per": {
+          "of": "greatestToughness"
+        }
+      },
+      {
+        "type": "putFromHandOntoBattlefield",
+        "filter": {
+          "types": [
+            "Creature"
+          ]
+        },
+        "any": true
+      }
+    ],
+    "cantBeCountered": true,
+    "text": "This spell can't be countered.\nDraw cards equal to the greatest toughness among creatures you control, then put any number of creature cards from your hand onto the battlefield.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/7/f/7f1b99e0-ffb7-4f98-8ee5-4357bb79dd2e.jpg?1783916273",
+      "card": "https://cards.scryfall.io/normal/front/7/f/7f1b99e0-ffb7-4f98-8ee5-4357bb79dd2e.jpg?1783916273"
+    },
+    "artist": "John Tedrick",
+    "colors": [
+      "G"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "172",
+    "typeLine": "Sorcery",
+    "oracleText": "This spell can't be countered.\nDraw cards equal to the greatest toughness among creatures you control, then put any number of creature cards from your hand onto the battlefield.",
+    "scryfallId": "7f1b99e0-ffb7-4f98-8ee5-4357bb79dd2e",
+    "scryfallUri": "https://scryfall.com/card/ltr/172/last-march-of-the-ents?utm_source=api"
+  },
   "lavaAxe": {
     "id": "lavaAxe",
     "name": "Lava Axe",
@@ -9159,6 +10453,83 @@ export const IMPORTED_CARDS = {
     "oracleText": "Reach\nWhenever you scry, if Legolas is tapped, you may untap it. Do this only once each turn.\nWhenever a creature an opponent controls dies, put a +1/+1 counter on Legolas.",
     "scryfallId": "c8bd408c-9e6d-436d-9c4f-9ef3203aeb64",
     "scryfallUri": "https://scryfall.com/card/ltr/212/legolas-counter-of-kills?utm_source=api"
+  },
+  "legolasMasterArcher": {
+    "id": "legolasMasterArcher",
+    "name": "Legolas, Master Archer",
+    "manaCost": {
+      "generic": 1,
+      "G": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Elf",
+      "Archer"
+    ],
+    "power": 1,
+    "toughness": 4,
+    "keywords": [
+      "reach"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "spellCast1",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a spell that targets Legolas, put a +1/+1 counter on Legolas.",
+        "effects": [
+          {
+            "type": "addCounters",
+            "counter": "+1/+1",
+            "count": 1,
+            "affected": "source"
+          }
+        ],
+        "filter": {},
+        "targetsSource": true
+      },
+      {
+        "id": "spellCast2",
+        "trigger": "spellCast",
+        "text": "Whenever you cast a spell that targets a creature you don't control, Legolas deals damage equal to its power to up to one target creature.",
+        "effects": [
+          {
+            "type": "dealDamage",
+            "amount": 1,
+            "per": {
+              "of": "powerOf",
+              "who": "source"
+            }
+          }
+        ],
+        "filter": {},
+        "targetsCreatureYouDontControl": true,
+        "target": {
+          "kind": "creature",
+          "optional": true
+        }
+      }
+    ],
+    "text": "Reach\nWhenever you cast a spell that targets Legolas, put a +1/+1 counter on Legolas.\nWhenever you cast a spell that targets a creature you don't control, Legolas deals damage equal to its power to up to one target creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/9/a9405577-c1dc-48e0-b2aa-6237c569d02e.jpg?1783916270",
+      "card": "https://cards.scryfall.io/normal/front/a/9/a9405577-c1dc-48e0-b2aa-6237c569d02e.jpg?1783916270"
+    },
+    "artist": "Campbell White",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "173",
+    "typeLine": "Legendary Creature — Elf Archer",
+    "oracleText": "Reach\nWhenever you cast a spell that targets Legolas, put a +1/+1 counter on Legolas.\nWhenever you cast a spell that targets a creature you don't control, Legolas deals damage equal to its power to up to one target creature.",
+    "scryfallId": "a9405577-c1dc-48e0-b2aa-6237c569d02e",
+    "scryfallUri": "https://scryfall.com/card/ltr/173/legolas-master-archer?utm_source=api"
   },
   "lembas": {
     "id": "lembas",
@@ -9502,6 +10873,65 @@ export const IMPORTED_CARDS = {
     "oracleText": "Whenever this creature attacks, scry 1.",
     "scryfallId": "4e3639c1-ebc3-4a0b-ab93-549e45aff0f7",
     "scryfallUri": "https://scryfall.com/card/ltr/175/lothl%C3%B3rien-lookout?utm_source=api"
+  },
+  "lothoCorruptShirriff": {
+    "id": "lothoCorruptShirriff",
+    "name": "Lotho, Corrupt Shirriff",
+    "manaCost": {
+      "W": 1,
+      "B": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Rogue"
+    ],
+    "power": 2,
+    "toughness": 1,
+    "triggeredAbilities": [
+      {
+        "id": "spellCast1",
+        "trigger": "spellCast",
+        "text": "Whenever a player casts their second spell each turn, you lose 1 life and create a Treasure token.",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 1
+          },
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": "treasure"
+          }
+        ],
+        "filter": {
+          "controller": "any",
+          "nthThisTurn": 2
+        }
+      }
+    ],
+    "text": "Whenever a player casts their second spell each turn, you lose 1 life and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/c/e/ce01ff8f-a037-484f-9148-c847ffaabc5a.jpg?1783916251",
+      "card": "https://cards.scryfall.io/normal/front/c/e/ce01ff8f-a037-484f-9148-c847ffaabc5a.jpg?1783916251"
+    },
+    "artist": "Ilker Yildiz",
+    "colors": [
+      "B",
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "213",
+    "typeLine": "Legendary Creature — Halfling Rogue",
+    "oracleText": "Whenever a player casts their second spell each turn, you lose 1 life and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "scryfallId": "ce01ff8f-a037-484f-9148-c847ffaabc5a",
+    "scryfallUri": "https://scryfall.com/card/ltr/213/lotho-corrupt-shirriff?utm_source=api"
   },
   "luminousBonds": {
     "id": "luminousBonds",
@@ -10019,6 +11449,77 @@ export const IMPORTED_CARDS = {
     "scryfallId": "885a3277-ef10-4dcf-ac63-eb8971cd627c",
     "scryfallUri": "https://scryfall.com/card/ltr/177/meriadoc-brandybuck?utm_source=api"
   },
+  "merryEsquireOfRohan": {
+    "id": "merryEsquireOfRohan",
+    "name": "Merry, Esquire of Rohan",
+    "manaCost": {
+      "R": 1,
+      "W": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Knight"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "keywords": [
+      "haste"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "attacksWith1",
+        "trigger": "attacksWith",
+        "text": "Whenever you attack with Merry and another legendary creature, draw a card.",
+        "effects": [
+          {
+            "type": "drawCards",
+            "count": 1
+          }
+        ],
+        "filter": {
+          "supertypes": [
+            "Legendary"
+          ]
+        },
+        "minCount": 2,
+        "includesSource": true
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "source",
+        "keywords": [
+          "first strike"
+        ],
+        "condition": {
+          "sourceEquipped": true
+        }
+      }
+    ],
+    "text": "Haste\nMerry has first strike as long as it's equipped.\nWhenever you attack with Merry and another legendary creature, draw a card.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/7/b7c5fe73-1684-4edc-9f9b-976b2246d5ea.jpg?1783916252",
+      "card": "https://cards.scryfall.io/normal/front/b/7/b7c5fe73-1684-4edc-9f9b-976b2246d5ea.jpg?1783916252"
+    },
+    "artist": "Tomas Duchek",
+    "colors": [
+      "R",
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "215",
+    "typeLine": "Legendary Creature — Halfling Knight",
+    "oracleText": "Haste\nMerry has first strike as long as it's equipped.\nWhenever you attack with Merry and another legendary creature, draw a card.",
+    "scryfallId": "b7c5fe73-1684-4edc-9f9b-976b2246d5ea",
+    "scryfallUri": "https://scryfall.com/card/ltr/215/merry-esquire-of-rohan?utm_source=api"
+  },
   "meteorite": {
     "id": "meteorite",
     "name": "Meteorite",
@@ -10069,6 +11570,149 @@ export const IMPORTED_CARDS = {
     "oracleText": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
     "scryfallId": "ec3a2c95-4e7a-43c5-90bd-6f1de7c82a5c",
     "scryfallUri": "https://scryfall.com/card/m21/233/meteorite?utm_source=api"
+  },
+  "minasTirith": {
+    "id": "minasTirith",
+    "name": "Minas Tirith",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForW",
+        "text": "{T}: Add {W}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "W": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{1}{W}, {T}: Draw a card. Activate only if you attacked with two or more creatures this turn.",
+        "cost": {
+          "mana": {
+            "generic": 1,
+            "W": 1
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "drawCards",
+            "count": 1
+          }
+        ],
+        "activationCondition": {
+          "attackedWithAtLeast": 2
+        }
+      }
+    ],
+    "entersTappedUnless": {
+      "youControl": {
+        "types": [
+          "Creature"
+        ],
+        "supertypes": [
+          "Legendary"
+        ]
+      }
+    },
+    "text": "Minas Tirith enters tapped unless you control a legendary creature.\n{T}: Add {W}.\n{1}{W}, {T}: Draw a card. Activate only if you attacked with two or more creatures this turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/3/b38b6760-616f-4b11-8ce7-ac1223c7fd53.jpg?1783916236",
+      "card": "https://cards.scryfall.io/normal/front/b/3/b38b6760-616f-4b11-8ce7-ac1223c7fd53.jpg?1783916236"
+    },
+    "artist": "Arthur Yuan",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "256",
+    "typeLine": "Legendary Land",
+    "oracleText": "Minas Tirith enters tapped unless you control a legendary creature.\n{T}: Add {W}.\n{1}{W}, {T}: Draw a card. Activate only if you attacked with two or more creatures this turn.",
+    "scryfallId": "b38b6760-616f-4b11-8ce7-ac1223c7fd53",
+    "scryfallUri": "https://scryfall.com/card/ltr/256/minas-tirith?utm_source=api"
+  },
+  "minesOfMoria": {
+    "id": "minesOfMoria",
+    "name": "Mines of Moria",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForR",
+        "text": "{T}: Add {R}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "R": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{3}{R}, {T}, Exile three cards from your graveyard: Create two Treasure tokens.",
+        "cost": {
+          "mana": {
+            "generic": 3,
+            "R": 1
+          },
+          "tap": true,
+          "exileFromGraveyard": 3
+        },
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 2,
+            "token": "treasure"
+          }
+        ]
+      }
+    ],
+    "entersTappedUnless": {
+      "youControl": {
+        "types": [
+          "Creature"
+        ],
+        "supertypes": [
+          "Legendary"
+        ]
+      }
+    },
+    "text": "Mines of Moria enters tapped unless you control a legendary creature.\n{T}: Add {R}.\n{3}{R}, {T}, Exile three cards from your graveyard: Create two Treasure tokens.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/b/0be723d6-4ada-4c3f-b87b-8ab83a4bbb8f.jpg?1783916232",
+      "card": "https://cards.scryfall.io/normal/front/0/b/0be723d6-4ada-4c3f-b87b-8ab83a4bbb8f.jpg?1783916232"
+    },
+    "artist": "Arthur Yuan",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "257",
+    "typeLine": "Legendary Land",
+    "oracleText": "Mines of Moria enters tapped unless you control a legendary creature.\n{T}: Add {R}.\n{3}{R}, {T}, Exile three cards from your graveyard: Create two Treasure tokens.",
+    "scryfallId": "0be723d6-4ada-4c3f-b87b-8ab83a4bbb8f",
+    "scryfallUri": "https://scryfall.com/card/ltr/257/mines-of-moria?utm_source=api"
   },
   "mirkwoodBats": {
     "id": "mirkwoodBats",
@@ -10320,6 +11964,84 @@ export const IMPORTED_CARDS = {
     "oracleText": "This creature can't be blocked.",
     "scryfallId": "574f73a7-9ff7-4ce3-9f56-002af968d35a",
     "scryfallUri": "https://scryfall.com/card/m19/310/mist-cloaked-herald?utm_source=api"
+  },
+  "mithrilCoat": {
+    "id": "mithrilCoat",
+    "name": "Mithril Coat",
+    "manaCost": {
+      "generic": 3
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "keywords": [
+      "flash",
+      "indestructible"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {3}",
+        "cost": {
+          "mana": {
+            "generic": 3
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield1",
+        "trigger": "entersBattlefield",
+        "text": "When Mithril Coat enters, attach it to target legendary creature you control.",
+        "effects": [
+          {
+            "type": "attach"
+          }
+        ],
+        "target": {
+          "kind": "creatureYouControl",
+          "filter": {
+            "supertypes": [
+              "Legendary"
+            ]
+          }
+        }
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "indestructible"
+        ]
+      }
+    ],
+    "text": "Flash\nIndestructible\nWhen Mithril Coat enters, attach it to target legendary creature you control.\nEquipped creature has indestructible.\nEquip {3}",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/f/0fd1fc09-a09d-45e6-8a07-3a8a83b4e6ec.jpg?1783916237",
+      "card": "https://cards.scryfall.io/normal/front/0/f/0fd1fc09-a09d-45e6-8a07-3a8a83b4e6ec.jpg?1783916237"
+    },
+    "artist": "Igor Krstic",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "245",
+    "typeLine": "Legendary Artifact — Equipment",
+    "oracleText": "Flash\nIndestructible\nWhen Mithril Coat enters, attach it to target legendary creature you control.\nEquipped creature has indestructible.\nEquip {3}",
+    "scryfallId": "0fd1fc09-a09d-45e6-8a07-3a8a83b4e6ec",
+    "scryfallUri": "https://scryfall.com/card/ltr/245/mithril-coat?utm_source=api"
   },
   "moatPiranhas": {
     "id": "moatPiranhas",
@@ -10616,6 +12338,98 @@ export const IMPORTED_CARDS = {
     "oracleText": "({T}: Add {R}.)",
     "scryfallId": "71f2030b-f622-4cc3-ac83-258ae3645fd6",
     "scryfallUri": "https://scryfall.com/card/m19/273/mountain?utm_source=api"
+  },
+  "mountDoom": {
+    "id": "mountDoom",
+    "name": "Mount Doom",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "{T}, Pay 1 life: Add {B} or {R}.",
+        "cost": {
+          "tap": true,
+          "life": 1
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "anyColor": 1,
+            "colorsFrom": [
+              "B",
+              "R"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{1}{B}{R}, {T}: Mount Doom deals 1 damage to each opponent.",
+        "cost": {
+          "mana": {
+            "generic": 1,
+            "B": 1,
+            "R": 1
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "dealDamage",
+            "amount": 1,
+            "affected": "eachOpponent"
+          }
+        ]
+      },
+      {
+        "id": "ability3",
+        "text": "{5}{B}{R}, {T}, Sacrifice Mount Doom and a legendary artifact: Choose up to two creatures, then destroy the rest. Activate only as a sorcery.",
+        "cost": {
+          "mana": {
+            "generic": 5,
+            "B": 1,
+            "R": 1
+          },
+          "tap": true,
+          "sacrificeSelf": true,
+          "sacrifice": {
+            "kind": "artifact",
+            "filter": {
+              "supertypes": [
+                "Legendary"
+              ]
+            }
+          }
+        },
+        "effects": [
+          {
+            "type": "keepAndDestroyRest",
+            "keep": 2
+          }
+        ],
+        "timing": "sorcery"
+      }
+    ],
+    "text": "{T}, Pay 1 life: Add {B} or {R}.\n{1}{B}{R}, {T}: Mount Doom deals 1 damage to each opponent.\n{5}{B}{R}, {T}, Sacrifice Mount Doom and a legendary artifact: Choose up to two creatures, then destroy the rest. Activate only as a sorcery.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/5/b5bc71a1-2344-4bc6-aa60-658cec19d0d6.jpg?1783916235",
+      "card": "https://cards.scryfall.io/normal/front/b/5/b5bc71a1-2344-4bc6-aa60-658cec19d0d6.jpg?1783916235"
+    },
+    "artist": "Jonas De Ro",
+    "colors": [],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "258",
+    "typeLine": "Legendary Land",
+    "oracleText": "{T}, Pay 1 life: Add {B} or {R}.\n{1}{B}{R}, {T}: Mount Doom deals 1 damage to each opponent.\n{5}{B}{R}, {T}, Sacrifice Mount Doom and a legendary artifact: Choose up to two creatures, then destroy the rest. Activate only as a sorcery.",
+    "scryfallId": "b5bc71a1-2344-4bc6-aa60-658cec19d0d6",
+    "scryfallUri": "https://scryfall.com/card/ltr/258/mount-doom?utm_source=api"
   },
   "murder": {
     "id": "murder",
@@ -11471,6 +13285,100 @@ export const IMPORTED_CARDS = {
     "oracleText": "Trample\nThis creature can't block unless you control a Goblin or Orc.",
     "scryfallId": "c33bf593-62e0-491a-a31a-328bce6d8735",
     "scryfallUri": "https://scryfall.com/card/ltr/140/olog-hai-crusher?utm_source=api"
+  },
+  "oneRingToRuleThemAll": {
+    "id": "oneRingToRuleThemAll",
+    "name": "One Ring to Rule Them All",
+    "manaCost": {
+      "generic": 2,
+      "B": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Saga"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "chapter1",
+        "trigger": "chapter",
+        "chapters": [
+          1
+        ],
+        "text": "I — The Ring tempts you, then each player mills cards equal to your Ring-bearer's power.",
+        "effects": [
+          {
+            "type": "ringTempts"
+          },
+          {
+            "type": "mill",
+            "count": 1,
+            "affected": "eachPlayer",
+            "per": {
+              "of": "ringBearerPower"
+            }
+          }
+        ]
+      },
+      {
+        "id": "chapter2",
+        "trigger": "chapter",
+        "chapters": [
+          2
+        ],
+        "text": "II — Destroy all nonlegendary creatures.",
+        "effects": [
+          {
+            "type": "destroy",
+            "affected": "eachCreature",
+            "filter": {
+              "nonlegendary": true
+            }
+          }
+        ]
+      },
+      {
+        "id": "chapter3",
+        "trigger": "chapter",
+        "chapters": [
+          3
+        ],
+        "text": "III — Each opponent loses 1 life for each creature card in that player's graveyard.",
+        "effects": [
+          {
+            "type": "loseLife",
+            "amount": 1,
+            "affected": "eachOpponent",
+            "perPlayer": {
+              "of": "cards",
+              "filter": {
+                "types": [
+                  "Creature"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — The Ring tempts you, then each player mills cards equal to your Ring-bearer's power.\nII — Destroy all nonlegendary creatures.\nIII — Each opponent loses 1 life for each creature card in that player's graveyard.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/b/bb2dc2e0-f393-4442-818b-d3b860bfffd0.jpg?1783916298",
+      "card": "https://cards.scryfall.io/normal/front/b/b/bb2dc2e0-f393-4442-818b-d3b860bfffd0.jpg?1783916298"
+    },
+    "artist": "L J Koh",
+    "colors": [
+      "B"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "102",
+    "typeLine": "Enchantment — Saga",
+    "oracleText": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — The Ring tempts you, then each player mills cards equal to your Ring-bearer's power.\nII — Destroy all nonlegendary creatures.\nIII — Each opponent loses 1 life for each creature card in that player's graveyard.",
+    "scryfallId": "bb2dc2e0-f393-4442-818b-d3b860bfffd0",
+    "scryfallUri": "https://scryfall.com/card/ltr/102/one-ring-to-rule-them-all?utm_source=api"
   },
   "oranRiefTheVastwood": {
     "id": "oranRiefTheVastwood",
@@ -12728,6 +14636,64 @@ export const IMPORTED_CARDS = {
     "scryfallId": "06541200-fa4c-4b98-bdc4-44708fd2ddf6",
     "scryfallUri": "https://scryfall.com/card/ltr/143/rangers-firebrand?utm_source=api"
   },
+  "rangersOfIthilien": {
+    "id": "rangersOfIthilien",
+    "name": "Rangers of Ithilien",
+    "manaCost": {
+      "generic": 2,
+      "U": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Ranger"
+    ],
+    "power": 3,
+    "toughness": 3,
+    "keywords": [
+      "vigilance"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield1",
+        "trigger": "entersBattlefield",
+        "text": "When this creature enters, gain control of up to one target creature with lesser power for as long as you control this creature. Then the Ring tempts you.",
+        "effects": [
+          {
+            "type": "gainControl",
+            "whileSourceControlled": true
+          },
+          {
+            "type": "ringTempts"
+          }
+        ],
+        "target": {
+          "kind": "creature",
+          "optional": true,
+          "lesserPowerThanSource": true
+        }
+      }
+    ],
+    "text": "Vigilance\nWhen this creature enters, gain control of up to one target creature with lesser power for as long as you control this creature. Then the Ring tempts you.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/8/1/819b4208-7a29-41fa-947f-614bf669b300.jpg?1783916313",
+      "card": "https://cards.scryfall.io/normal/front/8/1/819b4208-7a29-41fa-947f-614bf669b300.jpg?1783916313"
+    },
+    "artist": "Torgeir Fjereide",
+    "colors": [
+      "U"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "66",
+    "typeLine": "Creature — Human Ranger",
+    "oracleText": "Vigilance\nWhen this creature enters, gain control of up to one target creature with lesser power for as long as you control this creature. Then the Ring tempts you.",
+    "scryfallId": "819b4208-7a29-41fa-947f-614bf669b300",
+    "scryfallUri": "https://scryfall.com/card/ltr/66/rangers-of-ithilien?utm_source=api"
+  },
   "rapaciousDragon": {
     "id": "rapaciousDragon",
     "name": "Rapacious Dragon",
@@ -13168,6 +15134,85 @@ export const IMPORTED_CARDS = {
     "scryfallId": "d4fbcac6-8ac9-44a8-9d1a-03d0799ac253",
     "scryfallUri": "https://scryfall.com/card/ltr/145/rising-of-the-day?utm_source=api"
   },
+  "rivendell": {
+    "id": "rivendell",
+    "name": "Rivendell",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForU",
+        "text": "{T}: Add {U}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "U": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{1}{U}, {T}: Scry 2. Activate only if you control a legendary creature.",
+        "cost": {
+          "mana": {
+            "generic": 1,
+            "U": 1
+          },
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "scry",
+            "count": 2
+          }
+        ],
+        "activationCondition": {
+          "youControl": {
+            "types": [
+              "Creature"
+            ],
+            "supertypes": [
+              "Legendary"
+            ]
+          }
+        }
+      }
+    ],
+    "entersTappedUnless": {
+      "youControl": {
+        "types": [
+          "Creature"
+        ],
+        "supertypes": [
+          "Legendary"
+        ]
+      }
+    },
+    "text": "Rivendell enters tapped unless you control a legendary creature.\n{T}: Add {U}.\n{1}{U}, {T}: Scry 2. Activate only if you control a legendary creature.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/a/bacd500c-1389-4314-a53e-0ad510d6fb79.jpg?1783916232",
+      "card": "https://cards.scryfall.io/normal/front/b/a/bacd500c-1389-4314-a53e-0ad510d6fb79.jpg?1783916232"
+    },
+    "artist": "Jonas De Ro",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "259",
+    "typeLine": "Legendary Land",
+    "oracleText": "Rivendell enters tapped unless you control a legendary creature.\n{T}: Add {U}.\n{1}{U}, {T}: Scry 2. Activate only if you control a legendary creature.",
+    "scryfallId": "bacd500c-1389-4314-a53e-0ad510d6fb79",
+    "scryfallUri": "https://scryfall.com/card/ltr/259/rivendell?utm_source=api"
+  },
   "rodOfRuin": {
     "id": "rodOfRuin",
     "name": "Rod of Ruin",
@@ -13526,6 +15571,89 @@ export const IMPORTED_CARDS = {
     "oracleText": "Return target creature card from your graveyard to your hand. The Ring tempts you.",
     "scryfallId": "bdd4d735-8cda-47c1-865b-48b51ac8f666",
     "scryfallUri": "https://scryfall.com/card/ltr/105/sams-desperate-rescue?utm_source=api"
+  },
+  "samwiseGamgee": {
+    "id": "samwiseGamgee",
+    "name": "Samwise Gamgee",
+    "manaCost": {
+      "G": 1,
+      "W": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Peasant"
+    ],
+    "power": 2,
+    "toughness": 2,
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "Sacrifice three Foods: Return target historic card from your graveyard to your hand.",
+        "cost": {
+          "sacrifice": {
+            "kind": "permanent",
+            "filter": {
+              "subtypes": [
+                "Food"
+              ]
+            },
+            "count": 3
+          }
+        },
+        "effects": [
+          {
+            "type": "returnFromGraveyard"
+          }
+        ],
+        "target": {
+          "kind": "cardInYourGraveyard",
+          "filter": {
+            "historic": true
+          }
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "creatureEnters1",
+        "trigger": "creatureEnters",
+        "text": "Whenever another nontoken creature you control enters, create a Food token.",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": "food"
+          }
+        ],
+        "filter": {
+          "other": true,
+          "token": false
+        }
+      }
+    ],
+    "text": "Whenever another nontoken creature you control enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSacrifice three Foods: Return target historic card from your graveyard to your hand. (Artifacts, legendaries, and Sagas are historic.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/1/a1b6f13e-63d0-46bf-aa57-23c2dbdf62dd.jpg?1783916249",
+      "card": "https://cards.scryfall.io/normal/front/a/1/a1b6f13e-63d0-46bf-aa57-23c2dbdf62dd.jpg?1783916249"
+    },
+    "artist": "Ekaterina Burmak",
+    "colors": [
+      "G",
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "222",
+    "typeLine": "Legendary Creature — Halfling Peasant",
+    "oracleText": "Whenever another nontoken creature you control enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSacrifice three Foods: Return target historic card from your graveyard to your hand. (Artifacts, legendaries, and Sagas are historic.)",
+    "scryfallId": "a1b6f13e-63d0-46bf-aa57-23c2dbdf62dd",
+    "scryfallUri": "https://scryfall.com/card/ltr/222/samwise-gamgee?utm_source=api"
   },
   "samwiseTheStouthearted": {
     "id": "samwiseTheStouthearted",
@@ -13963,6 +16091,74 @@ export const IMPORTED_CARDS = {
     "oracleText": "Create two tapped 1/1 white Spirit creature tokens with flying.",
     "scryfallId": "ec0984b2-bed6-41b1-9087-2cfd16749037",
     "scryfallUri": "https://scryfall.com/card/ltr/226/shadow-summoning?utm_source=api"
+  },
+  "shagratLootBearer": {
+    "id": "shagratLootBearer",
+    "name": "Shagrat, Loot Bearer",
+    "manaCost": {
+      "generic": 2,
+      "B": 1,
+      "R": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Orc",
+      "Soldier"
+    ],
+    "power": 4,
+    "toughness": 4,
+    "triggeredAbilities": [
+      {
+        "id": "attacks1",
+        "trigger": "attacks",
+        "text": "Whenever Shagrat attacks, attach up to one target Equipment to it. Then amass Orcs X, where X is the number of Equipment attached to Shagrat.",
+        "effects": [
+          {
+            "type": "attach",
+            "toSource": true
+          },
+          {
+            "type": "amass",
+            "count": 1,
+            "subtype": "Orc",
+            "per": {
+              "of": "equipmentAttachedToSource"
+            }
+          }
+        ],
+        "target": {
+          "kind": "artifact",
+          "filter": {
+            "subtypes": [
+              "Equipment"
+            ]
+          },
+          "optional": true
+        }
+      }
+    ],
+    "text": "Whenever Shagrat attacks, attach up to one target Equipment to it. Then amass Orcs X, where X is the number of Equipment attached to Shagrat. (Control of the Equipment doesn't change. To amass Orcs X, put X +1/+1 counters on an Army you control. It's also an Orc. If you don't control an Army, create a 0/0 black Orc Army creature token first.)",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/0/7/0731f64a-15da-4814-82e9-3a42e1657f36.jpg?1783916244",
+      "card": "https://cards.scryfall.io/normal/front/0/7/0731f64a-15da-4814-82e9-3a42e1657f36.jpg?1783916244"
+    },
+    "artist": "Tatiana Veryayskaya",
+    "colors": [
+      "B",
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "228",
+    "typeLine": "Legendary Creature — Orc Soldier",
+    "oracleText": "Whenever Shagrat attacks, attach up to one target Equipment to it. Then amass Orcs X, where X is the number of Equipment attached to Shagrat. (Control of the Equipment doesn't change. To amass Orcs X, put X +1/+1 counters on an Army you control. It's also an Orc. If you don't control an Army, create a 0/0 black Orc Army creature token first.)",
+    "scryfallId": "0731f64a-15da-4814-82e9-3a42e1657f36",
+    "scryfallUri": "https://scryfall.com/card/ltr/228/shagrat-loot-bearer?utm_source=api"
   },
   "shelobsAmbush": {
     "id": "shelobsAmbush",
@@ -14753,6 +16949,79 @@ export const IMPORTED_CARDS = {
     "scryfallId": "2e20c2b8-ffe3-4d14-8588-f89719358e3d",
     "scryfallUri": "https://scryfall.com/card/ltr/31/slip-on-the-ring?utm_source=api"
   },
+  "smeagolHelpfulGuide": {
+    "id": "smeagolHelpfulGuide",
+    "name": "Sméagol, Helpful Guide",
+    "manaCost": {
+      "generic": 1,
+      "B": 1,
+      "G": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Halfling",
+      "Horror"
+    ],
+    "power": 4,
+    "toughness": 2,
+    "triggeredAbilities": [
+      {
+        "id": "endStep1",
+        "trigger": "endStep",
+        "text": "At the beginning of your end step, if a creature died under your control this turn, the Ring tempts you.",
+        "effects": [
+          {
+            "type": "ringTempts"
+          }
+        ],
+        "condition": {
+          "creatureDiedThisTurn": true
+        }
+      },
+      {
+        "id": "ringTempts2",
+        "trigger": "ringTempts",
+        "text": "Whenever the Ring tempts you, target opponent reveals cards from the top of their library until they reveal a land card. Put that card onto the battlefield tapped under your control and the rest into their graveyard.",
+        "effects": [
+          {
+            "type": "revealUntil",
+            "affected": "target",
+            "filter": {
+              "types": [
+                "Land"
+              ]
+            },
+            "count": 1,
+            "tapped": true,
+            "rest": "graveyard"
+          }
+        ],
+        "target": "opponent"
+      }
+    ],
+    "text": "At the beginning of your end step, if a creature died under your control this turn, the Ring tempts you.\nWhenever the Ring tempts you, target opponent reveals cards from the top of their library until they reveal a land card. Put that card onto the battlefield tapped under your control and the rest into their graveyard.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/1/3/13253f8d-1897-41e8-a904-9e57ac7eff0a.jpg?1783916243",
+      "card": "https://cards.scryfall.io/normal/front/1/3/13253f8d-1897-41e8-a904-9e57ac7eff0a.jpg?1783916243"
+    },
+    "artist": "Campbell White",
+    "colors": [
+      "B",
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "231",
+    "typeLine": "Legendary Creature — Halfling Horror",
+    "oracleText": "At the beginning of your end step, if a creature died under your control this turn, the Ring tempts you.\nWhenever the Ring tempts you, target opponent reveals cards from the top of their library until they reveal a land card. Put that card onto the battlefield tapped under your control and the rest into their graveyard.",
+    "scryfallId": "13253f8d-1897-41e8-a904-9e57ac7eff0a",
+    "scryfallUri": "https://scryfall.com/card/ltr/231/sm%C3%A9agol-helpful-guide?utm_source=api"
+  },
   "smiteTheDeathless": {
     "id": "smiteTheDeathless",
     "name": "Smite the Deathless",
@@ -15159,6 +17428,68 @@ export const IMPORTED_CARDS = {
     "scryfallId": "cf3765b7-11e2-4837-b5e5-ca24adc0e33c",
     "scryfallUri": "https://scryfall.com/card/m21/331/spirit-of-malevolence?utm_source=api"
   },
+  "spitefulBanditry": {
+    "id": "spitefulBanditry",
+    "name": "Spiteful Banditry",
+    "manaCost": {
+      "X": 1,
+      "R": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "triggeredAbilities": [
+      {
+        "id": "entersBattlefield1",
+        "trigger": "entersBattlefield",
+        "text": "When this enchantment enters, it deals X damage to each creature.",
+        "effects": [
+          {
+            "type": "dealDamage",
+            "amount": 1,
+            "affected": "eachCreature",
+            "per": {
+              "of": "sourceX"
+            }
+          }
+        ]
+      },
+      {
+        "id": "creatureDies2",
+        "trigger": "creatureDies",
+        "text": "Whenever one or more creatures your opponents control die, you create a Treasure token. This ability triggers only once each turn.",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": "treasure"
+          }
+        ],
+        "filter": {
+          "controller": "opponent"
+        },
+        "oncePerTurn": true
+      }
+    ],
+    "text": "When this enchantment enters, it deals X damage to each creature.\nWhenever one or more creatures your opponents control die, you create a Treasure token. This ability triggers only once each turn.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/e/8/e85a82bc-49f3-4694-b688-808a541146db.jpg?1783916276",
+      "card": "https://cards.scryfall.io/normal/front/e/8/e85a82bc-49f3-4694-b688-808a541146db.jpg?1783916276"
+    },
+    "artist": "Manuel Castañón",
+    "colors": [
+      "R"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "149",
+    "typeLine": "Enchantment",
+    "oracleText": "When this enchantment enters, it deals X damage to each creature.\nWhenever one or more creatures your opponents control die, you create a Treasure token. This ability triggers only once each turn.",
+    "scryfallId": "e85a82bc-49f3-4694-b688-808a541146db",
+    "scryfallUri": "https://scryfall.com/card/ltr/149/spiteful-banditry?utm_source=api"
+  },
   "stab": {
     "id": "stab",
     "name": "Stab",
@@ -15376,6 +17707,90 @@ export const IMPORTED_CARDS = {
     "oracleText": "Target creature you control deals damage equal to its power to target creature you don't control. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
     "scryfallId": "bcc7c41c-f416-457e-91ba-1f338f45eeac",
     "scryfallUri": "https://scryfall.com/card/ltr/189/stew-the-coneys?utm_source=api"
+  },
+  "stingTheGlintingDagger": {
+    "id": "stingTheGlintingDagger",
+    "name": "Sting, the Glinting Dagger",
+    "manaCost": {
+      "generic": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "abilities": [
+      {
+        "id": "equip",
+        "text": "Equip {2}",
+        "cost": {
+          "mana": {
+            "generic": 2
+          }
+        },
+        "timing": "sorcery",
+        "target": "creatureYouControl",
+        "effect": {
+          "type": "attach"
+        }
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "beginningOfCombat1",
+        "trigger": "beginningOfCombat",
+        "text": "At the beginning of each combat, untap equipped creature.",
+        "effects": [
+          {
+            "type": "untap",
+            "affected": "attachedPermanent"
+          }
+        ],
+        "eachTurn": true
+      }
+    ],
+    "staticAbilities": [
+      {
+        "affected": "attachedPermanent",
+        "power": 1,
+        "toughness": 1,
+        "keywords": [
+          "haste"
+        ]
+      },
+      {
+        "affected": "attachedPermanent",
+        "keywords": [
+          "first strike"
+        ],
+        "condition": {
+          "hostBlockingOrBlockedBy": {
+            "subtypes": [
+              "Goblin",
+              "Orc"
+            ]
+          }
+        }
+      }
+    ],
+    "text": "Equipped creature gets +1/+1 and has haste.\nAt the beginning of each combat, untap equipped creature.\nEquipped creature has first strike as long as it's blocking or blocked by a Goblin or Orc.\nEquip {2}",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/f/afbec7e7-f5b9-407e-bf96-2e088710e791.jpg?1783916234",
+      "card": "https://cards.scryfall.io/normal/front/a/f/afbec7e7-f5b9-407e-bf96-2e088710e791.jpg?1783916234"
+    },
+    "artist": "Nino Is",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "250",
+    "typeLine": "Legendary Artifact — Equipment",
+    "oracleText": "Equipped creature gets +1/+1 and has haste.\nAt the beginning of each combat, untap equipped creature.\nEquipped creature has first strike as long as it's blocking or blocked by a Goblin or Orc.\nEquip {2}",
+    "scryfallId": "afbec7e7-f5b9-407e-bf96-2e088710e791",
+    "scryfallUri": "https://scryfall.com/card/ltr/250/sting-the-glinting-dagger?utm_source=api"
   },
   "stoneGolem": {
     "id": "stoneGolem",
@@ -16033,6 +18448,75 @@ export const IMPORTED_CARDS = {
     "scryfallId": "6b24af94-9632-47da-9bf3-e81bb743cd43",
     "scryfallUri": "https://scryfall.com/card/ons/290/taunting-elf?utm_source=api"
   },
+  "theBalrogDurinsBane": {
+    "id": "theBalrogDurinsBane",
+    "name": "The Balrog, Durin's Bane",
+    "manaCost": {
+      "generic": 5,
+      "B": 1,
+      "R": 1
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Avatar",
+      "Demon"
+    ],
+    "power": 7,
+    "toughness": 5,
+    "keywords": [
+      "haste",
+      "can't be blocked except by legendary creatures"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "dies1",
+        "trigger": "dies",
+        "text": "When The Balrog dies, destroy target artifact or creature an opponent controls.",
+        "effects": [
+          {
+            "type": "destroy"
+          }
+        ],
+        "target": {
+          "kind": "permanent",
+          "filter": {
+            "types": [
+              "Artifact",
+              "Creature"
+            ],
+            "controller": "opponent"
+          }
+        }
+      }
+    ],
+    "costReduction": {
+      "per": {
+        "of": "permanentsSacrificedThisTurn"
+      }
+    },
+    "text": "This spell costs {1} less to cast for each permanent sacrificed this turn.\nHaste\nThe Balrog can't be blocked except by legendary creatures.\nWhen The Balrog dies, destroy target artifact or creature an opponent controls.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/4/1/416880c3-cefb-45ea-bcc3-2ec7a70c8097.jpg?1783916256",
+      "card": "https://cards.scryfall.io/normal/front/4/1/416880c3-cefb-45ea-bcc3-2ec7a70c8097.jpg?1783916256"
+    },
+    "artist": "Kekai Kotaki",
+    "colors": [
+      "B",
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "195",
+    "typeLine": "Legendary Creature — Avatar Demon",
+    "oracleText": "This spell costs {1} less to cast for each permanent sacrificed this turn.\nHaste\nThe Balrog can't be blocked except by legendary creatures.\nWhen The Balrog dies, destroy target artifact or creature an opponent controls.",
+    "scryfallId": "416880c3-cefb-45ea-bcc3-2ec7a70c8097",
+    "scryfallUri": "https://scryfall.com/card/ltr/195/the-balrog-durins-bane?utm_source=api"
+  },
   "theBathSong": {
     "id": "theBathSong",
     "name": "The Bath Song",
@@ -16104,6 +18588,54 @@ export const IMPORTED_CARDS = {
     "oracleText": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI, II — Draw two cards, then discard a card.\nIII — Shuffle any number of target cards from your graveyard into your library. Add {U}{U}.",
     "scryfallId": "fb11c04f-6f17-4da4-bbf6-0bd09de6e544",
     "scryfallUri": "https://scryfall.com/card/ltr/40/the-bath-song?utm_source=api"
+  },
+  "theBattleOfBywater": {
+    "id": "theBattleOfBywater",
+    "name": "The Battle of Bywater",
+    "manaCost": {
+      "generic": 1,
+      "W": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "destroy",
+        "affected": "eachCreature",
+        "filter": {
+          "power": {
+            "min": 3
+          }
+        }
+      },
+      {
+        "type": "createToken",
+        "count": 1,
+        "token": "food",
+        "per": {
+          "of": "creatures"
+        }
+      }
+    ],
+    "text": "Destroy all creatures with power 3 or greater. Then create a Food token for each creature you control. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/b/9bae7a4d-9117-43c5-a048-80a0ddadc034.jpg?1783916337",
+      "card": "https://cards.scryfall.io/normal/front/9/b/9bae7a4d-9117-43c5-a048-80a0ddadc034.jpg?1783916337"
+    },
+    "artist": "Tomas Duchek",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "2",
+    "typeLine": "Sorcery",
+    "oracleText": "Destroy all creatures with power 3 or greater. Then create a Food token for each creature you control. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")",
+    "scryfallId": "9bae7a4d-9117-43c5-a048-80a0ddadc034",
+    "scryfallUri": "https://scryfall.com/card/ltr/2/the-battle-of-bywater?utm_source=api"
   },
   "theBlackBreath": {
     "id": "theBlackBreath",
@@ -16338,6 +18870,256 @@ export const IMPORTED_CARDS = {
     "oracleText": "Whenever Théoden or another Human you control enters, target creature gains double strike until end of turn.",
     "scryfallId": "f6dcd1ca-4943-46e4-bb5d-c14949e21e23",
     "scryfallUri": "https://scryfall.com/card/ltr/233/th%C3%A9oden-king-of-rohan?utm_source=api"
+  },
+  "thereAndBackAgain": {
+    "id": "thereAndBackAgain",
+    "name": "There and Back Again",
+    "manaCost": {
+      "generic": 3,
+      "R": 2
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Saga"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "chapter1",
+        "trigger": "chapter",
+        "chapters": [
+          1
+        ],
+        "text": "I — Up to one target creature can't block for as long as you control this Saga. The Ring tempts you.",
+        "effects": [
+          {
+            "type": "pump",
+            "keywords": [
+              "can't block"
+            ],
+            "whileSourceControlled": true
+          },
+          {
+            "type": "ringTempts"
+          }
+        ],
+        "target": {
+          "kind": "creature",
+          "optional": true
+        }
+      },
+      {
+        "id": "chapter2",
+        "trigger": "chapter",
+        "chapters": [
+          2
+        ],
+        "text": "II — Search your library for a Mountain card, put it onto the battlefield, then shuffle.",
+        "effects": [
+          {
+            "type": "searchLibrary",
+            "filter": {
+              "subtypes": [
+                "Mountain"
+              ]
+            },
+            "count": 1,
+            "destination": "battlefield"
+          }
+        ]
+      },
+      {
+        "id": "chapter3",
+        "trigger": "chapter",
+        "chapters": [
+          3
+        ],
+        "text": "III — Create Smaug, a legendary 6/6 red Dragon creature token with flying, haste, and \"When Smaug dies, create fourteen Treasure tokens.\"",
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": {
+              "name": "Smaug",
+              "supertypes": [
+                "Legendary"
+              ],
+              "colors": [
+                "red"
+              ],
+              "subtypes": [
+                "Dragon"
+              ],
+              "power": 6,
+              "toughness": 6,
+              "keywords": [
+                "flying",
+                "haste"
+              ],
+              "triggeredAbilities": [
+                {
+                  "id": "smaugDies",
+                  "trigger": "dies",
+                  "text": "When Smaug dies, create fourteen Treasure tokens.",
+                  "effects": [
+                    {
+                      "type": "createToken",
+                      "count": 14,
+                      "token": "treasure"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Up to one target creature can't block for as long as you control this Saga. The Ring tempts you.\nII — Search your library for a Mountain card, put it onto the battlefield, then shuffle.\nIII — Create Smaug, a legendary 6/6 red Dragon creature token with flying, haste, and \"When Smaug dies, create fourteen Treasure tokens.\"",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/9/3/939b0bd0-24ea-45de-a2d3-37bbf6a3e6f9.jpg?1783916275",
+      "card": "https://cards.scryfall.io/normal/front/9/3/939b0bd0-24ea-45de-a2d3-37bbf6a3e6f9.jpg?1783916275"
+    },
+    "artist": "Jarel Threat",
+    "colors": [
+      "R"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "151",
+    "typeLine": "Enchantment — Saga",
+    "oracleText": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Up to one target creature can't block for as long as you control this Saga. The Ring tempts you.\nII — Search your library for a Mountain card, put it onto the battlefield, then shuffle.\nIII — Create Smaug, a legendary 6/6 red Dragon creature token with flying, haste, and \"When Smaug dies, create fourteen Treasure tokens.\"",
+    "scryfallId": "939b0bd0-24ea-45de-a2d3-37bbf6a3e6f9",
+    "scryfallUri": "https://scryfall.com/card/ltr/151/there-and-back-again?utm_source=api"
+  },
+  "theRingGoesSouth": {
+    "id": "theRingGoesSouth",
+    "name": "The Ring Goes South",
+    "manaCost": {
+      "generic": 3,
+      "G": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "effects": [
+      {
+        "type": "ringTempts"
+      },
+      {
+        "type": "revealUntil",
+        "affected": "you",
+        "filter": {
+          "types": [
+            "Land"
+          ]
+        },
+        "count": 1,
+        "per": {
+          "of": "creatures",
+          "filter": {
+            "supertypes": [
+              "Legendary"
+            ]
+          }
+        },
+        "tapped": true,
+        "rest": "bottom"
+      }
+    ],
+    "text": "The Ring tempts you. Then reveal cards from the top of your library until you reveal X land cards, where X is the number of legendary creatures you control. Put those land cards onto the battlefield tapped and the rest on the bottom of your library in a random order.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/c/3c8a4c7d-527c-49ea-a115-a9e747c0fd03.jpg?1783916261",
+      "card": "https://cards.scryfall.io/normal/front/3/c/3c8a4c7d-527c-49ea-a115-a9e747c0fd03.jpg?1783916261"
+    },
+    "artist": "Wangjie Li",
+    "colors": [
+      "G"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "186",
+    "typeLine": "Sorcery",
+    "oracleText": "The Ring tempts you. Then reveal cards from the top of your library until you reveal X land cards, where X is the number of legendary creatures you control. Put those land cards onto the battlefield tapped and the rest on the bottom of your library in a random order.",
+    "scryfallId": "3c8a4c7d-527c-49ea-a115-a9e747c0fd03",
+    "scryfallUri": "https://scryfall.com/card/ltr/186/the-ring-goes-south?utm_source=api"
+  },
+  "theShire": {
+    "id": "theShire",
+    "name": "The Shire",
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Land"
+    ],
+    "subtypes": [],
+    "abilities": [
+      {
+        "id": "tapForG",
+        "text": "{T}: Add {G}.",
+        "cost": {
+          "tap": true
+        },
+        "effects": [
+          {
+            "type": "addMana",
+            "mana": {
+              "G": 1
+            }
+          }
+        ]
+      },
+      {
+        "id": "ability2",
+        "text": "{1}{G}, {T}, Tap an untapped creature you control: Create a Food token.",
+        "cost": {
+          "mana": {
+            "generic": 1,
+            "G": 1
+          },
+          "tap": true,
+          "tapCreatures": {
+            "count": 1
+          }
+        },
+        "effects": [
+          {
+            "type": "createToken",
+            "count": 1,
+            "token": "food"
+          }
+        ]
+      }
+    ],
+    "entersTappedUnless": {
+      "youControl": {
+        "types": [
+          "Creature"
+        ],
+        "supertypes": [
+          "Legendary"
+        ]
+      }
+    },
+    "text": "The Shire enters tapped unless you control a legendary creature.\n{T}: Add {G}.\n{1}{G}, {T}, Tap an untapped creature you control: Create a Food token.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/d/5/d5178a1b-588b-4414-a370-ac6eed51187a.jpg?1783916234",
+      "card": "https://cards.scryfall.io/normal/front/d/5/d5178a1b-588b-4414-a370-ac6eed51187a.jpg?1783916234"
+    },
+    "artist": "Jonas De Ro",
+    "colors": [],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "260",
+    "typeLine": "Legendary Land",
+    "oracleText": "The Shire enters tapped unless you control a legendary creature.\n{T}: Add {G}.\n{1}{G}, {T}, Tap an untapped creature you control: Create a Food token.",
+    "scryfallId": "d5178a1b-588b-4414-a370-ac6eed51187a",
+    "scryfallUri": "https://scryfall.com/card/ltr/260/the-shire?utm_source=api"
   },
   "theTormentOfGollum": {
     "id": "theTormentOfGollum",
@@ -17967,6 +20749,83 @@ export const IMPORTED_CARDS = {
     "scryfallId": "5eeecb9e-fbde-429b-b3da-18a4dbadf6de",
     "scryfallUri": "https://scryfall.com/card/ltr/152/warbeast-of-gorgoroth?utm_source=api"
   },
+  "warOfTheLastAlliance": {
+    "id": "warOfTheLastAlliance",
+    "name": "War of the Last Alliance",
+    "manaCost": {
+      "generic": 3,
+      "W": 1
+    },
+    "supertypes": [],
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [
+      "Saga"
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "chapter1",
+        "trigger": "chapter",
+        "chapters": [
+          1,
+          2
+        ],
+        "text": "I, II — Search your library for a legendary creature card, reveal it, put it into your hand, then shuffle.",
+        "effects": [
+          {
+            "type": "searchLibrary",
+            "filter": {
+              "types": [
+                "Creature"
+              ],
+              "supertypes": [
+                "Legendary"
+              ]
+            },
+            "count": 1,
+            "destination": "hand"
+          }
+        ]
+      },
+      {
+        "id": "chapter2",
+        "trigger": "chapter",
+        "chapters": [
+          3
+        ],
+        "text": "III — Creatures you control gain double strike until end of turn. The Ring tempts you.",
+        "effects": [
+          {
+            "type": "pump",
+            "keywords": [
+              "double strike"
+            ],
+            "affected": "eachCreatureYouControl"
+          },
+          {
+            "type": "ringTempts"
+          }
+        ]
+      }
+    ],
+    "text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI, II — Search your library for a legendary creature card, reveal it, put it into your hand, then shuffle.\nIII — Creatures you control gain double strike until end of turn. The Ring tempts you.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/0/60ddf2cd-5b33-4c8a-a610-8e6a15404dde.jpg?1783916322",
+      "card": "https://cards.scryfall.io/normal/front/6/0/60ddf2cd-5b33-4c8a-a610-8e6a15404dde.jpg?1783916322"
+    },
+    "artist": "Alexander Forssberg",
+    "colors": [
+      "W"
+    ],
+    "rarity": "rare",
+    "set": "ltr",
+    "collectorNumber": "36",
+    "typeLine": "Enchantment — Saga",
+    "oracleText": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI, II — Search your library for a legendary creature card, reveal it, put it into your hand, then shuffle.\nIII — Creatures you control gain double strike until end of turn. The Ring tempts you.",
+    "scryfallId": "60ddf2cd-5b33-4c8a-a610-8e6a15404dde",
+    "scryfallUri": "https://scryfall.com/card/ltr/36/war-of-the-last-alliance?utm_source=api"
+  },
   "weakness": {
     "id": "weakness",
     "name": "Weakness",
@@ -18171,6 +21030,84 @@ export const IMPORTED_CARDS = {
     "oracleText": "",
     "scryfallId": "348955a0-e988-48d7-a6a0-a8045fcffd25",
     "scryfallUri": "https://scryfall.com/card/m21/86/wishcoin-crab?utm_source=api"
+  },
+  "witchKingOfAngmar": {
+    "id": "witchKingOfAngmar",
+    "name": "Witch-king of Angmar",
+    "manaCost": {
+      "generic": 3,
+      "B": 2
+    },
+    "supertypes": [
+      "Legendary"
+    ],
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Wraith",
+      "Noble"
+    ],
+    "power": 5,
+    "toughness": 3,
+    "keywords": [
+      "flying"
+    ],
+    "abilities": [
+      {
+        "id": "ability1",
+        "text": "Discard a card: Witch-king of Angmar gains indestructible until end of turn. Tap him.",
+        "cost": {
+          "discard": 1
+        },
+        "effects": [
+          {
+            "type": "pump",
+            "keywords": [
+              "indestructible"
+            ],
+            "affected": "source"
+          },
+          {
+            "type": "tap",
+            "affected": "source"
+          }
+        ]
+      }
+    ],
+    "triggeredAbilities": [
+      {
+        "id": "combatDamageToYou1",
+        "trigger": "combatDamageToYou",
+        "text": "Whenever one or more creatures deal combat damage to you, each opponent sacrifices a creature of their choice that dealt combat damage to you this turn. The Ring tempts you.",
+        "effects": [
+          {
+            "type": "sacrifice",
+            "affected": "eachOpponent",
+            "dealtCombatDamageToYou": true
+          },
+          {
+            "type": "ringTempts"
+          }
+        ]
+      }
+    ],
+    "text": "Flying\nWhenever one or more creatures deal combat damage to you, each opponent sacrifices a creature of their choice that dealt combat damage to you this turn. The Ring tempts you.\nDiscard a card: Witch-king of Angmar gains indestructible until end of turn. Tap him.",
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/5/a55e6508-0b59-4573-bc4e-67b27279cfed.jpg?1783916294",
+      "card": "https://cards.scryfall.io/normal/front/a/5/a55e6508-0b59-4573-bc4e-67b27279cfed.jpg?1783916294"
+    },
+    "artist": "Anato Finnstark",
+    "colors": [
+      "B"
+    ],
+    "rarity": "mythic",
+    "set": "ltr",
+    "collectorNumber": "114",
+    "typeLine": "Legendary Creature — Wraith Noble",
+    "oracleText": "Flying\nWhenever one or more creatures deal combat damage to you, each opponent sacrifices a creature of their choice that dealt combat damage to you this turn. The Ring tempts you.\nDiscard a card: Witch-king of Angmar gains indestructible until end of turn. Tap him.",
+    "scryfallId": "a55e6508-0b59-4573-bc4e-67b27279cfed",
+    "scryfallUri": "https://scryfall.com/card/ltr/114/witch-king-of-angmar?utm_source=api"
   },
   "wizardsRockets": {
     "id": "wizardsRockets",

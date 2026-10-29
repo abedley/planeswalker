@@ -561,6 +561,12 @@ function parseOracleText(card, typeInfo, problems) {
   };
 }
 
+/** Override fields convertScryfallCard reads itself; any others are copied into the definition as they are. */
+const OVERRIDE_FIELDS = new Set([
+  'keywords', 'abilities', 'triggeredAbilities', 'staticAbilities', 'enchant', 'effects', 'targets', 'target', 'additionalCost',
+  'handAbilities', 'entersTapped', 'costReduction', 'ward', 'modes', 'graveyardAbilities', 'power', 'toughness',
+]);
+
 /** A hand-written card's rules (see overrides.js), in the shape parseOracleText returns. */
 function overrideRules(override) {
   const named = (abilities, prefix) => (abilities ?? []).map((a, i) => ({ id: a.id ?? `${prefix}${i + 1}`, ...a }));
@@ -661,6 +667,8 @@ export function convertScryfallCard(card) {
     ...(wardCost ? { ward: wardCost } : {}),
     ...(override?.modes ? { modes: override.modes } : {}),
     ...(override?.graveyardAbilities ? { graveyardAbilities: override.graveyardAbilities.map((a, i) => ({ id: a.id ?? `graveyard${i + 1}`, ...a })) } : {}),
+    // Anything else an override says (`entersTappedUnless`, `cantBeCountered`, `chooseTwo`, ...).
+    ...Object.fromEntries(Object.entries(override ?? {}).filter(([key]) => !OVERRIDE_FIELDS.has(key))),
     text: card.oracle_text ?? '',
     // Presentation (the app shows the art and credits the artist).
     ...presentation(card),

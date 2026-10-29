@@ -133,6 +133,8 @@ export const AFFECTED = Object.freeze({
   YOU_AND_TARGET: 'youAndTarget',
   /** The permanents sacrificed earlier in the same resolution. */
   SACRIFICED: 'sacrificed',
+  /** The spell a "whenever a player casts" trigger is about: "counter that spell". */
+  SUBJECT_SPELL: 'subjectSpell',
 });
 
 /** Kinds of counters (122). */
@@ -140,6 +142,11 @@ export const COUNTER = Object.freeze({
   PLUS_ONE: '+1/+1',
   /** On Sagas (714.2): one is added as it enters and in each precombat main phase. */
   LORE: 'lore',
+  // Counters that only matter to the card that uses them (122.1).
+  HOPE: 'hope',
+  VERSE: 'verse',
+  BURDEN: 'burden',
+  INFLUENCE: 'influence',
 });
 
 /** Keyword abilities (702). */
@@ -194,6 +201,10 @@ export const KEYWORD = Object.freeze({
    * +1/+1 counter from it instead. If you do, untap it."
    */
   UNTAPS_BY_REMOVING_COUNTER: 'untaps only by removing a +1/+1 counter',
+  /** The Balrog: "can't be blocked except by legendary creatures" (509.1b). */
+  BLOCKED_ONLY_BY_LEGENDARY: "can't be blocked except by legendary creatures",
+  /** Goad (701.15b; two players): it attacks each combat if able. */
+  MUST_ATTACK: 'attacks each combat if able',
 });
 
 /**
@@ -202,6 +213,7 @@ export const KEYWORD = Object.freeze({
  */
 export const INTERNAL_KEYWORDS = Object.freeze(new Set([
   KEYWORD.CANT_BE_BLOCKED_BY_GREATER_POWER, KEYWORD.DAMAGE_BY_TOUGHNESS, KEYWORD.UNTAPS_BY_REMOVING_COUNTER, KEYWORD.WARD,
+  KEYWORD.MUST_ATTACK,
 ]));
 
 export const EFFECT = Object.freeze({
@@ -338,6 +350,27 @@ export const EFFECT = Object.freeze({
   NOTHING: 'nothing',
   /** "Reveal the top card of your library." Later effects can check `{ revealedMatches }`. */
   REVEAL_TOP: 'revealTop',
+  /** `{ tapped?, attacking? }`: the card REVEAL_TOP revealed goes from the library onto the battlefield. */
+  PUT_REVEALED_ONTO_BATTLEFIELD: 'putRevealedOntoBattlefield',
+  /** `{ counter, count }`: remove counters from the affected permanents; later effects can check `{ paid: true }` ("If you do"). */
+  REMOVE_COUNTERS: 'removeCounters',
+  /**
+   * `{ count, filter, max }`: look at the top `count` cards of your library; you may reveal up to `max`
+   * matching `filter` and put them into your hand; the rest go on the bottom in a random order.
+   */
+  LOOK_AT_TOP: 'lookAtTop',
+  /**
+   * `{ filter, count, tapped?, rest: 'graveyard' | 'bottom' }`: the affected player reveals cards from the top of their
+   * library until `count` cards matching `filter` are revealed; those go onto the battlefield (under your control),
+   * the rest to `rest` (the bottom in a random order).
+   */
+  REVEAL_UNTIL: 'revealUntil',
+  /** `{ keep }`: the affected player exiles cards of their choice from their hand until they have `keep` (Isildur's Fateful Strike). */
+  EXILE_HAND_EXCESS: 'exileHandExcess',
+  /** `{ keep }`: choose up to `keep` creatures, then destroy the rest (Mount Doom). */
+  KEEP_AND_DESTROY_REST: 'keepAndDestroyRest',
+  /** 701.15: goad the target: until your next turn, it attacks each combat if able. */
+  GOAD: 'goad',
 });
 
 /** Effects that apply to the spell's or ability's target (unless `affected` says otherwise). */
@@ -345,7 +378,7 @@ export const TARGETED_EFFECTS = Object.freeze(new Set([
   EFFECT.ATTACH, EFFECT.DEAL_DAMAGE, EFFECT.DESTROY, EFFECT.EXILE, EFFECT.RETURN_TO_HAND, EFFECT.TAP,
   EFFECT.UNTAP, EFFECT.PUMP, EFFECT.ADD_COUNTERS, EFFECT.COUNTER_SPELL, EFFECT.FIGHT, EFFECT.RETURN_FROM_GRAVEYARD,
   EFFECT.RETURN_SPELL_TO_HAND, EFFECT.PUT_INTO_LIBRARY, EFFECT.GAIN_CONTROL, EFFECT.FLICKER, EFFECT.EXILE_UNTIL_SOURCE_LEAVES,
-  EFFECT.COUNTER_UNLESS_PAID, EFFECT.REVEAL_HAND_DISCARD,
+  EFFECT.COUNTER_UNLESS_PAID, EFFECT.REVEAL_HAND_DISCARD, EFFECT.GOAD,
 ]));
 /** Effects that hurt whatever they affect, for AI decisions. */
 export const HARMFUL_EFFECTS = Object.freeze(new Set([
@@ -423,6 +456,10 @@ export const TRIGGER = Object.freeze({
   DEALS_DAMAGE_TO_CREATURE: 'dealsDamageToCreature',
   /** On Equipment: "Whenever equipped creature blocks or becomes blocked by a creature" (the subject is that creature). */
   EQUIPPED_BLOCKS_OR_BLOCKED: 'equippedBlocksOrBlocked',
+  /** On Equipment: "Whenever equipped creature attacks" (the subject is that creature). */
+  EQUIPPED_ATTACKS: 'equippedAttacks',
+  /** "Whenever one or more creatures deal combat damage to you" (once per combat damage step). */
+  COMBAT_DAMAGE_TO_YOU: 'combatDamageToYou',
   /** A Saga's chapter ability (714.2b): `chapters` lists the chapter numbers it has. */
   CHAPTER: 'chapter',
   // These watch other objects, through `filter`.
@@ -444,7 +481,8 @@ export const TRIGGER = Object.freeze({
   TOKEN_CREATED: 'tokenCreated',
   /** "Whenever you sacrifice a token". */
   TOKEN_SACRIFICED: 'tokenSacrificed',
-  // These trigger at the beginning of a step of the controller's turn (603.2, 503.1, 507.1, 513.1).
+  // These trigger at the beginning of a step of the controller's turn (603.2, 503.1, 507.1, 513.1), or of
+  // every turn with `eachTurn: true` ("At the beginning of each combat").
   UPKEEP: 'upkeep',
   BEGINNING_OF_COMBAT: 'beginningOfCombat',
   END_STEP: 'endStep',
@@ -752,6 +790,11 @@ export function countOf(spec, {
   if (spec.of === 'permanents') {
     return battlefield.filter((p) => matchesFilter(p, { controller: spec.controller, ...spec.filter }, { controllerId, sourceId, combat })).length;
   }
+  // "the greatest toughness among creatures you control" (Last March of the Ents).
+  if (spec.of === 'greatestToughness') {
+    const toughness = battlefield.filter((p) => isCreature(p) && matchesFilter(p, { controller: spec.controller }, { controllerId })).map((p) => p.toughness ?? 0);
+    return Math.max(0, ...toughness);
+  }
   // Amounts that only exist while a spell or ability resolves (X, the amassed Army's power) count 0 here.
   if (spec.of !== 'creatures' && spec.of !== 'power') return 0;
   let creatures = battlefield.filter((p) => isCreature(p)
@@ -797,11 +840,14 @@ export function reduceGeneric(manaCost, amount) {
  * `{ amount, condition }` ("costs {2} less to cast if ..."). A condition needs the game, so
  * `conditionMet(condition)` is asked; without it, conditional reductions don't apply.
  */
-export function spellCost(card, { battlefield, controllerId, combat = null, x = 0, conditionMet = null }) {
+export function spellCost(card, {
+  battlefield, controllerId, combat = null, x = 0, conditionMet = null, countFor = null,
+}) {
   const cost = withX(card.manaCost, x);
   const reduction = card.costReduction;
   if (!reduction || !cost) return cost;
-  if (reduction.per) return reduceGeneric(cost, countOf(reduction.per, { battlefield, controllerId, combat }));
+  // `countFor` (the game's) knows numbers only a game knows, such as permanents sacrificed this turn.
+  if (reduction.per) return reduceGeneric(cost, countFor ? countFor(reduction.per) : countOf(reduction.per, { battlefield, controllerId, combat }));
   return conditionMet?.(reduction.condition) ? reduceGeneric(cost, reduction.amount) : cost;
 }
 
@@ -818,5 +864,6 @@ export function canBlockCreature(blocker, attacker) {
   if (hasKeyword(attacker, KEYWORD.CANT_BE_BLOCKED_BY_POWER_2_OR_LESS) && (blocker.power ?? 0) <= 2) return false;
   // The Ring, level 1 (701.54c): a Ring-bearer can't be blocked by creatures with greater power.
   if (hasKeyword(attacker, KEYWORD.CANT_BE_BLOCKED_BY_GREATER_POWER) && (blocker.power ?? 0) > (attacker.power ?? 0)) return false;
+  if (hasKeyword(attacker, KEYWORD.BLOCKED_ONLY_BY_LEGENDARY) && !isLegendary(blocker)) return false;
   return true;
 }

@@ -813,9 +813,34 @@ function wantedSelection(state, me, decision) {
     case CHOICE.GRAVEYARD_CARDS:
       // The Bath Song: everything goes back (a bigger library, and our spells to draw again).
       return [...decision.options];
+    case CHOICE.LOOK:
+      // Horn of the Mark, Radagast: the best creature card.
+      return [...decision.options].filter((id) => card(id)).sort((a, b) => keepValue(state, me, card(b)) - keepValue(state, me, card(a))).slice(0, decision.max);
+    case CHOICE.EXILE_FROM_HAND:
+      // Isildur's Fateful Strike: the cards we'd least like to keep.
+      return [...decision.options].sort((a, b) => keepValue(state, me, player.hand.find((c) => c.id === a)) - keepValue(state, me, player.hand.find((c) => c.id === b)))
+        .slice(0, decision.min);
+    case CHOICE.EXILE_COST:
+      // Mines of Moria: the graveyard cards worth least (lands first; not ones with abilities there).
+      return [...decision.options].sort((a, b) => graveyardWorth(card(a)) - graveyardWorth(card(b))).slice(0, decision.min);
+    case CHOICE.KEEP: {
+      // Mount Doom: our best creatures.
+      const mine = decision.options.map((id) => state.battlefield.find((p) => p.id === id)).filter((p) => p?.controllerId === me);
+      return mine.sort((a, b) => creatureValue(b) - creatureValue(a)).slice(0, decision.max).map((p) => p.id);
+    }
+    case CHOICE.HAND_CARDS:
+      // Last March of the Ents: every creature we can.
+      return [...decision.options];
     default:
-      return decision.selected;
+      return decision.selected.length >= (decision.min ?? 0) ? decision.selected
+        : [...decision.selected, ...decision.options.filter((id) => !decision.selected.includes(id))].slice(0, decision.min);
   }
+}
+
+/** How much a card in a graveyard is worth there (to keep it from being exiled). */
+function graveyardWorth(card) {
+  if (!card) return 0;
+  return (card.graveyardAbilities?.length ? 10 : 0) + (isLand(card) ? 0 : 1 + manaValue(card.manaCost ?? {}) / 10);
 }
 
 /** How much a card in hand is worth keeping (for discarding down to hand size). */

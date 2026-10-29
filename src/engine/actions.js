@@ -22,6 +22,11 @@ export const ACTION = Object.freeze({
   KEEP_HAND: 'KEEP_HAND',
   MULLIGAN: 'MULLIGAN',
   PUT_ON_BOTTOM: 'PUT_ON_BOTTOM',
+  // A choice made while a spell or ability resolves (DECISION.CHOOSE): one of the decision's `options`.
+  CHOOSE: 'CHOOSE',
+  // Choosing several things (DECISION.CHOOSE_MANY): toggle each in or out, then confirm.
+  TOGGLE_CHOICE: 'TOGGLE_CHOICE',
+  CONFIRM_CHOICE: 'CONFIRM_CHOICE',
 });
 
 export const passPriority = (playerId) => ({ type: ACTION.PASS_PRIORITY, playerId });
@@ -69,3 +74,6 @@ export const keepLegend = (playerId, cardId) => ({ type: ACTION.KEEP_LEGEND, pla
 export const keepHand = (playerId) => ({ type: ACTION.KEEP_HAND, playerId });
 export const mulligan = (playerId) => ({ type: ACTION.MULLIGAN, playerId });
 export const putOnBottom = (playerId, cardId) => ({ type: ACTION.PUT_ON_BOTTOM, playerId, cardId });
+export const choose = (playerId, choice) => ({ type: ACTION.CHOOSE, playerId, choice });
+export const toggleChoice = (playerId, choice) => ({ type: ACTION.TOGGLE_CHOICE, playerId, choice });
+export const confirmChoice = (playerId) => ({ type: ACTION.CONFIRM_CHOICE, playerId });

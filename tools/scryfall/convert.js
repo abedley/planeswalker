@@ -30,6 +30,7 @@ import {
   normalizeSelfReferences, parseManaSymbols, parseKeywordList, parseEffects, parseCost, sentences, SUPPORTED_KEYWORDS,
   parseCount, singularSubtype,
 } from './rulesText.js';
+import { OVERRIDES } from './overrides.js';
 
 const SUPPORTED_TYPES = new Set(Object.values(CARD_TYPE));
 // 704.5j: the legend rule is in the engine.
@@ -39,7 +40,7 @@ const KNOWN_SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoin
  * Keyword actions (701) and ability words (207.2c) Scryfall lists under `keywords`
  * whose rules text is parsed like any other.
  */
-const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill', 'investigate', 'treasure', 'food', 'clue', 'fight', 'landfall']);
+const SUPPORTED_KEYWORD_ACTIONS = new Set(['mill', 'investigate', 'treasure', 'food', 'clue', 'fight', 'landfall', 'scry', 'amass']);
 
 /** "Llanowar Elves" -> "llanowarElves" */
 export function cardIdFromName(name) {
@@ -69,7 +70,37 @@ const ENTERS = '(?:enters|enters the battlefield)';
 
 /** Trigger conditions (603.1): a pattern, and the trigger (and filter) it means. */
 const TRIGGER_CONDITIONS = [
+  {
+    pattern: /^When ~ enters or leaves the battlefield, (.+)$/,
+    trigger: () => ({ trigger: [TRIGGER.ENTERS_BATTLEFIELD, TRIGGER.LEAVES_BATTLEFIELD] }),
+  },
+  { pattern: /^When ~ leaves the battlefield, (.+)$/, trigger: () => ({ trigger: TRIGGER.LEAVES_BATTLEFIELD }) },
   { pattern: new RegExp(`^When ~ ${ENTERS}, (.+)$`), trigger: () => ({ trigger: TRIGGER.ENTERS_BATTLEFIELD }) },
+  { pattern: /^Whenever you scry, (.+)$/, trigger: () => ({ trigger: TRIGGER.SCRY }) },
+  { pattern: /^Whenever the Ring tempts you, (.+)$/, trigger: () => ({ trigger: TRIGGER.RING_TEMPTS }) },
+  { pattern: /^Whenever you draw your second card each turn, (.+)$/, trigger: () => ({ trigger: TRIGGER.DRAW_SECOND_CARD }) },
+  { pattern: /^Whenever ~ becomes blocked, (.+)$/, trigger: () => ({ trigger: TRIGGER.BECOMES_BLOCKED }) },
+  { pattern: /^Whenever ~ deals combat damage to a player, (.+)$/, trigger: () => ({ trigger: TRIGGER.DEALS_COMBAT_DAMAGE_TO_PLAYER }) },
+  {
+    pattern: /^Whenever you cast an instant or sorcery spell, (.+)$/,
+    trigger: () => ({ trigger: TRIGGER.SPELL_CAST, filter: { types: [CARD_TYPE.INSTANT, CARD_TYPE.SORCERY] } }),
+  },
+  {
+    pattern: /^Whenever a creature an opponent controls dies, (.+)$/,
+    trigger: () => ({ trigger: TRIGGER.CREATURE_DIES, filter: { controller: 'opponent' } }),
+  },
+  {
+    // "Whenever Elrond or another creature you control enters": itself included.
+    pattern: new RegExp(`^Whenever ~ or another creature you control ${ENTERS}, (.+)$`),
+    trigger: () => ({ trigger: TRIGGER.CREATURE_ENTERS, filter: {} }),
+  },
+  {
+    pattern: new RegExp(`^Whenever ~ or another ([A-Z][a-z]+) you control ${ENTERS}, (.+)$`),
+    trigger: ([, subtype]) => ({ trigger: TRIGGER.CREATURE_ENTERS, filter: { subtypes: [subtype] } }),
+  },
+  { pattern: /^At the beginning of combat on your turn, (.+)$/, trigger: () => ({ trigger: TRIGGER.BEGINNING_OF_COMBAT }) },
+  { pattern: /^At the beginning of your end step, (.+)$/, trigger: () => ({ trigger: TRIGGER.END_STEP }) },
+  { pattern: /^At the beginning of your upkeep, (.+)$/, trigger: () => ({ trigger: TRIGGER.UPKEEP }) },
   { pattern: /^When ~ dies, (.+)$/, trigger: () => ({ trigger: TRIGGER.DIES }) },
   { pattern: /^When ~ is put into a graveyard from the battlefield, (.+)$/, trigger: () => ({ trigger: TRIGGER.PUT_INTO_GRAVEYARD }) },
   { pattern: /^Whenever ~ attacks or blocks, (.+)$/, trigger: () => ({ trigger: TRIGGER.ATTACKS_OR_BLOCKS }) },
@@ -114,7 +145,16 @@ function parseTriggeredAbility(line, normalized, problems, bullets = []) {
     return { ability: null };
   };
   let rest = match.at(-1);
-  const base = { id: trigger, text: [line, ...bullets.map((b) => b.line)].join('\n'), trigger, ...(filter ? { filter } : {}) };
+  // "This ability triggers only once each turn."
+  const oncePerTurn = / This ability triggers only once each turn\.$/.test(rest);
+  if (oncePerTurn) rest = rest.replace(/ This ability triggers only once each turn\.$/, '');
+  const base = {
+    id: Array.isArray(trigger) ? trigger.join('Or') : trigger,
+    text: [line, ...bullets.map((b) => b.line)].join('\n'),
+    trigger,
+    ...(filter ? { filter } : {}),
+    ...(oncePerTurn ? { oncePerTurn: true } : {}),
+  };
   if (/^choose one —$/.test(rest)) {
     if (bullets.length < 2) return fail();
     const modes = [];
@@ -132,7 +172,9 @@ function parseTriggeredAbility(line, normalized, problems, bullets = []) {
   }
   const optional = /^you may /.test(rest);
   if (optional) rest = rest.replace(/^you may /, '');
-  const { effects, target, targetOther, failed } = parseEffects(effectSentence(rest), problems);
+  const parsed = parseEffects(effectSentence(rest), problems);
+  const { effects, targetOther, failed } = parsed;
+  const target = parsed.targets ?? parsed.target;
   if (failed || effects.length === 0) return fail();
   // Once it has left the battlefield, "it" is a card in a graveyard, which effects on the
   // permanent itself can't follow (Rancor's "return Rancor to its owner's hand").
@@ -142,7 +184,7 @@ function parseTriggeredAbility(line, normalized, problems, bullets = []) {
     ability: {
       ...base,
       ...(effects.length === 1 ? { effect: effects[0] } : { effects }),
-      ...(target ? { target } : {}),
+      ...(Array.isArray(target) ? { targets: target } : target ? { target } : {}),
       ...(targetOther ? { targetOther: true } : {}),
       ...(optional ? { optional: true } : {}),
     },
@@ -164,7 +206,9 @@ function parseActivatedAbility(line, normalized, number, problems) {
     effectText = effectText.replace(/ Activate only as a sorcery\.$/, '');
     timing = ACTIVATION_TIMING.SORCERY;
   }
-  const { effects, target, failed } = parseEffects(effectText, problems);
+  const parsed = parseEffects(effectText, problems);
+  const { effects, failed } = parsed;
+  const target = parsed.targets ?? parsed.target;
   if (failed) problems.push(`Unsupported rules text: "${line}"`);
   if (!cost || failed || effects.length === 0) return { ability: null };
   const manaOnly = effects.every((e) => e.type === EFFECT.ADD_MANA && !e.per) && !target;
@@ -179,7 +223,7 @@ function parseActivatedAbility(line, normalized, number, problems) {
       cost,
       ...(effects.length === 1 ? { effect: effects[0] } : { effects }),
       ...(timing ? { timing } : {}),
-      ...(target ? { target } : {}),
+      ...(Array.isArray(target) ? { targets: target } : target ? { target } : {}),
     },
   };
 }
@@ -192,6 +236,7 @@ const SELF_RESTRICTIONS = {
   "~ can't be blocked by creatures with power 2 or less.": KEYWORD.CANT_BE_BLOCKED_BY_POWER_2_OR_LESS,
   "~ can't be blocked by more than one creature.": KEYWORD.MAX_ONE_BLOCKER,
   '~ must be blocked if able.': KEYWORD.MUST_BE_BLOCKED,
+  "~ can't be blocked except by three or more creatures.": KEYWORD.MIN_THREE_BLOCKERS,
   'All creatures able to block ~ do so.': KEYWORD.LURE,
 };
 
@@ -251,6 +296,32 @@ const COLOR_WORDS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
  * if it grants unsupported keywords, or null if the line isn't one.
  */
 function parseAnthem(line, problems) {
+  // "Creatures you control have haste.", "Creature tokens you control have deathtouch.",
+  // "Other Birds you control have vigilance.": keywords only.
+  const grants = /^(Other )?(?:(Legendary|[A-Z][a-z]+) creatures|Creatures|Creature tokens|([A-Z][a-z]+)) you control have (.+)\.$/.exec(line);
+  if (grants) {
+    const [, other, kind, plural, keywordText] = grants;
+    const keywords = parseKeywordList(keywordText, problems);
+    if (!keywords) return { effect: null };
+    const filter = line.includes('Creature tokens') ? { token: true } : kind === 'Legendary' ? { supertypes: ['Legendary'] } : null;
+    const subtype = plural ? singularSubtype(plural) : kind && kind !== 'Legendary' ? kind : null;
+    return {
+      effect: {
+        affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, keywords,
+        ...(other ? { other: true } : {}), ...(subtype ? { subtypes: [subtype] } : {}), ...(filter ? { filter } : {}),
+      },
+    };
+  }
+  // "Legendary creatures you control get +1/+0." (Rising of the Day)
+  const legendary = /^Legendary creatures you control get ([+-]\d+)\/([+-]\d+)\.$/.exec(line);
+  if (legendary) {
+    return {
+      effect: {
+        affected: AFFECTED.EACH_CREATURE_YOU_CONTROL, filter: { supertypes: ['Legendary'] },
+        ...(Number(legendary[1]) ? { power: Number(legendary[1]) } : {}), ...(Number(legendary[2]) ? { toughness: Number(legendary[2]) } : {}),
+      },
+    };
+  }
   // "Other Elves you control get +1/+1." names the creature type in the plural, without "creatures".
   const plural = /^(Other )?([A-Z][a-z]+) you control get ([+-]\d+)\/([+-]\d+)(?: and have (.+))?\.$/.exec(line);
   const match = plural && plural[2] !== 'Creatures'
@@ -277,6 +348,25 @@ function parseAnthem(line, problems) {
 }
 
 /**
+ * 702.29a: "Cycling {G}" means "{G}, Discard this card: Draw a card.", from the hand.
+ * 702.29e: typecycling ("Plainscycling {1}") searches for a card of that type instead:
+ * "Search your library for a Plains card, reveal it, put it into your hand, then shuffle."
+ * Returns the hand ability, or null if the line isn't cycling.
+ */
+function parseCycling(line, problems, handledKeywords) {
+  const match = /^(Plains|Island|Swamp|Mountain|Forest)?[Cc]ycling ((?:\{[^}]+\})+)$/.exec(line);
+  if (!match) return null;
+  const [, type, cost] = match;
+  handledKeywords.add('cycling');
+  if (type) for (const k of ['landcycling', 'typecycling', `${type.toLowerCase()}cycling`]) handledKeywords.add(k);
+  const mana = parseManaSymbols(cost, problems, `"${line}"`);
+  const effect = type
+    ? { type: EFFECT.SEARCH_LIBRARY, filter: { subtypes: [type] }, count: 1, destination: 'hand' }
+    : { type: EFFECT.DRAW_CARDS, count: 1 };
+  return { id: 'cycling', text: line, cost: { mana, discardSelf: true }, effect };
+}
+
+/**
  * Splits rules text into keywords and abilities, reporting any line that isn't
  * a supported keyword list, mana ability, or Aura/Equipment line.
  */
@@ -286,12 +376,13 @@ function parseOracleText(card, typeInfo, problems) {
   const triggeredAbilities = [];
   const staticAbilities = [];
   const effects = [];
-  const spellTargets = [];
+  const spellText = [];
   const handAbilities = [];
   let additionalCost = null;
   let enchant = null;
   let entersTapped = false;
   let costReduction = null;
+  let wardCost = null;
   const isSpellCard = typeInfo.types.includes(CARD_TYPE.INSTANT) || typeInfo.types.includes(CARD_TYPE.SORCERY);
   const isAuraCard = typeInfo.subtypes.includes(SUBTYPE.AURA);
   const isEquipmentCard = typeInfo.subtypes.includes(SUBTYPE.EQUIPMENT);
@@ -314,6 +405,13 @@ function parseOracleText(card, typeInfo, problems) {
     }
     const normalized = normalizeSelfReferences(withoutReminder, card.name);
 
+    // Cycling works from the hand, on any card (702.29a).
+    if (isSpellCard && /^(?:Plains|Island|Swamp|Mountain|Forest)?[Cc]ycling \{/.test(withoutReminder)) {
+      const cycled = parseCycling(withoutReminder, problems, handledKeywords);
+      if (cycled) handAbilities.push(cycled);
+      continue;
+    }
+
     if (isSpellCard) {
       // 601.2f: "As an additional cost to cast this spell, sacrifice a creature."
       const extra = /^As an additional cost to cast ~, (.+)\.$/.exec(normalized);
@@ -324,17 +422,13 @@ function parseOracleText(card, typeInfo, problems) {
         }
         continue;
       }
-      // An instant or sorcery's rules text is its effect, one sentence at a time (608.2c).
+      // An instant or sorcery's rules text is its effect, one sentence at a time (608.2c); each
+      // is checked alone, so every unsupported one is reported, then all together (below).
       for (const sentence of sentences(normalized)) {
-        const parsed = parseEffects(sentence, problems);
-        if (parsed.failed) {
-          problems.push(`Unsupported rules text: "${sentence.replaceAll('~', card.name)}"`);
-          continue;
-        }
-        effects.push(...parsed.effects);
-        if (parsed.target) spellTargets.push(parsed.target);
-        if (parsed.targets) spellTargets.push(parsed.targets);
+        const parsed = parseEffects(sentence, []);
+        if (parsed.failed) problems.push(`Unsupported rules text: "${sentence.replaceAll('~', card.name)}"`);
       }
+      spellText.push(normalized);
       continue;
     }
 
@@ -407,14 +501,18 @@ function parseOracleText(card, typeInfo, problems) {
       continue;
     }
 
-    // 702.29a: "Cycling {G}" means "{G}, Discard this card: Draw a card.", from the hand.
-    const cycling = /^Cycling ((?:\{[^}]+\})+)$/.exec(withoutReminder);
-    if (cycling) {
-      handledKeywords.add('cycling');
-      const mana = parseManaSymbols(cycling[1], problems, `"${withoutReminder}"`);
-      handAbilities.push({
-        id: 'cycling', text: withoutReminder, cost: { mana, discardSelf: true }, effect: { type: EFFECT.DRAW_CARDS, count: 1 },
-      });
+    const cycled = parseCycling(withoutReminder, problems, handledKeywords);
+    if (cycled) {
+      handAbilities.push(cycled);
+      continue;
+    }
+
+    // 702.21: "Ward {2}".
+    const ward = /^Ward ((?:\{[^}]+\})+)$/.exec(withoutReminder);
+    if (ward) {
+      handledKeywords.add('ward');
+      keywords.push(KEYWORD.WARD);
+      wardCost = { mana: parseManaSymbols(ward[1], problems, `"${withoutReminder}"`) };
       continue;
     }
 
@@ -447,11 +545,39 @@ function parseOracleText(card, typeInfo, problems) {
     }
   }
   if (isAuraCard && !enchant && !problems.length) problems.push('An Aura needs "Enchant creature".');
-  if (spellTargets.length > 1) problems.push(`More than one target isn't supported: "${card.oracle_text}"`);
+  // The spell's whole text at once, so effects know which of its targets they're about.
+  let spellTarget = null;
+  if (isSpellCard && spellText.length && !problems.length) {
+    const parsed = parseEffects(spellText.join(' '), problems);
+    if (!parsed.failed) {
+      effects.push(...parsed.effects);
+      spellTarget = parsed.targets ?? parsed.target;
+    }
+  }
   if (isSpellCard && effects.length === 0 && !problems.length) problems.push('An instant or sorcery needs rules text.');
   return {
-    keywords: [...new Set(keywords)], abilities, triggeredAbilities, staticAbilities, enchant, effects, spellTarget: spellTargets[0] ?? null, additionalCost,
-    handAbilities, entersTapped, costReduction,
+    keywords: [...new Set(keywords)], abilities, triggeredAbilities, staticAbilities, enchant, effects, spellTarget, additionalCost,
+    handAbilities, entersTapped, costReduction, wardCost,
+  };
+}
+
+/** A hand-written card's rules (see overrides.js), in the shape parseOracleText returns. */
+function overrideRules(override) {
+  const named = (abilities, prefix) => (abilities ?? []).map((a, i) => ({ id: a.id ?? `${prefix}${i + 1}`, ...a }));
+  const triggerName = (a) => (Array.isArray(a.trigger) ? a.trigger.join('Or') : a.trigger);
+  return {
+    keywords: override.keywords ?? [],
+    abilities: named(override.abilities, 'ability'),
+    triggeredAbilities: (override.triggeredAbilities ?? []).map((a, i) => ({ id: a.id ?? `${triggerName(a)}${i + 1}`, ...a })),
+    staticAbilities: override.staticAbilities ?? [],
+    enchant: override.enchant ?? null,
+    effects: override.effects ?? [],
+    spellTarget: override.targets ?? override.target ?? null,
+    additionalCost: override.additionalCost ?? null,
+    handAbilities: override.handAbilities ?? [],
+    entersTapped: Boolean(override.entersTapped),
+    costReduction: override.costReduction ?? null,
+    wardCost: override.ward ?? null,
   };
 }
 
@@ -464,7 +590,10 @@ export function convertScryfallCard(card) {
   const name = card.name;
 
   if (card.object !== 'card') return { ok: false, name: name ?? '(unknown)', problems: ['Not a Scryfall card object.'] };
-  if (card.layout !== 'normal' || card.card_faces) {
+  // Cards whose rules are written by hand (tools/scryfall/overrides.js): their text isn't parsed.
+  const override = OVERRIDES[name] ?? null;
+  const sagaOverride = override && card.layout === 'saga';
+  if ((card.layout !== 'normal' && !sagaOverride) || card.card_faces) {
     problems.push(`Unsupported layout "${card.layout}" (only single-faced "normal" cards are supported).`);
     return { ok: false, name, problems };
   }
@@ -487,24 +616,25 @@ export function convertScryfallCard(card) {
 
   let power;
   let toughness;
-  if (isCreature) {
-    power = Number(card.power);
-    toughness = Number(card.toughness);
-    if (!/^\d+$/.test(card.power ?? '') || !/^\d+$/.test(card.toughness ?? '')) {
+  // A Vehicle has power and toughness too (301.7b).
+  if (isCreature || (override && card.power !== undefined)) {
+    power = override?.power ?? Number(card.power);
+    toughness = override?.toughness ?? Number(card.toughness);
+    if (override?.power === undefined && (!/^\d+$/.test(card.power ?? '') || !/^\d+$/.test(card.toughness ?? ''))) {
       problems.push(`Unsupported power/toughness ${card.power}/${card.toughness} (only fixed numbers are supported).`);
     }
   }
 
   const {
     keywords, abilities, triggeredAbilities, staticAbilities, enchant, effects, spellTarget, additionalCost,
-    handAbilities, entersTapped, costReduction,
-  } = parseOracleText(card, typeInfo, problems);
+    handAbilities, entersTapped, costReduction, wardCost,
+  } = override ? overrideRules(override) : parseOracleText(card, typeInfo, problems);
   const knownSubtypes = { [SUBTYPE.AURA]: CARD_TYPE.ENCHANTMENT, [SUBTYPE.EQUIPMENT]: CARD_TYPE.ARTIFACT };
   for (const [subtype, type] of Object.entries(knownSubtypes)) {
     if (typeInfo.subtypes.includes(subtype) && !typeInfo.types.includes(type)) problems.push(`Unsupported: ${subtype} that isn't an ${type}.`);
   }
-  // Flash (702.8) works on any spell; other keywords only mean something on creatures.
-  if (keywords.some((k) => k !== KEYWORD.FLASH) && !isCreature) problems.push('Keywords on non-creatures are not supported.');
+  // Flash (702.8) works on any spell; other keywords only mean something on creatures (or a Vehicle, by override).
+  if (keywords.some((k) => k !== KEYWORD.FLASH) && !isCreature && !override) problems.push('Keywords on non-creatures are not supported.');
 
   if (problems.length) return { ok: false, name, problems };
 
@@ -516,7 +646,7 @@ export function convertScryfallCard(card) {
     supertypes: typeInfo.supertypes,
     types: typeInfo.types,
     subtypes: typeInfo.subtypes,
-    ...(isCreature ? { power, toughness } : {}),
+    ...(power !== undefined ? { power, toughness } : {}),
     ...(keywords.length ? { keywords } : {}),
     ...(abilities.length ? { abilities } : {}),
     ...(triggeredAbilities.length ? { triggeredAbilities } : {}),
@@ -528,6 +658,9 @@ export function convertScryfallCard(card) {
     ...(costReduction ? { costReduction } : {}),
     ...(additionalCost ? { additionalCost } : {}),
     ...(staticAbilities.length ? { staticAbilities } : {}),
+    ...(wardCost ? { ward: wardCost } : {}),
+    ...(override?.modes ? { modes: override.modes } : {}),
+    ...(override?.graveyardAbilities ? { graveyardAbilities: override.graveyardAbilities.map((a, i) => ({ id: a.id ?? `graveyard${i + 1}`, ...a })) } : {}),
     text: card.oracle_text ?? '',
     // Presentation (the app shows the art and credits the artist).
     ...presentation(card),

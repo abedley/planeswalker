@@ -115,3 +115,14 @@ test('every LTR card in the list was imported', async () => {
   assert.deepEqual(names.filter((name) => !imported.has(name)), []);
   assert.ok(DECISION.CHOOSE);
 });
+
+test("the basic AI taps creatures for Elven Chorus's mana", async () => {
+  const { manaSources } = await import('../src/ai/manaPlanning.js');
+  const g = game({ hand: ['elvenChorus', 'bear'], cards: { ...free(['elvenChorus']), bear: creature('bear', 2, 2) } });
+  castAndResolve(g, 'elvenChorus');
+  castAndResolve(g, 'bear');
+  while (!(g.getState().turn === 3 && g.getState().phase === PHASE.PRECOMBAT_MAIN)) g.dispatch(passPriority(g.getState().priorityPlayerId) );
+  const state = g.getState();
+  const bear = state.battlefield.find((p) => p.cardId === 'bear');
+  assert.ok(manaSources(state, state.validActions.filter((a) => a.playerId === 'p1')).some((s) => s.cardId === bear.id));
+});

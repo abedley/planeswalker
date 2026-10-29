@@ -35,7 +35,8 @@ export function manaSources(state, mine) {
   for (const action of mine) {
     if (action.type !== ACTION.ACTIVATE_ABILITY) continue;
     const source = state.battlefield.find((p) => p.id === action.cardId);
-    const ability = source?.abilities.find((ab) => ab.id === action.abilityId);
+    // Its own abilities, or one another permanent gives it (Elven Chorus).
+    const ability = [...(source?.abilities ?? []), ...(source?.grantedAbilities ?? [])].find((ab) => ab.id === action.abilityId);
     if (!ability?.isManaAbility) continue;
     if (!byCard.has(source.id)) {
       byCard.set(source.id, {

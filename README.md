@@ -48,8 +48,9 @@ any of the effects above. Try the *Triggered abilities sampler* deck (`SAMPLE_TR
   blocking requirements ("must be blocked if able", "all creatures able to block it do so").
 - **Details:** see *Rules implemented*.
 
-**The Lord of the Rings: Tales of Middle-earth (LTR):** its 181 commons and uncommons are in the
-card pool (`cards/ltr-cards.txt`). The rares and mythics aren't yet. They brought:
+**The Lord of the Rings: Tales of Middle-earth (LTR):** 253 of the 261 cards in its boosters are in
+the card pool (`cards/ltr-cards.txt`): every common and uncommon, and 72 of the 80 rares and
+mythics. They brought:
 - **Set mechanics:** the Ring tempts you (the Ring-bearer and the Ring's four abilities), amass
   Orcs, scry, Food, Sagas (lore counters and chapters), and landcycling ("Plainscycling {1}").
 - **Keywords:** indestructible, hexproof and ward, "can't be blocked except by three or more
@@ -66,10 +67,32 @@ card pool (`cards/ltr-cards.txt`). The rares and mythics aren't yet. They brough
 - **Static and replacement effects:** conditional anthems and keyword grants, changing a
   permanent's types or base power and toughness, losing all abilities, control changes, flicker,
   "exile it instead" when it would die, and "that many plus one +1/+1 counters".
+- **From the rares and mythics:**
+  - **Counters:** keyword counters (Arwen's lifelink counter), stun counters (The Watcher in the
+    Water), moving counters (Goldberry), and counters that only matter to their card (hope,
+    verse, burden, influence).
+  - **Protection** from colors and card types (Éowyn, Fearless Knight; Pippin, Guard of the
+    Citadel), and protection from everything for a player (The One Ring).
+  - **Turns:** extra turns (Lost Isle Calling) and extra combats (Éomer, Marshal of Rohan).
+  - **Casting:** without paying, as an ability resolves (Glamdring, Press the Enemy); from exile
+    (Moria Marauder, Shadow of the Enemy) and from the top of the library (Elven Chorus).
+  - **Copies:** tokens that copy a card, with exceptions (Sauron, the Necromancer; Shelob).
+  - **Mana:** hybrid costs ({W/B}, Frodo, Sauron's Bane), mana that makes a spell uncounterable
+    (Delighted Halfling), green mana that stays (Fangorn).
+  - **Smaller rules:** goad, ward with a sacrifice cost, "can't be countered", legendary
+    instants that need a legendary creature, losing the game as an effect, two modes at once
+    (Flame of Anor), draw and life-gain replacements (Phial of Galadriel), lands that enter
+    tapped unless you control a legend.
+- **Left out**, because they need rules this game doesn't model (each is listed with the reason in
+  `cards/ltr-cards.txt`): spell copying (Display of Power, Storm of Saruman, Gandalf the Grey,
+  Saruman of Many Colors), phasing (King of the Oathbreakers), triggers that trigger an
+  additional time (Gandalf the White), gaining other permanents' activated abilities (Sharkey,
+  Tyrant of the Shire), and an opponent splitting cards into face-up and face-down piles
+  (Sauron's Ransom).
 
 Two sampler decks, *LTR: Fellowship* (G/W Hobbits, Food and the Ring) and *LTR: Mordor* (B/R
-Orcs and amass) (`LTR_DECKS`, `src/cards/ltrDecks.js`), can be picked in the debugger and the
-arena (`--decks fellowship,mordor`). The campaign doesn't use LTR cards.
+Orcs and amass), each with a few rares (`LTR_DECKS`, `src/cards/ltrDecks.js`), can be picked in
+the debugger and the arena (`--decks fellowship,mordor`). The campaign doesn't use LTR cards.
 
 **Where this game differs from Magic:** each player has innate planeswalker-style abilities,
 granted by **emblems** in the command zone. Instead of loyalty, the abilities cost life, mana,
@@ -197,6 +220,15 @@ payments are sheets; "up to two targets" are picked in any order, with *Done* to
 your graveyard count opens your graveyard, with the abilities you can activate from it (it glows
 when there are some). The Ring-bearer wears the Ring, and the Ring's level is next to its
 player's card counts; a Saga shows its chapter; restricted mana shows as a wildcard pip.
+
+**The rares' choices:** a kind of counter, a card type for protection, a spell to cast for free
+(and its targets) are sheets; Mount Doom's "choose up to two creatures" and Mines of Moria's
+"exile three cards from your graveyard" are card grids like scry's. Cards you may play from exile
+light up your exile count (shown once anything is exiled), and a creature you may cast from the
+top of your library lights up your library count: tap either to see them and play them. Stun,
+hope, verse, burden and influence counters show as small badges, protection as *Pro* with the
+color's or card type's symbol, a goaded creature as *Goaded*, and a player with protection from
+everything has a gold ring around their portrait. Hybrid mana ({W/B}) is drawn as a split circle.
 
 **Symbols:** mana costs, {T}, card types, keyword abilities and set symbols (in their rarity's
 color) are drawn with the open-source [Mana](https://mana.andrewgioia.com) and
@@ -414,10 +446,13 @@ LTR needed more grammar in `tools/scryfall/rulesText.js` and `convert.js`:
 - **Other lines:** "Ward {N}", typecycling and landcycling ("Plainscycling {1}"), Sagas.
 
 Cards whose abilities are one of a kind get **per-card overrides** in
-`tools/scryfall/overrides.js` (126 of the 181 LTR cards): hand-written rules data, keyed by card
-name, in the format of `src/cards/cards.js`. The importer takes everything else (types, cost, art,
-rarity) from Scryfall as usual, and uses the override instead of parsing the rules text. Re-running
-the import keeps them.
+`tools/scryfall/overrides.js` (198 of the 253 LTR cards, every rare and mythic among them):
+hand-written rules data, keyed by card name, in the format of `src/cards/cards.js`. The importer
+takes everything else (types, cost, art, rarity) from Scryfall as usual, and uses the override
+instead of parsing the rules text; fields it doesn't read itself (`entersTappedUnless`,
+`entersWithCounters`, `cantBeCountered`, `chooseTwo`) are copied into the definition as they are.
+Re-running the import keeps them. Token art matching allows a legendary token with abilities of
+its own (Smaug).
 
 ## GitHub Pages
 
@@ -858,6 +893,18 @@ Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simul
   - Continuous effects apply in layer order (613): control, then types, then abilities, then
     power and toughness (setting base values before pumps and counters).
   - Replacement effects (614) for dying (exile it instead) and for +1/+1 counters and tokens.
+  - Protection (702.16): it can't be damaged, enchanted or equipped, blocked or targeted by
+    anything with the quality; for a player (702.16j), damage is prevented and they can't be
+    targeted.
+  - Keyword counters (122.1b) give their keyword; a stun counter (122.1d) is removed instead of
+    the permanent untapping.
+  - Extra turns (500.7, the most recent first) and additional combat phases (500.8).
+  - Goad (701.15): with two players, the creature attacks each combat if able until its goader's
+    next turn (the declaration starts with it, and it can't be left out).
+  - Casting from exile or a library's top with a permission, and without paying the mana cost
+    as an ability resolves (X is 0), with timing restrictions waived only for the latter.
+  - Copies (707.2): a token copying a card takes its definition, with the exceptions the effect
+    names.
 Cards are defined in `src/cards/cards.js` (by hand) and `src/cards/importedCards.js` (generated
 from Scryfall, see above): a mana cost, types, power and toughness for creatures, and activated
 abilities as data (`{ id, text, cost, effects, target?, timing? }`; the format is documented at

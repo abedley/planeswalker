@@ -285,8 +285,14 @@ function renderPlayers(state) {
       cardRow(player.graveyard, cardActions, 'Empty'),
       ...(player.exile.length ? [
         el('h3', { textContent: `Exile (${player.exile.length})` }),
-        cardRow(player.exile, () => [], 'Empty'),
+        cardRow(player.exile, cardActions, 'Empty', (card) => (card.mayPlay ? [`playable by ${card.mayPlay.playerId}`] : [])),
       ] : []),
+      // Cards this player may play from elsewhere: an opponent's exile (Shadow of the Enemy), the top of their library (Elven Chorus).
+      ...((() => {
+        const ids = new Set(actions.filter((a) => a.zone).map((a) => a.cardId));
+        const cards = [...state.players.filter((p) => p.id !== player.id).flatMap((p) => p.exile), ...player.library.slice(0, 1)].filter((c) => ids.has(c.id));
+        return cards.length ? [el('h3', { textContent: 'Playable from elsewhere' }), cardRow(cards, cardActions, 'None')] : [];
+      })()),
     ]);
   }));
 }
@@ -364,6 +370,17 @@ const CHOICE_PROMPTS = {
   [CHOICE.HAND_CARD]: 'choose a card from your hand.',
   [CHOICE.SCRY]: 'choose the cards to keep on top, in order (the rest go to the bottom)',
   [CHOICE.GRAVEYARD_CARDS]: 'choose cards from your graveyard',
+  [CHOICE.LOOK]: 'choose cards to take (the rest go to the bottom in a random order)',
+  [CHOICE.EXILE_FROM_HAND]: 'choose cards to exile from your hand',
+  [CHOICE.KEEP]: 'choose creatures to keep (the rest are destroyed)',
+  [CHOICE.HAND_CARDS]: 'choose creature cards to put onto the battlefield',
+  [CHOICE.EXILE_COST]: 'choose cards to exile from your graveyard (a cost)',
+  [CHOICE.COUNTER]: 'choose a kind of counter.',
+  [CHOICE.COUNTERS]: 'choose counters to move',
+  [CHOICE.SACRIFICE_ANY]: 'choose permanents to sacrifice',
+  [CHOICE.CARD_TYPE]: 'choose a card type to gain protection from.',
+  [CHOICE.CAST_FREE]: 'cast a spell without paying its mana cost?',
+  [CHOICE.CAST_FREE_VARIANT]: 'choose how to cast it.',
 };
 
 /** A pool, with mana that can be any color (or only some spells') after it. */
@@ -526,13 +543,22 @@ function describeCost(cost) {
 function actionLabel(action, card, state) {
   switch (action.type) {
     case ACTION.PASS_PRIORITY: return 'Pass priority';
-    case ACTION.PLAY_LAND: return 'Play';
+    case ACTION.PLAY_LAND: return action.zone ? `Play from ${action.zone}` : 'Play';
     case ACTION.CAST_SPELL: {
-      const mode = action.mode !== undefined ? ` (mode ${action.mode + 1}: ${card?.spell?.modes?.[action.mode]?.text ?? ''})` : '';
+      const modes = [action.mode].flat().filter((m) => m !== undefined);
+      const mode = modes.length ? ` (mode ${modes.map((m) => `${m + 1}: ${card?.spell?.modes?.[m]?.text ?? ''}`).join(' and ')})` : '';
       const x = action.x !== undefined ? ` with X=${action.x}` : '';
-      return `Cast ${formatMana(card?.manaCost)}${x}${mode}${targetLabel(action, state)}`;
+      const from = action.zone ? ` from ${action.zone}` : '';
+      return `Cast${from} ${formatMana(card?.manaCost)}${x}${mode}${targetLabel(action, state)}`;
     }
     case ACTION.CHOOSE:
+      if (state.pendingDecision.kind === CHOICE.CAST_FREE_VARIANT) {
+        const variant = state.pendingDecision.variants[Number(action.choice)];
+        return `Cast it${targetLabel(variant, state)}`;
+      }
+      if (state.pendingDecision.kind === CHOICE.PAY && String(action.choice).includes(':')) {
+        return `Sacrifice ${String(action.choice).split(':')[1].split(',').map((id) => describeId(id, state)).join(', ')}`;
+      }
       return typeof action.choice === 'string' && /^\d+(:|$)/.test(action.choice)
         ? `Pay: ${state.pendingDecision.costs?.[Number(action.choice.split(':')[0])] ? describeCost(state.pendingDecision.costs[Number(action.choice.split(':')[0])]) : action.choice}${action.choice.includes(':') ? ` (${action.choice.split(':')[1].split(',').map((id) => describeId(id, state)).join(', ')})` : ''}`
         : capitalizeWord(describeId(action.choice, state));

@@ -84,6 +84,8 @@ export class BoardView {
       h('span.count.hand-count', icon('hand'), h('b', '0')),
       h('span.count.lib-count', icon('library'), h('b', '0')),
       h('span.count.grave-count', icon('grave'), h('b', '0')),
+      // Exile: shown once something is there (cards may be played from it: Moria Marauder).
+      h('span.count.exile-count', { title: 'Exile' }, icon('exile'), h('b', '0')),
       // The Ring (701.54): how many of its abilities this player's Ring-bearer has; hidden until it tempts them.
       h('span.count.ring-count', { title: 'The Ring' }, icon('ring'), h('b', '0')));
     const abilities = h('div.abilities');
@@ -592,14 +594,17 @@ export class BoardView {
       if (changed && delay) setTimeout(() => { if (this.#state === state) show(); }, delay);
       else show();
       this.#lastLife[player.id] = player.life;
-      const [hand, lib, grave, ring] = parts.counts.querySelectorAll('b');
+      const [hand, lib, grave, exile, ring] = parts.counts.querySelectorAll('b');
       setText(hand, player.hand.length);
       setText(lib, player.library.length);
       setText(grave, player.graveyard.length);
+      setText(exile, player.exile.length);
+      toggle(exile.parentElement, 'on', player.exile.length > 0);
       const level = player.ring?.level ?? 0;
       setText(ring, level);
       toggle(ring.parentElement, 'on', level > 0);
       toggle(parts.avatar.parentElement, 'active', state.activePlayerId === player.id);
+      toggle(parts.avatar, 'protected', (state.temporaryEffects ?? []).some((e) => e.playerProtection && e.targetId === player.id));
       this.#renderAbilities(player, side);
     }
   }

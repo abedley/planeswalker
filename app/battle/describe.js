@@ -65,13 +65,24 @@ export function choiceLabel(state, decision, choice, me) {
   if (choice === 'decline') return decision.kind === CHOICE.OPTIONAL_COST ? 'Don\'t pay' : 'Don\'t';
   switch (decision.kind) {
     case CHOICE.MAY: return choice === 'yes' ? 'Yes' : 'No';
-    case CHOICE.PAY: return choice === 'pay' ? costWords(state, decision.cost, [], me) : decision.counterId ? 'Don\'t pay (it\'s countered)' : 'Don\'t pay';
+    case CHOICE.PAY:
+      // Ward—sacrifice a legend (Sauron, the Dark Lord): '0:<id>'.
+      if (String(choice).includes(':')) return costWords(state, decision.cost, String(choice).split(':')[1].split(','), me);
+      return choice === 'pay' ? costWords(state, decision.cost, [], me) : decision.counterId ? 'Don\'t pay (it\'s countered)' : 'Don\'t pay';
     case CHOICE.OPTIONAL_COST: {
       const [index, ids] = String(choice).split(':');
       return costWords(state, decision.costs[Number(index)], ids ? ids.split(',') : [], me);
     }
     case CHOICE.KEYWORD: return capitalize(choice);
+    case CHOICE.COUNTER: return `${capitalize(choice)} counter`;
+    case CHOICE.CARD_TYPE: return `Protection from ${choice === 'Sorcery' ? 'sorceries' : `${choice.toLowerCase()}s`}`;
     case CHOICE.CREATURE_TYPE: return choice;
+    case CHOICE.CAST_FREE_VARIANT: {
+      // How the free spell is cast: its targets.
+      const variant = decision.variants[Number(choice)];
+      const targets = (variant.targets ?? []).filter(Boolean).map((id) => nameOf(state, id, me));
+      return targets.length ? `Target ${targets.join(', ')}` : 'Cast it';
+    }
     default: {
       const card = decision.cards?.find((c) => c.id === choice) ?? findCard(state, choice);
       return card?.name ?? String(choice);
@@ -108,6 +119,15 @@ export function promptFor(state, me) {
         switch (decision.kind) {
           case CHOICE.SCRY: return `Scry ${decision.options.length}: tap the cards to keep on top, in order`;
           case CHOICE.SEARCH: return `Search your library: choose up to ${decision.max}`;
+          case CHOICE.LOOK:
+            return decision.destination === 'battlefield' ? 'Choose any artifacts and lands to put onto the battlefield'
+              : `Look at the top ${decision.looked.length}: you may take ${decision.max === 1 ? 'a card' : `up to ${decision.max}`}`;
+          case CHOICE.EXILE_FROM_HAND: return `Exile ${decision.min} card${decision.min > 1 ? 's' : ''} from your hand`;
+          case CHOICE.EXILE_COST: return `Exile ${decision.min} cards from your graveyard`;
+          case CHOICE.KEEP: return `Choose up to ${decision.max} creatures to keep: the rest are destroyed`;
+          case CHOICE.HAND_CARDS: return 'Put any creature cards onto the battlefield';
+          case CHOICE.COUNTERS: return 'Choose counters to move';
+          case CHOICE.SACRIFICE_ANY: return 'Sacrifice any number of lands';
           default: return 'Choose any number of cards';
         }
       default: return '';
@@ -139,6 +159,10 @@ function choosePrompt(decision) {
     case CHOICE.REVEALED_CARD: return 'Choose a card for them to discard';
     case CHOICE.KEYWORD: return `Choose the ability it gains${from}`;
     case CHOICE.MAY: return decision.text ?? `Do it?${from}`;
+    case CHOICE.COUNTER: return `Choose a counter${from}`;
+    case CHOICE.CARD_TYPE: return `Choose a card type to gain protection from${from}`;
+    case CHOICE.CAST_FREE: return `You may cast a spell without paying its mana cost${from}`;
+    case CHOICE.CAST_FREE_VARIANT: return `Choose its targets${from}`;
     case CHOICE.OPTIONAL_COST: return `Pay the cost?${from}`;
     case CHOICE.PAY: return decision.counterId ? `Pay for ward, or your spell is countered${from}` : `Pay, or else${from}`;
     case CHOICE.CREATURE_TYPE: return `Note a creature type${from}`;

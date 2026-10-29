@@ -27,7 +27,9 @@ export function playOptions(game, me) {
   const options = [];
   for (const action of state.validActions) {
     if (action.playerId === me && action.type === ACTION.PLAY_LAND) {
-      options.push({ kind: 'land', sourceId: action.cardId, variants: [action], targets: [] });
+      options.push({
+        kind: 'land', sourceId: action.cardId, variants: [action], targets: [], ...(action.zone ? { fromZone: action.zone } : {}),
+      });
     }
   }
   const player = state.players.find((p) => p.id === me);
@@ -42,8 +44,16 @@ export function playOptions(game, me) {
       if (option) options.push({ ...option, fromHand: true, text: ability.text });
     }
   }
+  // Spells from exile (Moria Marauder, Shadow of the Enemy) or the top of the library (Elven Chorus).
+  for (const { cardId, zone } of game.playableElsewhere(me)) {
+    const card = zone === 'library' ? player.library[0] : state.players.flatMap((p) => p.exile).find((c) => c.id === cardId);
+    if (!card || isLand(card)) continue;
+    const option = prepare(game, state, me, { kind: 'cast', cardId, targetId: null }, card.manaCost?.X);
+    if (option) options.push({ ...option, fromZone: zone });
+  }
   const sources = [...state.battlefield.filter((p) => p.controllerId === me), ...player.emblems];
   for (const source of sources) {
+    // Activated abilities, with any another permanent gives it (Elven Chorus's are mana abilities, paid automatically).
     for (const ability of source.abilities) {
       if (ability.isManaAbility) continue;
       const option = prepare(game, state, me, { kind: 'activate', cardId: source.id, abilityId: ability.id, targetId: null }, ability.cost.mana?.X);
@@ -109,7 +119,9 @@ function prepare(game, state, me, macro, hasX = false) {
  */
 export function nextChoice(variants, { interchangeable = false, picked = [] } = {}) {
   const distinct = (key) => [...new Set(variants.map(key))];
-  const modes = distinct((v) => v.mode);
+  // Two modes at once (Flame of Anor with a Wizard) are a list: compared by value.
+  const modeKey = (mode) => JSON.stringify(mode ?? null);
+  const modes = [...new Map(variants.map((v) => [modeKey(v.mode), v.mode])).values()];
   if (modes.length > 1) return { kind: 'mode', values: modes };
   const xs = distinct((v) => v.x);
   if (xs.length > 1) return { kind: 'x', values: xs.sort((a, b) => a - b) };
@@ -130,7 +142,7 @@ export function nextChoice(variants, { interchangeable = false, picked = [] } = 
 
 /** The variants that go with one value of a choice from nextChoice() (`picked`: targets picked before it). */
 export function narrow(variants, choice, value, picked = []) {
-  if (choice.kind === 'mode') return variants.filter((v) => v.mode === value);
+  if (choice.kind === 'mode') return variants.filter((v) => JSON.stringify(v.mode ?? null) === JSON.stringify(value ?? null));
   if (choice.kind === 'x') return variants.filter((v) => v.x === value);
   if (choice.kind === 'targets') {
     const chosen = (v) => (v.targets ?? []).filter(Boolean);

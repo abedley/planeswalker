@@ -350,6 +350,11 @@ export class Game extends EventEmitter {
 
   // Read-only views used by turn-structure skip rules.
   get turn() { return this.#turn; }
+
+  /** Cards `playerId` may play from exile or the top of their library now (for UIs): `[{ cardId, zone }]`. */
+  playableElsewhere(playerId) {
+    return this.#playableElsewhere(playerId).map(({ card, zone }) => ({ cardId: card.id, zone }));
+  }
   get combat() { return this.#combat; }
 
   /** 510.4: whether an attacking or blocking creature has first strike or double strike. */
@@ -1115,6 +1120,8 @@ export class Game extends EventEmitter {
    * must first choose a target for a triggered ability.
    */
   #givePriority(playerId) {
+    // Characteristics that count cards in graveyards (Glamdring) are brought up to date.
+    if (this.#battlefield.some((p) => this.#cardDefinitions[p.cardId].staticAbilities?.some((e) => e.per))) this.#applyContinuousEffects();
     // 117.5 / 704.3: state-based actions are checked before a player receives priority,
     // then triggered abilities are put on the stack (603.3).
     if (this.#checkStateBasedActions()) return false;

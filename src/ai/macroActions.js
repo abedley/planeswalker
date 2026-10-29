@@ -298,8 +298,14 @@ function costsOf(state, me, macro) {
   // {X}: the mana for the X the macro chose.
   const plusX = (cost, X) => (macro.x && X ? { ...cost, generic: (cost?.generic ?? 0) + X * macro.x } : cost);
   if (macro.kind === 'cast') {
-    const card = state.players.find((p) => p.id === me).hand.find((c) => c.id === macro.cardId);
-    return { manaCost: card ? plusX(castCost(state, me, card), card.manaCost?.X) ?? undefined : undefined, cost: card?.additionalCost ?? {} };
+    const player = state.players.find((p) => p.id === me);
+    // From the hand, or from exile (Moria Marauder) or the top of the library (Elven Chorus).
+    const card = player.hand.find((c) => c.id === macro.cardId)
+      ?? state.players.flatMap((p) => p.exile ?? []).find((c) => c.id === macro.cardId && c.mayPlay?.playerId === me)
+      ?? (player.library?.[0]?.id === macro.cardId ? player.library[0] : undefined);
+    // Shadow of the Enemy: "mana of any type can be spent to cast them".
+    const cost = card?.mayPlay?.anyMana ? { generic: manaValue(castCost(state, me, card) ?? {}) } : card && castCost(state, me, card);
+    return { manaCost: card ? plusX(cost, card.manaCost?.X) ?? undefined : undefined, cost: card?.additionalCost ?? {} };
   }
   const player = state.players.find((p) => p.id === me);
   const inHand = player.hand.find((c) => c.id === macro.cardId);

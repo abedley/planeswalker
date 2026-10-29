@@ -1193,3 +1193,16 @@ test('Shelob: a creature a Spider damaged comes back as a Food copy', () => {
   assert.ok(food && food.controllerId === 'p1');
   assert.deepEqual([food.types, food.subtypes], [['Artifact'], ['Food']]);
 });
+
+test("Glamdring's bonus follows the graveyard as spells resolve", () => {
+  const { game } = setup({ p1: ['glamdring', 'bear', 'salve', 'salve'], cards: ['glamdring'], freeAbilities: true });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'glamdring');
+  cast(game, 'p1', 'bear');
+  const bear = byCard(game, 'bear')[0];
+  activate(game, 'p1', byCard(game, 'glamdring')[0].id, { targets: [bear.id] });
+  resolveAll(game);
+  assert.equal(permanent(game, bear.id).power, 2);
+  cast(game, 'p1', 'salve');
+  assert.equal(permanent(game, bear.id).power, 3);
+});

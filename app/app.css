@@ -217,6 +217,13 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .ms-cost.ms-r { background: #e49977; }
 .ms-cost.ms-g { background: #a3c095; }
 .ms-cost.ms-c { background: #cbc2bf; }
+/* Hybrid mana ({W/B}): a split circle with each color's symbol in its half. */
+.ms-cost.ms-hybrid { position: relative; background: linear-gradient(135deg, var(--ha) 50%, var(--hb) 50%); }
+.ha-w { --ha: #f8f6d8; } .ha-u { --ha: #c1d7e9; } .ha-b { --ha: #bab1ab; } .ha-r { --ha: #e49977; } .ha-g { --ha: #a3c095; }
+.hb-w { --hb: #f8f6d8; } .hb-u { --hb: #c1d7e9; } .hb-b { --hb: #bab1ab; } .hb-r { --hb: #e49977; } .hb-g { --hb: #a3c095; }
+.ms-cost.ms-hybrid > .ms { position: absolute; font-size: .5em; }
+.ms-cost.ms-hybrid > .ms:first-child { top: .2em; left: .25em; }
+.ms-cost.ms-hybrid > .ms:last-child { bottom: .2em; right: .25em; }
 .ms-cost.ms-tap::before, .ms-cost.ms-untap::before { font-size: .78em; }
 .ss-common { color: #1a1718; text-shadow: 0 0 1px rgba(255, 255, 255, .7); }
 .ss-uncommon { color: #b6c0cc; text-shadow: 0 0 1px #000; }
@@ -313,6 +320,9 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 /* The Ring's level: shown once it has tempted the player. */
 .count.ring-count { display: none; color: var(--gold); }
 .count.ring-count.on { display: inline-flex; }
+.count.exile-count { display: none; }
+.pick-label { display: grid; place-items: center; aspect-ratio: 5 / 7; padding: 6px; border-radius: 8px; background: var(--panel, #22263a); color: #e8e3d3; font-size: 13px; text-align: center; text-transform: capitalize; }
+.count.exile-count.on, .count.exile-count.live { display: inline-flex; }
 .count b { color: #cfd5ea; font-weight: 600; }
 .bar.active .who .name { color: var(--gold); }
 
@@ -472,6 +482,12 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .rb.no-block, .rb.no-attack { background: rgba(150, 30, 34, .92); }
 .rb.unblockable { background: rgba(32, 78, 150, .92); }
 .rb.lure { background: rgba(176, 98, 18, .92); }
+.rb.protect { background: rgba(196, 170, 90, .95); color: #1a1408; }
+.counter-badges { position: absolute; left: 3px; bottom: 26px; display: flex; flex-direction: column; gap: 1px; z-index: 4; pointer-events: none; }
+.cb { padding: 0 4px; border-radius: 6px; font: 800 8.5px/12px var(--display); color: #fff; background: rgba(40, 40, 60, .9); border: 1px solid rgba(255, 255, 255, .35); }
+.cb-stun { background: rgba(70, 90, 160, .95); }
+/* The One Ring: a player with protection from everything. */
+.avatar.protected .crest { box-shadow: 0 0 0 3px var(--gold), 0 0 14px 4px rgba(233, 196, 106, .7); }
 /* Only this turn: from a spell or ability, not printed. */
 .rb.now { box-shadow: 0 0 0 1px var(--gold), 0 0 6px rgba(233, 196, 106, .7); }
 .board-face .kw { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 40% 30%, #3a3a46, #08080c); color: #fff; font-size: 10px; box-shadow: 0 0 0 1px rgba(233, 196, 106, .6), 0 1px 2px rgba(0, 0, 0, .7); }
@@ -901,4 +917,4 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 /* A revealed hand: the cards that can't be chosen are dimmed. */
 .mull-card.dim { opacity: .38; }
 /* Your graveyard has an ability you can use. */
-.count.grave-count.live { color: var(--gold); animation: glow 1.2s ease-in-out infinite; }
+.count.grave-count.live, .count.exile-count.live, .count.lib-count.live { color: var(--gold); animation: glow 1.2s ease-in-out infinite; }

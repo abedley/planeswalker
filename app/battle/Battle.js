@@ -280,7 +280,7 @@ export class Battle {
     const decision = state.pendingDecision;
     const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE);
     const cardOf = (id) => decision.cards?.find((c) => c.id === id) ?? findCard(state, id);
-    const showsCards = [CHOICE.REVEALED_CARD, CHOICE.GRAVEYARD_CARD, CHOICE.HAND_CARD].includes(decision.kind);
+    const showsCards = [CHOICE.REVEALED_CARD, CHOICE.GRAVEYARD_CARD, CHOICE.HAND_CARD, CHOICE.CAST_FREE].includes(decision.kind);
     // Choices that read the same (two Foods to sacrifice) are the same choice: list one.
     const byLabel = new Map();
     for (const action of mine) {
@@ -314,7 +314,9 @@ export class Battle {
   #chooseMany(state) {
     const decision = state.pendingDecision;
     const selected = [...decision.selected];
-    const cards = decision.options.map((id) => decision.cards?.find((c) => c.id === id) ?? findCard(state, id)).filter(Boolean);
+    // Cards (or permanents), or for Goldberry, counters ('+1/+1#2'), shown by name.
+    const cards = decision.options.map((id) => decision.cards?.find((c) => c.id === id) ?? findCard(state, id)
+      ?? { id, label: String(id).split('#')[0] });
     const scry = decision.kind === CHOICE.SCRY;
     const done = h('button.btn.primary', {}, 'Done');
     const tiles = cards.map((card) => {
@@ -326,9 +328,13 @@ export class Battle {
           else if (selected.length < decision.max) selected.push(card.id);
           update();
         },
-      }, fullCard(card, this.#app.definitions), badge);
+      }, card.label ? h('div.pick-label', `${card.label} counter`) : fullCard(card, this.#app.definitions), badge);
       return { card, tile, badge };
     });
+    const verb = {
+      [CHOICE.SEARCH]: 'Take', [CHOICE.LOOK]: 'Take', [CHOICE.KEEP]: 'Keep', [CHOICE.EXILE_COST]: 'Exile', [CHOICE.EXILE_FROM_HAND]: 'Exile',
+      [CHOICE.SACRIFICE_ANY]: 'Sacrifice', [CHOICE.HAND_CARDS]: 'Put', [CHOICE.COUNTERS]: 'Move',
+    }[decision.kind];
     const update = () => {
       for (const { card, tile, badge } of tiles) {
         const at = selected.indexOf(card.id);
@@ -336,7 +342,7 @@ export class Battle {
         badge.textContent = at < 0 ? (scry ? 'Bottom' : '') : scry ? `Top ${at + 1}` : '✓';
       }
       done.disabled = selected.length < decision.min;
-      done.textContent = scry ? 'Done' : `Take ${selected.length}`;
+      done.textContent = scry || !verb ? 'Done' : `${verb} ${selected.length}`;
     };
     update();
     const confirm = () => {
@@ -528,8 +534,12 @@ export class Battle {
       ctx.selectedHand = mode.zone === 'hand' ? mode.id : null;
     }
     this.#view.setInteraction(ctx);
-    // An ability usable from the graveyard lights up the graveyard's count.
-    this.#view.parts.me.counts.querySelector('.grave-count')?.classList.toggle('live', this.#options.some((o) => o.fromGraveyard));
+    // An ability usable from the graveyard lights up the graveyard's count; cards playable from exile or the top of
+    // the library light up those counts.
+    const counts = this.#view.parts.me.counts;
+    counts.querySelector('.grave-count')?.classList.toggle('live', this.#options.some((o) => o.fromGraveyard));
+    counts.querySelector('.exile-count')?.classList.toggle('live', this.#options.some((o) => o.fromZone === 'exile'));
+    counts.querySelector('.lib-count')?.classList.toggle('live', this.#options.some((o) => o.fromZone === 'library'));
     this.#syncPreview();
   }
 
@@ -614,7 +624,11 @@ export class Battle {
     const card = findCard(this.#state, option.sourceId);
     // The target kinds, once the mode is known: a spell's (or its mode's), or an ability's.
     const kinds = (mode) => {
-      if (option.kind === 'cast') return (mode !== undefined ? card?.spell?.modes?.[mode] : card?.spell)?.targets;
+      if (option.kind === 'cast') {
+        // Two modes at once: their targets one after the other.
+        if (Array.isArray(mode)) return mode.flatMap((m) => card?.spell?.modes?.[m]?.targets ?? (card?.spell?.modes?.[m]?.target ? [card.spell.modes[m].target] : []));
+        return (mode !== undefined ? card?.spell?.modes?.[mode] : card?.spell)?.targets;
+      }
       const ability = [...(card?.abilities ?? []), ...(card?.graveyardAbilities ?? []), ...(card?.handAbilities ?? [])].find((a) => a.id === option.abilityId);
       return ability?.targets;
     };
@@ -653,7 +667,9 @@ export class Battle {
       this.#app.overlays.sheet({
         title: card?.name ?? 'Choose one',
         text: 'Choose one.',
-        options: choice.values.map((mode, i) => ({ label: inlineSymbols(modes[mode]?.text ?? `Mode ${mode + 1}`), primary: i === 0, onPick: () => next(mode) })),
+        options: choice.values.map((mode, i) => ({
+          label: inlineSymbols([mode].flat().map((m) => modes[m]?.text ?? `Mode ${m + 1}`).join(' And: ')), primary: i === 0, onPick: () => next(mode),
+        })),
         onCancel: () => this.#cancel(),
       });
       return;
@@ -845,6 +861,8 @@ export class Battle {
     const land = node.closest('.land-group');
     if (land) return { kind: 'land', id: land.dataset.land };
     if (node.closest('.bar-me .grave-count')) return { kind: 'graveyard' };
+    if (node.closest('.bar-me .exile-count')) return { kind: 'zone', zone: 'exile' };
+    if (node.closest('.bar-me .lib-count')) return { kind: 'zone', zone: 'library' };
     const player = node.closest('[data-player]');
     if (player) return { kind: 'player', id: player.dataset.player };
     return { kind: 'empty' };
@@ -1032,6 +1050,10 @@ export class Battle {
       this.#showGraveyard();
       return;
     }
+    if (target.kind === 'zone') {
+      this.#showZone(target.zone);
+      return;
+    }
     if (!this.#interactive) {
       // Cards stay inspectable while the opponent acts.
       if (target.kind === 'card' && target.zone === 'hand') this.#inspectHand(target);
@@ -1205,6 +1227,33 @@ export class Battle {
         primary: i === 0,
         onPick: () => this.#begin(option),
       })),
+      cancel: 'Close',
+    });
+  }
+
+  /**
+   * Your exile, or what you may see of your library (its top card, with Elven Chorus), with what you may play
+   * from there: Moria Marauder's card this turn, Shadow of the Enemy's creatures, Elven Chorus's creature on top.
+   */
+  #showZone(zone) {
+    const state = this.#state;
+    const me = state.players.find((p) => p.id === this.#me);
+    const options = this.#interactive ? this.#options.filter((o) => o.fromZone === zone) : [];
+    const playable = options.map((o) => findCard(state, o.sourceId) ?? (zone === 'library' ? me.library[0] : null)).filter(Boolean);
+    const cards = zone === 'exile' ? [...me.exile, ...playable.filter((c) => !me.exile.includes(c))] : playable;
+    if (zone === 'library' && cards.length === 0) return;
+    this.#app.overlays.sheet({
+      title: zone === 'exile' ? `Exile (${me.exile.length})` : 'Top of your library',
+      body: cards.length ? h('div.mull-hand', [...cards].reverse().map((card) => h('div.mull-card', fullCard(card, this.#app.definitions)))) : null,
+      text: cards.length ? null : 'Empty.',
+      options: options.map((option, i) => {
+        const card = findCard(state, option.sourceId) ?? me.library[0];
+        return {
+          label: `${option.kind === 'land' ? 'Play' : 'Cast'} ${card?.name ?? ''}`,
+          primary: i === 0,
+          onPick: () => (option.kind === 'land' ? this.#dispatch(option.variants[0]) : this.#begin(option)),
+        };
+      }),
       cancel: 'Close',
     });
   }

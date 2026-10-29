@@ -317,3 +317,37 @@ test('the main button and prompt for choices made while something resolves', () 
   assert.equal(promptFor(at({ type: DECISION.CHOOSE, kind: CHOICE.RING_BEARER, options: ['x'] }), 'p1'), 'The Ring tempts you: choose your Ring-bearer');
   assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.SCRY, options: ['x', 'y'] }), 'p1'), 'Scry 2: tap the cards to keep on top, in order');
 });
+
+test('two modes at once are one choice among the modes; prompts for the rares\' choices', () => {
+  const variants = [{ mode: 0, targets: ['a'] }, { mode: [0, 2], targets: ['a', 'b'] }, { mode: [0, 2], targets: ['a', 'c'] }];
+  const choice = nextChoice(variants);
+  assert.deepEqual(choice, { kind: 'mode', values: [0, [0, 2]] });
+  assert.equal(narrow(variants, choice, [0, 2]).length, 2);
+  const base = { players: [{ id: 'p1', hand: [] }], stack: [], battlefield: [], combat: { attackers: [] }, status: 'inProgress' };
+  const at = (decision) => ({ ...base, pendingDecision: { playerId: 'p1', ...decision }, validActions: [] });
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.KEEP, options: ['x', 'y', 'z'], max: 2 }), 'p1'),
+    'Choose up to 2 creatures to keep: the rest are destroyed');
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.EXILE_COST, options: ['x', 'y', 'z'], min: 3, max: 3 }), 'p1'),
+    'Exile 3 cards from your graveyard');
+  assert.deepEqual(primaryAction(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.KEEP, options: [] }), 'p1'), { label: 'Keep', reopen: true });
+});
+
+test('cards that may be cast from exile are play options', () => {
+  const marauderCards = {
+    ...cards,
+    bearFree: { id: 'bearFree', name: 'Bear', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 2, toughness: 2 },
+    exileTop: {
+      id: 'exileTop', name: 'Exile Top', manaCost: {}, types: [CARD_TYPE.SORCERY], effects: [{ type: EFFECT.EXILE_TOP }, { type: EFFECT.MAY_PLAY_FROM_EXILE, turn: 'this' }],
+    },
+  };
+  const deck = ['exileTop', ...Array(6).fill('forest'), 'bearFree', ...Array(32).fill('forest')];
+  const game = new Game({ players, cards: marauderCards, shuffleLibraries: false, emblems: { p1: [], p2: [] }, decks: { p1: deck, p2: deck } });
+  game.start();
+  for (let i = 0; i < 2; i++) game.dispatch(passPriority(game.getState().priorityPlayerId));
+  game.dispatch({ type: ACTION.CAST_SPELL, playerId: 'p1', cardId: handCard(game, 'exileTop').id });
+  game.dispatch(passPriority('p1'));
+  game.dispatch(passPriority('p2'));
+  const option = playOptions(game, 'p1').find((o) => o.fromZone === 'exile');
+  assert.ok(option, 'the Bear in exile');
+  assert.deepEqual(perform(game, 'p1', option, option.variants[0]), { ok: true });
+});

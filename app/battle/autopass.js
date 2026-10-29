@@ -95,7 +95,7 @@ export function primaryAction(state, me) {
         if ([CHOICE.DISCARD, CHOICE.BOTTOM_FROM_HAND].includes(decision.kind)) return { label: decision.kind === CHOICE.DISCARD ? 'Discard 1' : 'Bottom 1' };
         return { label: 'Choose', reopen: true };
       case DECISION.CHOOSE_MANY:
-        return { label: decision.kind === CHOICE.SCRY ? 'Scry' : 'Choose', reopen: true };
+        return { label: { [CHOICE.SCRY]: 'Scry', [CHOICE.KEEP]: 'Keep', [CHOICE.EXILE_COST]: 'Exile', [CHOICE.EXILE_FROM_HAND]: 'Exile', [CHOICE.SACRIFICE_ANY]: 'Sacrifice' }[decision.kind] ?? 'Choose', reopen: true };
       default:
         return { label: 'Choose' };
     }

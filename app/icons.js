@@ -45,6 +45,8 @@ const PATHS = {
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
   flag: 'M5 21V3m0 1h12l-3 4 3 4H5',
   zzz: 'M4 5h6L4 12h6M13 12h5l-5 6h5',
+  // The One Ring: a band seen at an angle.
+  ring: 'M12 6c5 0 9 2.7 9 6s-4 6-9 6-9-2.7-9-6 4-6 9-6zm0 3c-3.6 0-6 1.4-6 3s2.4 3 6 3 6-1.4 6-3-2.4-3-6-3z',
   // A hooded figure: the portrait of someone without art.
   hooded: 'M12 2C8 2 5.5 5 5.5 9.5c0 2.6.8 4.6 1.8 6L4 22h16l-3.3-6.5c1-1.4 1.8-3.4 1.8-6C18.5 5 16 2 12 2zm0 5.5c1.9 0 3.2 1.7 3.2 4 0 1.6-.7 3-1.6 3.8L12 17l-1.6-1.7c-.9-.8-1.6-2.2-1.6-3.8 0-2.3 1.3-4 3.2-4z',
 };

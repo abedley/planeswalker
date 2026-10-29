@@ -7,7 +7,9 @@
  * is passed automatically when there's nothing sensible to do (autopass.js), and
  * every play is one tap: mana is tapped for you (play.js).
  */
-import { Game, GAME_STATUS, DECISION, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
+import {
+  Game, GAME_STATUS, DECISION, CHOICE, OPENING_HAND_SIZE,
+} from '../../src/engine/Game.js';
 import { ACTION } from '../../src/engine/actions.js';
 import { actingPlayerId } from '../../src/ai/simulate.js';
 import { createCpuController } from '../../src/campaign/cpu.js';
@@ -19,16 +21,19 @@ import { icon } from '../icons.js';
 import { crest, preloadImages } from '../art.js';
 import { BoardView } from './BoardView.js';
 import {
-  playOptions, variantsFor, secondTargets, perform,
+  playOptions, perform, nextChoice, narrow, interchangeableTargets,
 } from './play.js';
 import { shouldAutoPass, primaryAction } from './autopass.js';
-import { promptFor, variantLabel, nameOf, findCard } from './describe.js';
+import {
+  promptFor, variantLabel, nameOf, findCard, choiceLabel, BOARD_CHOICES, HAND_CHOICES,
+} from './describe.js';
 import { damagePlans } from './damage.js';
 import { PlayHistory, historyView } from './history.js';
 import { boardCard, fullCard, typeLine } from '../cardView.js';
 import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
 import { isLand, castsAtInstantSpeed, TARGET } from '../../src/cards/cards.js';
+import { formatMana } from '../../src/engine/mana.js';
 
 const LONG_PRESS_MS = 430;
 
@@ -225,9 +230,132 @@ export class Battle {
       case DECISION.LEGEND_RULE: this.#keepLegend(state); break;
       case DECISION.CHOOSE_TARGETS:
         if (decision.targetKind === TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD) this.#chooseGraveyardCard(state);
+        else if (this.#severalTargets(state)) this.#chooseTriggerTargets(state);
         break;
+      case DECISION.CHOOSE:
+        if (BOARD_CHOICES.has(decision.kind)) this.#chooseOnBoard(state);
+        else if (!HAND_CHOICES.has(decision.kind)) this.#chooseOnSheet(state);
+        break;
+      case DECISION.CHOOSE_MANY: this.#chooseMany(state); break;
       default: break;
     }
+  }
+
+  /** Whether a triggered ability's targets are several (or "up to"): picked one at a time. */
+  #severalTargets(state) {
+    return state.validActions.some((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE_TARGETS
+      && (a.targets.length > 1 || a.targets.includes(null)));
+  }
+
+  /** A triggered ability with several targets: each tapped on the board in turn. */
+  #chooseTriggerTargets(state) {
+    const actions = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE_TARGETS);
+    const decline = actions.find((a) => a.targets.length === 0);
+    this.#step(actions.filter((a) => a.targets.length), {
+      sourceId: state.pendingDecision.sourceId,
+      kinds: () => state.pendingDecision.targetKinds,
+      cancel: false,
+      finish: (action) => this.#dispatch(action),
+      decline: decline ? () => this.#dispatch(decline) : null,
+    });
+  }
+
+  /** A permanent to choose on the board: the Ring-bearer, an Army, what to sacrifice. */
+  #chooseOnBoard(state) {
+    const decision = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE);
+    this.#mode = {
+      kind: 'targeting',
+      targets: new Set(mine.map((a) => a.choice)),
+      sourceId: decision.sourceId,
+      prompt: promptFor(state, this.#me),
+      cancel: false,
+      pick: (id) => this.#dispatch(mine.find((a) => a.choice === id)),
+    };
+    this.#refresh();
+  }
+
+  /** A choice of words or cards on a sheet: yes or no, a cost, a keyword, a card from a revealed hand… */
+  #chooseOnSheet(state) {
+    const decision = state.pendingDecision;
+    const mine = state.validActions.filter((a) => a.playerId === this.#me && a.type === ACTION.CHOOSE);
+    const cardOf = (id) => decision.cards?.find((c) => c.id === id) ?? findCard(state, id);
+    const showsCards = [CHOICE.REVEALED_CARD, CHOICE.GRAVEYARD_CARD, CHOICE.HAND_CARD].includes(decision.kind);
+    // Choices that read the same (two Foods to sacrifice) are the same choice: list one.
+    const byLabel = new Map();
+    for (const action of mine) {
+      const label = choiceLabel(state, decision, action.choice, this.#me);
+      if (!byLabel.has(label)) byLabel.set(label, action);
+    }
+    this.#app.overlays.sheet({
+      title: decision.sourceName ?? 'Choose',
+      text: promptFor(state, this.#me),
+      // A revealed hand shows every card, those that can't be chosen too.
+      body: decision.kind === CHOICE.REVEALED_CARD
+        ? h('div.mull-hand', decision.cards.map((card) => h('div.mull-card', { class: decision.options.includes(card.id) ? '' : 'dim' }, fullCard(card, this.#app.definitions))))
+        : null,
+      options: [...byLabel].map(([label, action], i) => {
+        const card = showsCards && typeof action.choice === 'string' && action.choice !== 'decline' ? cardOf(action.choice) : null;
+        return {
+          label: card ? h('div.dmg-row', h('div.dmg-card', fullCard(card, this.#app.definitions))) : inlineSymbols(label),
+          sub: card ? label : null,
+          primary: i === 0,
+          onPick: () => this.#dispatch(action),
+        };
+      }),
+      cancel: null,
+    });
+  }
+
+  /**
+   * Choosing several cards (scrying, searching, The Bath Song): tap cards in and out, in
+   * order, then confirm; the engine is told the whole choice at once.
+   */
+  #chooseMany(state) {
+    const decision = state.pendingDecision;
+    const selected = [...decision.selected];
+    const cards = decision.options.map((id) => decision.cards?.find((c) => c.id === id) ?? findCard(state, id)).filter(Boolean);
+    const scry = decision.kind === CHOICE.SCRY;
+    const done = h('button.btn.primary', {}, 'Done');
+    const tiles = cards.map((card) => {
+      const badge = h('span.pick-n');
+      const tile = h('button.pick-card', {
+        onclick: () => {
+          const at = selected.indexOf(card.id);
+          if (at >= 0) selected.splice(at, 1);
+          else if (selected.length < decision.max) selected.push(card.id);
+          update();
+        },
+      }, fullCard(card, this.#app.definitions), badge);
+      return { card, tile, badge };
+    });
+    const update = () => {
+      for (const { card, tile, badge } of tiles) {
+        const at = selected.indexOf(card.id);
+        tile.classList.toggle('chosen', at >= 0);
+        badge.textContent = at < 0 ? (scry ? 'Bottom' : '') : scry ? `Top ${at + 1}` : '✓';
+      }
+      done.disabled = selected.length < decision.min;
+      done.textContent = scry ? 'Done' : `Take ${selected.length}`;
+    };
+    update();
+    const confirm = () => {
+      // The engine's selection starts empty; toggle in the chosen cards in order, then confirm.
+      for (const id of decision.selected.filter((c) => !selected.includes(c))) this.#game.dispatch({ type: ACTION.TOGGLE_CHOICE, playerId: this.#me, choice: id });
+      for (const id of selected.filter((c) => !decision.selected.includes(c))) this.#game.dispatch({ type: ACTION.TOGGLE_CHOICE, playerId: this.#me, choice: id });
+      this.#dispatch({ type: ACTION.CONFIRM_CHOICE, playerId: this.#me });
+    };
+    done.addEventListener('click', () => {
+      this.#app.overlays.close();
+      confirm();
+    });
+    this.#app.overlays.sheet({
+      title: decision.sourceName ?? 'Choose',
+      text: promptFor(state, this.#me),
+      body: h('div.pick-grid', tiles.map((t) => t.tile), h('div.pick-done', done)),
+      options: [],
+      cancel: null,
+    });
   }
 
   /** "Choose one —" (700.2): a sheet of the modes; a mode with a target then asks for it on the board. */
@@ -368,7 +496,10 @@ export class Battle {
       ctx.targetable = mode.targets;
       ctx.prompt = mode.prompt;
       ctx.selected = mode.sourceId;
-      ctx.main = { label: mode.cancel === false ? '…' : 'Cancel', disabled: mode.cancel === false };
+      ctx.main = mode.skip ? { label: mode.skipLabel, disabled: false }
+        : { label: mode.cancel === false ? '…' : 'Cancel', disabled: mode.cancel === false };
+    } else if (decision?.type === DECISION.CHOOSE && HAND_CHOICES.has(decision.kind)) {
+      ctx.playable = new Set(mine.filter((a) => a.type === ACTION.CHOOSE).map((a) => a.choice));
     } else if (decision?.type === DECISION.DECLARE_ATTACKERS) {
       ctx.canAttack = new Set(mine.filter((a) => a.type === ACTION.TOGGLE_ATTACKER).map((a) => a.cardId));
       ctx.main.go = decision.attackers.length > 0;
@@ -397,6 +528,8 @@ export class Battle {
       ctx.selectedHand = mode.zone === 'hand' ? mode.id : null;
     }
     this.#view.setInteraction(ctx);
+    // An ability usable from the graveyard lights up the graveyard's count.
+    this.#view.parts.me.counts.querySelector('.grave-count')?.classList.toggle('live', this.#options.some((o) => o.fromGraveyard));
     this.#syncPreview();
   }
 
@@ -435,7 +568,9 @@ export class Battle {
     if (!options.length) return [{ label: this.#whyNot(card), disabled: true }];
     const labelOf = (option) => {
       if (option.fromHand) return inlineSymbols(option.text);
-      return option.kind === 'land' ? 'Play land' : option.targets.length ? 'Cast → target' : 'Cast';
+      if (option.kind === 'land') return 'Play land';
+      const xs = new Set(option.variants.map((v) => v.x).filter((x) => x !== undefined));
+      return `Cast${xs.size ? ` (X up to ${Math.max(...xs)})` : ''}${option.targets.length ? ' → target' : ''}`;
     };
     return options.map((option, i) => ({ label: labelOf(option), primary: i === 0, onPick: () => this.#interactive && this.#begin(option) }));
   }
@@ -466,52 +601,102 @@ export class Battle {
     return result;
   }
 
-  /** Starts a play: choose its target if it has one, then any remaining choice. */
+  /** Starts a play: its mode, X and targets (one at a time), then any remaining choice. */
   #begin(option) {
     this.#view.showPreview(null);
-    if (option.targets.length) {
-      this.#mode = {
-        kind: 'targeting',
-        targets: new Set(option.targets),
-        sourceId: option.sourceId,
-        // The source shows itself (the lifted card, the lit ability button); the lane is narrow.
-        prompt: 'Choose a target',
-        pick: (targetId) => this.#commit(option, targetId),
-      };
-      this.#app.sound('select');
-      this.#refresh();
-      return;
-    }
+    this.#app.sound('select');
     this.#commit(option, null);
   }
 
-  #commit(option, targetId, secondId = null) {
-    let variants = variantsFor(option, targetId);
-    // A second target (a fight): tap it on the board.
-    const seconds = secondTargets(variants);
-    if (seconds.length > 1 && secondId === null) {
-      this.#mode = {
-        kind: 'targeting',
-        targets: new Set(seconds),
-        sourceId: targetId,
-        prompt: 'Choose the second target',
-        pick: (id) => this.#commit(option, targetId, id),
-      };
-      this.#refresh();
-      return;
-    }
-    if (secondId !== null) variants = variants.filter((v) => v.targets[1] === secondId);
-    const go = (variant) => {
-      this.#mode = { kind: 'idle' };
-      this.#view.showPreview(null);
-      clearTimeout(this.#autoTimer);
-      const result = perform(this.#game, this.#me, option, variant);
-      if (!result.ok) this.#view.toast(result.reason ?? 'Not allowed');
+  /** Carries on with a play once its first target (`targetId`, or null) is known, e.g. dropped on. */
+  #commit(option, targetId) {
+    const variants = targetId === null ? option.variants : option.variants.filter((v) => v.targets?.includes(targetId));
+    const card = findCard(this.#state, option.sourceId);
+    // The target kinds, once the mode is known: a spell's (or its mode's), or an ability's.
+    const kinds = (mode) => {
+      if (option.kind === 'cast') return (mode !== undefined ? card?.spell?.modes?.[mode] : card?.spell)?.targets;
+      const ability = [...(card?.abilities ?? []), ...(card?.graveyardAbilities ?? []), ...(card?.handAbilities ?? [])].find((a) => a.id === option.abilityId);
+      return ability?.targets;
     };
-    if (variants.length === 1) {
-      go(variants[0]);
+    this.#step(variants, {
+      sourceId: option.sourceId,
+      card,
+      kinds,
+      picked: targetId === null ? [] : [targetId],
+      finish: (variant) => this.#pay(option, variant),
+      payChoices: (left) => this.#chooseCostVariant(option, left),
+    });
+  }
+
+  /**
+   * Narrows `variants` (of a play, or a decision's actions) one open choice at a time
+   * (nextChoice): the mode and X on a sheet, each target on the board (with the main
+   * button for "no target", when one may be left out). When one variant is left (or
+   * only cost choices), `finish` (or `payChoices`) is called.
+   */
+  #step(variants, {
+    sourceId, card = null, kinds = () => null, finish, payChoices = null, cancel = true, decline = null, picked = [],
+  }) {
+    const interchangeable = interchangeableTargets(kinds(variants[0]?.mode) ?? []);
+    const choice = nextChoice(variants, { interchangeable, picked });
+    const next = (value) => this.#step(narrow(variants, choice, value, picked), {
+      sourceId, card, kinds, finish, payChoices, cancel, decline: null,
+      picked: (choice.kind === 'target' || choice.kind === 'targets') && value ? [...picked, value] : picked,
+    });
+    if (!choice) {
+      if (variants.length === 1 || !payChoices) finish(variants[0]);
+      else payChoices(variants);
       return;
     }
+    if (choice.kind === 'mode') {
+      const modes = card?.spell?.modes ?? [];
+      this.#app.overlays.sheet({
+        title: card?.name ?? 'Choose one',
+        text: 'Choose one.',
+        options: choice.values.map((mode, i) => ({ label: inlineSymbols(modes[mode]?.text ?? `Mode ${mode + 1}`), primary: i === 0, onPick: () => next(mode) })),
+        onCancel: () => this.#cancel(),
+      });
+      return;
+    }
+    if (choice.kind === 'x') {
+      this.#app.overlays.sheet({
+        title: card?.name ?? 'Choose X',
+        text: 'Choose X.',
+        // The biggest first: it's usually the point.
+        options: [...choice.values].reverse().map((x, i) => ({ label: `X = ${x}`, primary: i === 0, onPick: () => next(x) })),
+        onCancel: () => this.#cancel(),
+      });
+      return;
+    }
+    const targets = choice.values.filter((v) => v !== null);
+    const optional = choice.values.includes(null);
+    const first = choice.kind === 'targets' ? picked.length === 0 : choice.index === 0;
+    const nth = first ? 'a target' : 'another target';
+    this.#mode = {
+      kind: 'targeting',
+      targets: new Set(targets),
+      sourceId,
+      picked,
+      prompt: optional ? `Choose ${nth}, or none` : `Choose ${nth}`,
+      cancel,
+      pick: (id) => next(id),
+      ...(optional ? { skip: () => next(null), skipLabel: first ? 'No target' : 'Done' } : {}),
+      ...(decline && !optional ? { skip: decline, skipLabel: 'Don\'t' } : {}),
+    };
+    this.#refresh();
+  }
+
+  /** Carries out a play's chosen variant (tapping mana as the dry run did). */
+  #pay(option, variant) {
+    this.#mode = { kind: 'idle' };
+    this.#view.showPreview(null);
+    clearTimeout(this.#autoTimer);
+    const result = perform(this.#game, this.#me, option, variant);
+    if (!result.ok) this.#view.toast(result.reason ?? 'Not allowed');
+  }
+
+  /** The cost choices left (which creature to sacrifice, …): a sheet, unless they all read the same. */
+  #chooseCostVariant(option, variants) {
     const state = this.#state;
     // Choices that read the same (two identical tokens) are the same choice: list one.
     const byLabel = new Map();
@@ -520,12 +705,12 @@ export class Battle {
       if (!byLabel.has(label)) byLabel.set(label, variant);
     }
     if (byLabel.size === 1) {
-      go(variants[0]);
+      this.#pay(option, variants[0]);
       return;
     }
     this.#app.overlays.sheet({
       title: 'Choose how to pay',
-      options: [...byLabel].map(([label, variant]) => ({ label: inlineSymbols(label), onPick: () => go(variant) })),
+      options: [...byLabel].map(([label, variant]) => ({ label: inlineSymbols(label), onPick: () => this.#pay(option, variant) })),
       onCancel: () => this.#cancel(),
     });
   }
@@ -659,6 +844,7 @@ export class Battle {
     if (card) return { kind: 'card', id: card.dataset.id, zone: card.dataset.zone, el: card, stackId: card.dataset.stackId };
     const land = node.closest('.land-group');
     if (land) return { kind: 'land', id: land.dataset.land };
+    if (node.closest('.bar-me .grave-count')) return { kind: 'graveyard' };
     const player = node.closest('[data-player]');
     if (player) return { kind: 'player', id: player.dataset.player };
     return { kind: 'empty' };
@@ -842,6 +1028,10 @@ export class Battle {
       this.#showAbility(target);
       return;
     }
+    if (target.kind === 'graveyard') {
+      this.#showGraveyard();
+      return;
+    }
     if (!this.#interactive) {
       // Cards stay inspectable while the opponent acts.
       if (target.kind === 'card' && target.zone === 'hand') this.#inspectHand(target);
@@ -872,6 +1062,13 @@ export class Battle {
       this.#select(target, card, [{ label: 'Put on bottom', onPick: () => this.#dispatch(action) }]);
       return;
     }
+    if (decision?.type === DECISION.CHOOSE && HAND_CHOICES.has(decision.kind) && target.kind === 'card' && target.zone === 'hand') {
+      // A card from your hand: to discard (a loot), or to put on the bottom.
+      const card = findCard(state, target.id);
+      const action = mine.find((a) => a.type === ACTION.CHOOSE && a.choice === target.id);
+      if (action) this.#select(target, card, [{ label: decision.kind === CHOICE.DISCARD ? 'Discard' : 'Put on bottom', danger: decision.kind === CHOICE.DISCARD, onPick: () => this.#dispatch(action) }]);
+      return;
+    }
     if (decision?.type === DECISION.DISCARD_TO_HAND_SIZE && target.kind === 'card' && target.zone === 'hand') {
       const card = findCard(state, target.id);
       const action = mine.find((a) => a.type === ACTION.DISCARD && a.cardId === target.id);
@@ -896,7 +1093,14 @@ export class Battle {
   }
 
   #pressMain() {
+    if (this.#mode.skip) {
+      const { skip } = this.#mode;
+      this.#mode = { kind: 'idle' };
+      skip();
+      return;
+    }
     if (this.#mode.kind !== 'idle') {
+      if (this.#mode.cancel === false) return;
       this.#cancel();
       return;
     }
@@ -984,6 +1188,25 @@ export class Battle {
     this.#app.sound('select');
     this.#view.showPreview(card, actions);
     this.#refresh();
+  }
+
+  /** Your graveyard: its cards, and the abilities that work from there (Gollum, Patient Plotter). */
+  #showGraveyard() {
+    const state = this.#state;
+    const { graveyard } = state.players.find((p) => p.id === this.#me);
+    const options = this.#interactive ? this.#options.filter((o) => o.fromGraveyard) : [];
+    this.#app.overlays.sheet({
+      title: `Graveyard (${graveyard.length})`,
+      body: graveyard.length ? h('div.mull-hand', [...graveyard].reverse().map((card) => h('div.mull-card', fullCard(card, this.#app.definitions)))) : null,
+      text: graveyard.length ? null : 'Empty.',
+      options: options.map((option, i) => ({
+        label: inlineSymbols(option.text),
+        sub: findCard(state, option.sourceId)?.name,
+        primary: i === 0,
+        onPick: () => this.#begin(option),
+      })),
+      cancel: 'Close',
+    });
   }
 
   #whyNot(card) {

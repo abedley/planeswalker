@@ -6,7 +6,8 @@ import { personInfo } from './common.js';
 
 /**
  * A fight. `mode: 'run'` plays the run's current encounter and records the
- * result; `mode: 'quick'` plays `quick: { run, ... }` without saving anything.
+ * result; `mode: 'quick'` plays `quick: { run, game? }` without saving anything,
+ * where `game` overrides the game's options (decks, cards, shuffling), for testing.
  */
 export function battleScreen(app, { mode = 'run', quick = null }) {
   const { content } = app;
@@ -15,7 +16,8 @@ export function battleScreen(app, { mode = 'run', quick = null }) {
     queueMicrotask(() => app.go('title'));
     return { el: h('div') };
   }
-  const setup = matchSetup(run, content, { playerName: content.planeswalkers[run.planeswalkerId].name });
+  const base = matchSetup(run, content, { playerName: content.planeswalkers[run.planeswalkerId].name });
+  const setup = quick?.game ? { ...base, game: { ...base.game, ...quick.game, cards: { ...base.game.cards, ...quick.game.cards } } } : base;
   const opponent = content.opponents[run.encounter.opponentId];
   const tier = currentTier(run, content);
 

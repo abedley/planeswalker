@@ -18,15 +18,17 @@ import { DECISION } from '../engine/Game.js';
 import { PHASE } from '../engine/turnStructure.js';
 import { canPayMana } from '../engine/mana.js';
 import {
-  isCreature, isLand, isAura, isCurse, hasKeyword, castsAtInstantSpeed, KEYWORD, EFFECT,
+  isCreature, isLand, isAura, isCurse, hasKeyword, castsAtInstantSpeed, KEYWORD, EFFECT, targetList, withX, manaValue,
 } from '../cards/cards.js';
 import {
   planAttack, planBlocks, chooseBlocks, creatureValue, curseValue, BLOCKING,
 } from './combat.js';
-import { candidateTargets, scoreEffects, costScore, wastedDamage } from './scoring.js';
+import {
+  candidateTargets, scoreEffects, costScore, wastedDamage, targetCombos, sacrificeCandidates,
+} from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import {
-  bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost,
+  bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost, manaAvailable,
 } from './manaPlanning.js';
 
 /** How many targets per spell or ability are worth considering (the best-scoring ones). */
@@ -134,8 +136,9 @@ function priorityMacros(state, me, mine) {
     .map((t) => t.id);
 
   // A "sacrifice a ..." cost needs something to sacrifice.
-  const canSacrifice = (cost, sourceId) => !cost?.sacrifice || state.battlefield.some((p) => p.controllerId === me
-    && p.id !== sourceId && (cost.sacrifice !== 'creature' || isCreature(p)));
+  const canSacrifice = (cost, sourceId) => !cost?.sacrifice || sacrificeCandidates(state, me, cost.sacrifice, sourceId)
+    .some((p) => p.id !== sourceId);
+  const available = manaAvailable(player.manaPool, sources);
   for (const card of player.hand) {
     // Cycling and other abilities that work from the hand.
     for (const ability of card.handAbilities ?? []) {
@@ -145,15 +148,18 @@ function priorityMacros(state, me, mine) {
     }
     if (isLand(card) || !(castsAtInstantSpeed(card) || sorceryTiming) || !affordable(castCost(state, me, card))) continue;
     if (!canSacrifice(card.additionalCost, card.id)) continue;
-    if (card.spell?.targets) {
-      // Several targets (a fight): the best few combinations.
-      let combos = [[]];
-      for (const kind of card.spell.targets) {
-        combos = combos.flatMap((chosen) => candidateTargets(state, me, kind).filter((id) => !chosen.includes(id)).map((id) => [...chosen, id]));
+    if (card.spell?.targets || card.spell?.modes || card.manaCost?.X) {
+      // Several targets (a fight, "up to two"), modes, or {X} (as big as we can pay): the best few combinations.
+      const x = card.manaCost?.X ? Math.max(0, available - manaValue(castCost(state, me, card) ?? {})) : undefined;
+      const modes = card.spell.modes ? card.spell.modes.map((m, i) => [i, m]) : [[undefined, card.spell]];
+      for (const [mode, holder] of modes) {
+        targetCombos(state, me, targetList(holder), card.id, 200, x)
+          .map((targets) => ({ targets, score: scoreEffects(state, me, holder.effects, targets, card.id, { x }) }))
+          .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
+          .forEach(({ targets }) => macros.push(keyed({
+            kind: 'cast', cardId: card.id, targetId: null, targets, ...(mode !== undefined ? { mode } : {}), ...(x !== undefined ? { x } : {}),
+          })));
       }
-      combos.map((targets) => ({ targets, score: scoreEffects(state, me, card.spell.effects, targets, card.id) }))
-        .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
-        .forEach(({ targets }) => macros.push(keyed({ kind: 'cast', cardId: card.id, targetId: null, targets })));
       continue;
     }
     let targets = [null];
@@ -171,12 +177,26 @@ function priorityMacros(state, me, mine) {
   }
 
   const permanents = state.battlefield.filter((p) => p.controllerId === me);
-  for (const source of [...permanents, ...player.emblems]) {
+  const graveyard = player.graveyard.filter((c) => c.graveyardAbilities);
+  for (const source of [...permanents, ...player.emblems, ...graveyard]) {
     if (source.emblemId && source.activationsThisTurn >= source.activationsPerTurn) continue;
-    for (const ability of source.abilities ?? []) {
+    for (const ability of (graveyard.includes(source) ? source.graveyardAbilities : source.abilities) ?? []) {
       if (ability.isManaAbility || (ability.timing === 'sorcery' && !sorceryTiming)) continue;
       if (ability.cost.tap && (source.tapped || (isCreature(source) && source.summoningSick && !hasKeyword(source, KEYWORD.HASTE)))) continue;
-      if (!affordable(ability.cost.mana) || !canSacrifice(ability.cost, null)) continue;
+      if (!affordable(ability.cost.mana) || !canSacrifice(ability.cost, source.id)) continue;
+      if (ability.targets || ability.cost.mana?.X) {
+        // Several targets, or {X}: the best few combinations, for each X we could pay.
+        const max = ability.cost.mana?.X ? Math.max(0, available - manaValue(ability.cost.mana)) : 0;
+        for (let x = 0; x <= max; x++) {
+          targetCombos(state, me, targetList(ability), source.id, 200, x)
+            .map((targets) => ({ targets, score: scoreEffects(state, me, ability.effects, targets, source.id, { x }) }))
+            .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
+            .forEach(({ targets }) => macros.push(keyed({
+              kind: 'activate', cardId: source.id, abilityId: ability.id, targetId: null, targets, ...(ability.cost.mana?.X ? { x } : {}),
+            })));
+        }
+        continue;
+      }
       let targets = [null];
       if (ability.effects.some((e) => e.type === EFFECT.ATTACH)) {
         targets = permanents.filter((p) => isCreature(p) && p.id !== source.attachedTo)
@@ -256,7 +276,8 @@ function payAndAct(state, me, mine, macro) {
   const type = macro.kind === 'cast' ? ACTION.CAST_SPELL : ACTION.ACTIVATE_ABILITY;
   const matches = mine.filter((a) => a.type === type && a.cardId === macro.cardId
     && (macro.kind === 'cast' || a.abilityId === macro.abilityId)
-    && (macro.targets ? a.targets?.join() === macro.targets.join() : macro.targetId === null || a.targets?.[0] === macro.targetId));
+    && (macro.mode === undefined || a.mode === macro.mode) && (macro.x === undefined || a.x === macro.x)
+    && (macro.targets ? (a.targets ?? []).join() === macro.targets.join() : macro.targetId === null || a.targets?.[0] === macro.targetId));
   const player = state.players.find((p) => p.id === me);
   const { manaCost, cost } = costsOf(state, me, macro);
   if (matches.length) {
@@ -272,15 +293,19 @@ function payAndAct(state, me, mine, macro) {
 }
 
 function costsOf(state, me, macro) {
+  // {X}: the mana for the X the macro chose.
+  const plusX = (cost, X) => (macro.x && X ? { ...cost, generic: (cost?.generic ?? 0) + X * macro.x } : cost);
   if (macro.kind === 'cast') {
     const card = state.players.find((p) => p.id === me).hand.find((c) => c.id === macro.cardId);
-    return { manaCost: card ? castCost(state, me, card) ?? undefined : undefined, cost: card?.additionalCost ?? {} };
+    return { manaCost: card ? plusX(castCost(state, me, card), card.manaCost?.X) ?? undefined : undefined, cost: card?.additionalCost ?? {} };
   }
   const player = state.players.find((p) => p.id === me);
   const inHand = player.hand.find((c) => c.id === macro.cardId);
-  const source = state.battlefield.find((p) => p.id === macro.cardId) ?? player.emblems.find((e) => e.id === macro.cardId) ?? inHand;
-  const ability = (source === inHand ? source?.handAbilities : source?.abilities)?.find((a) => a.id === macro.abilityId);
-  return ability ? { manaCost: ability.cost.mana ?? {}, cost: ability.cost } : { manaCost: undefined, cost: {} };
+  const inGraveyard = player.graveyard.find((c) => c.id === macro.cardId);
+  const source = state.battlefield.find((p) => p.id === macro.cardId) ?? player.emblems.find((e) => e.id === macro.cardId) ?? inHand ?? inGraveyard;
+  const abilities = source === inHand ? source?.handAbilities : source === inGraveyard ? source?.graveyardAbilities : source?.abilities;
+  const ability = abilities?.find((a) => a.id === macro.abilityId);
+  return ability ? { manaCost: withX(ability.cost.mana, macro.x ?? 0) ?? {}, cost: ability.cost } : { manaCost: undefined, cost: {} };
 }
 
 /**

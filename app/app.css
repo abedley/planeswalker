@@ -310,6 +310,9 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .who .name { font: 700 15px/1.15 var(--display); white-space: nowrap; overflow: hidden; color: #efe7d0; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
 .counts { display: flex; gap: 6px; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .count { display: inline-flex; align-items: center; gap: 2px; }
+/* The Ring's level: shown once it has tempted the player. */
+.count.ring-count { display: none; color: var(--gold); }
+.count.ring-count.on { display: inline-flex; }
 .count b { color: #cfd5ea; font-weight: 600; }
 .bar.active .who .name { color: var(--gold); }
 
@@ -412,10 +415,15 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .land-group.spent { opacity: .55; }
 .pool { display: flex; }
 .pool .pips { font-size: 13px; animation: glow 1.2s ease-in-out infinite; }
+/* Mana that can be spent as any color: a rainbow pip with its amount. */
+.pip-any { display: inline-grid; place-items: center; min-width: 15px; height: 15px; margin-left: 2px; padding: 0 3px; border-radius: 8px; background: conic-gradient(#f8f0d0, #4a8fd8, #2a2230, #d8452e, #3d8a4a, #f8f0d0); font: 800 9.5px var(--display); color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; box-shadow: 0 0 0 1px #0c0b0f; animation: glow 1.2s ease-in-out infinite; }
 .perms { display: flex; gap: 4px; margin-left: auto; min-width: 0; }
 .chip-face { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; padding: 2px; background: linear-gradient(160deg, var(--c), var(--c2)); box-shadow: 0 0 0 1px #0c0b0f, 0 0 0 2px rgba(233, 196, 106, .55), 0 2px 4px rgba(0, 0, 0, .5); }
 .chip-face .art { border-radius: 50%; height: 100%; box-shadow: none; }
 .chip-face .gen-glyph { width: 60%; height: 60%; }
+/* A Saga's chapter (its lore counters), on its chip. */
+.chip-face { position: relative; }
+.chip-lore { position: absolute; right: 0; bottom: 0; min-width: 14px; padding: 0 2px; border-radius: 6px; background: #3b2a12; border: 1px solid var(--gold); font: 800 8px/12px var(--display); color: var(--gold); text-align: center; }
 .card.z-perms { position: relative; width: 30px; height: 30px; transition: rotate .2s var(--ease); }
 .card.z-perms.tapped { rotate: 30deg; opacity: .65; }
 .card.z-perms.attached .chip-face { box-shadow: 0 0 0 1px var(--gold2), 0 2px 4px rgba(0, 0, 0, .5); }
@@ -487,6 +495,9 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .stat.up { color: #b9ffc1; }
 .stat.down, .stat.hurt { color: #ffc0b8; }
 .stat.tough.hurt { background: radial-gradient(circle at 40% 28%, #ff7a7a, #b12a32 55%, #5a0a10); }
+/* The Ring-bearer (701.54a): a gold ring on the creature's art, top left. */
+.ring-bearer { position: absolute; top: 4px; left: 4px; z-index: 4; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c8, #e9c46a 45%, #8a6115); box-shadow: 0 0 0 1px #0c0b0f, 0 0 8px rgba(233, 196, 106, .85); color: #3a2706; }
+.ring-bearer svg { width: 13px; height: 13px; }
 .counter { position: absolute; top: 5px; right: 5px; z-index: 4; padding: 0 4px; border-radius: 8px; background: #1e6a35; border: 1px solid #8fe39a; font: 800 10.5px var(--display); color: #eaffee; box-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
 .attach { position: absolute; left: 50%; bottom: -7px; z-index: 4; transform: translateX(-50%); display: flex; gap: 2px; }
 .attach .tab { width: 15px; height: 15px; border-radius: 4px; background: linear-gradient(var(--c), var(--c2)); display: grid; place-items: center; font-size: 10px; color: var(--t); box-shadow: 0 0 0 1px #0c0b0f, 0 1px 3px rgba(0, 0, 0, .6); }
@@ -877,3 +888,17 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .mull-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0 12px; }
 .mull-card { width: 74px; height: 104px; flex: none; }
 .turn-badge.pending { visibility: hidden; }
+
+/* Choosing several cards (scrying, searching): tap them in and out, in order. */
+.pick-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 6px 0 4px; }
+.pick-card { position: relative; width: 92px; padding: 0; border: 0; background: none; border-radius: 9px; transition: transform .12s; }
+.pick-card .card-face { width: 92px; }
+.pick-card.chosen { transform: translateY(-4px); box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(233, 196, 106, .7); }
+.pick-n { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); padding: 1px 6px; border-radius: 8px; background: #241d14; border: 1px solid #6b5a3a; font: 800 9.5px var(--ui); color: var(--muted); white-space: nowrap; }
+.pick-n:empty { display: none; }
+.pick-card.chosen .pick-n { background: var(--gold); border-color: var(--gold); color: #241d14; }
+.pick-done { flex-basis: 100%; display: flex; justify-content: center; margin-top: 10px; }
+/* A revealed hand: the cards that can't be chosen are dimmed. */
+.mull-card.dim { opacity: .38; }
+/* Your graveyard has an ability you can use. */
+.count.grave-count.live { color: var(--gold); animation: glow 1.2s ease-in-out infinite; }

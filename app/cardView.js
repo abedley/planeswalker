@@ -30,7 +30,7 @@ export function rulesText(card) {
 }
 
 const KEYWORDS = new Set(['flying', 'first strike', 'double strike', 'deathtouch', 'lifelink', 'trample', 'menace',
-  'reach', 'vigilance', 'haste', 'defender']);
+  'reach', 'vigilance', 'haste', 'defender', 'indestructible', 'hexproof', 'ward']);
 
 /** Keyword ability symbols (at most four). */
 export function keywordIcons(keywords = []) {
@@ -61,6 +61,12 @@ const RESTRICTIONS = [
   ["can't be blocked except by flyers", 'Flyers only', 'unblockable'],
   ["can't be blocked by power 2 or less", 'Power 3+ only', 'unblockable'],
   ["can't be blocked by more than one creature", 'One blocker', 'unblockable'],
+  ["can't be blocked except by three or more creatures", '3+ blockers', 'unblockable'],
+  // The Ring, level 1: the Ring-bearer.
+  ["can't be blocked by creatures with greater power", 'No bigger blockers', 'unblockable'],
+  // Bewitching Leechcraft; Bill the Pony.
+  ['untaps only by removing a +1/+1 counter', 'Stays tapped', 'no-attack'],
+  ['assigns combat damage equal to its toughness', 'Hits with toughness', 'lure'],
   // Blocking requirements (509.1c).
   ['must be blocked', 'Block me', 'lure'],
   ['all creatures able to block it do so', 'Lure', 'lure'],
@@ -83,16 +89,20 @@ export function restrictionBadges(card, attachments = []) {
 
 /** What changes how a permanent looks; its board element is redrawn only when this changes. */
 export function boardSignature(p, extra = '') {
-  return [p.power, p.toughness, p.damage, JSON.stringify(p.counters ?? {}), (p.keywords ?? []).join(), p.base?.power, p.base?.toughness, extra].join('|');
+  return [p.power, p.toughness, p.damage, JSON.stringify(p.counters ?? {}), (p.keywords ?? []).join(), p.base?.power, p.base?.toughness,
+    (p.types ?? []).join(), extra].join('|');
 }
 
-/** A creature on the battlefield: art, keywords and blocking restrictions, power/toughness, damage and counters. */
-export function boardCard(permanent, definitions, { attachments = [] } = {}) {
+/**
+ * A creature on the battlefield: art, keywords and blocking restrictions, power/toughness,
+ * damage and +1/+1 counters, and the Ring if it's its player's Ring-bearer (`ringBearer`).
+ */
+export function boardCard(permanent, definitions, { attachments = [], ringBearer = false } = {}) {
   const card = presentationOf(permanent, definitions);
   const powerClass = card.base && card.power > card.base.power ? 'up' : card.base && card.power < card.base.power ? 'down' : '';
   const toughness = card.toughness - (card.damage ?? 0);
   const toughnessClass = card.damage ? 'hurt' : card.base && card.toughness > card.base.toughness ? 'up' : '';
-  const counters = Object.values(card.counters ?? {}).reduce((sum, n) => sum + n, 0);
+  const counters = card.counters?.['+1/+1'] ?? 0;
   return h(`div.board-face.f-${frameOf(card)}`,
     cardArt(card),
     // Without real art, cards would look alike: name them.
@@ -101,14 +111,18 @@ export function boardCard(permanent, definitions, { attachments = [] } = {}) {
     restrictionBadges(card, attachments),
     attachments.length ? h('div.attach', attachments.map((a) => h(`span.tab.f-${frameOf(a)}`, icon(a.types.includes('Artifact') ? 'artifact' : 'enchantment')))) : null,
     counters ? h('div.counter', `+${counters}`) : null,
+    ringBearer ? h('div.ring-bearer', { title: 'Ring-bearer' }, icon('ring')) : null,
     h('div.stat.power', { class: powerClass }, String(card.power)),
     h('div.stat.tough', { class: toughnessClass }, String(toughness)));
 }
 
-/** A small permanent (artifact, enchantment, token) as a round chip. */
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+/** A small permanent (artifact, enchantment, token) as a round chip; a Saga shows its chapter (714.2). */
 export function chipFace(permanent, definitions) {
   const card = presentationOf(permanent, definitions);
-  return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card));
+  const lore = permanent.counters?.lore ?? 0;
+  return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card), lore ? h('div.chip-lore', ROMAN[lore] ?? String(lore)) : null);
 }
 
 export const cardBack = () => h('div.card-back', h('div.back-oval', h('div.back-sigil', icon('star'))));

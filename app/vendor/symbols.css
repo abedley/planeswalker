@@ -64,7 +64,11 @@
 .ms-ability-vigilance::before { content: "\e968"; }
 .ms-ability-haste::before { content: "\e953"; }
 .ms-ability-defender::before { content: "\e94c"; }
+.ms-ability-indestructible::before { content: "\e95a"; }
+.ms-ability-hexproof::before { content: "\e954"; }
+.ms-ability-ward::before { content: "\e992"; }
 .ss-m19::before { content: "\e941"; }
 .ss-m20::before { content: "\e95d"; }
 .ss-m21::before { content: "\e960"; }
 .ss-fdn::before { content: "\e9d8"; }
+.ss-ltr::before { content: "\e9af"; }

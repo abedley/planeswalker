@@ -12,6 +12,7 @@ import { ACTION } from '../../src/engine/actions.js';
 import { isLand } from '../../src/cards/cards.js';
 import { nextAction } from '../../src/ai/macroActions.js';
 import { actingPlayerId } from '../../src/ai/simulate.js';
+import { manaSources, chooseManaAction } from '../../src/ai/manaPlanning.js';
 
 /**
  * Everything `me` can start doing, when they have priority: `[{ kind, sourceId,
@@ -32,7 +33,7 @@ export function playOptions(game, me) {
   const player = state.players.find((p) => p.id === me);
   for (const card of player.hand) {
     if (!isLand(card)) {
-      const option = prepare(game, state, me, { kind: 'cast', cardId: card.id, targetId: null });
+      const option = prepare(game, state, me, { kind: 'cast', cardId: card.id, targetId: null }, card.manaCost?.X);
       if (option) options.push(option);
     }
     // Abilities that work from the hand: cycling.
@@ -45,8 +46,15 @@ export function playOptions(game, me) {
   for (const source of sources) {
     for (const ability of source.abilities) {
       if (ability.isManaAbility) continue;
-      const option = prepare(game, state, me, { kind: 'activate', cardId: source.id, abilityId: ability.id, targetId: null });
+      const option = prepare(game, state, me, { kind: 'activate', cardId: source.id, abilityId: ability.id, targetId: null }, ability.cost.mana?.X);
       if (option) options.push(option);
+    }
+  }
+  // Abilities that work from the graveyard (Gollum, Patient Plotter).
+  for (const card of player.graveyard) {
+    for (const ability of card.graveyardAbilities ?? []) {
+      const option = prepare(game, state, me, { kind: 'activate', cardId: card.id, abilityId: ability.id, targetId: null }, ability.cost.mana?.X);
+      if (option) options.push({ ...option, fromGraveyard: true, text: ability.text });
     }
   }
   return options;
@@ -62,22 +70,77 @@ function option(macro, variants) {
     sourceId: macro.cardId,
     ...(macro.abilityId ? { abilityId: macro.abilityId } : {}),
     variants,
-    targets: [...new Set(variants.map((v) => v.targets?.[0]).filter((t) => t !== undefined))],
+    // Everything it could target, in any of its target slots.
+    targets: [...new Set(variants.flatMap((v) => v.targets ?? []).filter(Boolean))],
   };
 }
 
-/** The option for a cast or activation, if its cost can be paid; dry-runs the mana on a clone. */
-function prepare(game, state, me, macro) {
+/**
+ * The option for a cast or activation, if its cost can be paid; dry-runs the mana on a
+ * clone. With {X} (`hasX`), every mana source is tapped in the dry run, so each X that
+ * could be paid is offered.
+ */
+function prepare(game, state, me, macro, hasX = false) {
   let step = nextAction(state, me, macro);
   if (!step) return null;
-  if (step.done) return option(macro, matching(state, me, macro));
+  if (step.done && !hasX) return option(macro, matching(state, me, macro));
   const sim = game.clone();
   for (let i = 0; i < 30 && step && !step.done; i++) {
     sim.applyTrusted(step.action);
     step = nextAction(sim.peekState(), me, macro);
   }
-  return step?.done ? option(macro, matching(sim.peekState(), me, macro)) : null;
+  if (!step?.done) return null;
+  for (let i = 0; hasX && i < 30; i++) {
+    const simState = sim.peekState();
+    const sources = manaSources(simState, simState.validActions.filter((a) => a.playerId === me)).filter((s) => !s.sacrifices);
+    if (!sources.length) break;
+    sim.applyTrusted(chooseManaAction(sources, {}));
+  }
+  return option(macro, matching(sim.peekState(), me, macro));
 }
+
+/**
+ * The choices still open among some variants of a play (or a decision's actions), one
+ * step at a time: `{ kind: 'mode' | 'x' | 'target' | 'targets', index?, values }` for the
+ * first that has more than one value, or null when none is left (only cost choices, if any).
+ * With `interchangeable` targets ("up to two target creatures"), they're picked as a set,
+ * in any order (`kind: 'targets'`, `picked` so far, null meaning "no more"); otherwise each
+ * position in turn (`kind: 'target'`, null meaning "none").
+ */
+export function nextChoice(variants, { interchangeable = false, picked = [] } = {}) {
+  const distinct = (key) => [...new Set(variants.map(key))];
+  const modes = distinct((v) => v.mode);
+  if (modes.length > 1) return { kind: 'mode', values: modes };
+  const xs = distinct((v) => v.x);
+  if (xs.length > 1) return { kind: 'x', values: xs.sort((a, b) => a - b) };
+  if (interchangeable) {
+    const chosen = (v) => (v.targets ?? []).filter(Boolean);
+    const values = [...new Set(variants.flatMap(chosen))].filter((id) => !picked.includes(id));
+    const canStop = variants.some((v) => chosen(v).length === picked.length);
+    if (values.length === 0 || (values.length === 1 && !canStop && variants.length === 1)) return null;
+    return { kind: 'targets', values: canStop ? [...values, null] : values };
+  }
+  const length = Math.max(0, ...variants.map((v) => v.targets?.length ?? 0));
+  for (let index = 0; index < length; index++) {
+    const values = distinct((v) => v.targets?.[index] ?? null);
+    if (values.length > 1) return { kind: 'target', index, values };
+  }
+  return null;
+}
+
+/** The variants that go with one value of a choice from nextChoice() (`picked`: targets picked before it). */
+export function narrow(variants, choice, value, picked = []) {
+  if (choice.kind === 'mode') return variants.filter((v) => v.mode === value);
+  if (choice.kind === 'x') return variants.filter((v) => v.x === value);
+  if (choice.kind === 'targets') {
+    const chosen = (v) => (v.targets ?? []).filter(Boolean);
+    return value === null ? variants.filter((v) => chosen(v).length === picked.length) : variants.filter((v) => chosen(v).includes(value));
+  }
+  return variants.filter((v) => (v.targets?.[choice.index] ?? null) === value);
+}
+
+/** Whether target kinds are all the same, so their order doesn't matter ("up to two target creatures"). */
+export const interchangeableTargets = (kinds = []) => kinds.length > 1 && kinds.every((k) => JSON.stringify(k) === JSON.stringify(kinds[0]));
 
 /** The variants of an option for one target (`null` for an untargeted one). */
 export const variantsFor = (option, targetId = null) => option.variants
@@ -96,7 +159,14 @@ export const secondTargets = (variants) => [...new Set(variants.map((v) => v.tar
 export function perform(game, me, option, variant) {
   if (option.kind === 'land') return game.dispatch(variant);
   const macro = {
-    kind: option.kind, cardId: option.sourceId, abilityId: option.abilityId, targetId: variant.targets?.[0] ?? null,
+    kind: option.kind,
+    cardId: option.sourceId,
+    abilityId: option.abilityId,
+    targetId: null,
+    // Exactly this variant: its targets (all of them), mode and X.
+    targets: variant.targets ?? [],
+    ...(variant.mode !== undefined ? { mode: variant.mode } : {}),
+    ...(variant.x !== undefined ? { x: variant.x } : {}),
   };
   for (let i = 0; i < 30; i++) {
     const state = game.peekState();

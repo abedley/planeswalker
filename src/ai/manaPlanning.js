@@ -60,6 +60,11 @@ export function neededColors(cost, pool) {
     const missing = (cost?.[type] ?? 0) - pool[type];
     if (missing > 0) needed[type] = missing;
   }
+  // A hybrid symbol the pool can't pay wants any of its colors.
+  for (const colors of cost?.hybrid ?? []) {
+    if (colors.some((c) => pool[c] > 0)) continue;
+    for (const c of colors) needed[c] = (needed[c] ?? 0) + 1;
+  }
   return needed;
 }
 
@@ -69,6 +74,14 @@ export const manaAvailable = (pool, sources) => manaPoolTotal(pool) + sources.re
 /** Whether the pool plus the untapped sources could pay a cost (approximately, per color). */
 export function canReach(cost, pool, sources) {
   if (manaValue(cost) > manaAvailable(pool, sources)) return false;
+  // Hybrid symbols ({W/B}): enough mana of any of their colors, from the pool or the sources.
+  const hybrid = cost?.hybrid ?? [];
+  if (hybrid.length) {
+    const colors = new Set(hybrid.flat());
+    const have = [...colors].reduce((sum, c) => sum + (pool[c] ?? 0), 0)
+      + sources.filter((s) => [...colors].some((c) => s.colors.has(c))).reduce((sum, s) => sum + (s.amount ?? 1), 0);
+    if (have < hybrid.length) return false;
+  }
   return Object.entries(neededColors(cost, pool))
     .every(([type, n]) => sources.filter((s) => s.colors.has(type)).reduce((sum, s) => sum + (s.amount ?? 1), 0) >= n);
 }
@@ -81,6 +94,7 @@ export const castCost = (state, me, card) => spellCost(card, { battlefield: stat
  * lands to creatures and anything to sacrificing a Treasure.
  */
 export function chooseManaAction(sources, needed) {
+  if (!sources.length) return null;
   // Sources that make several mana come after those making one, so less goes to waste.
   const rank = (source) => (source.sacrifices ? 10 : 0) + (source.creature ? 1 : 0) + ((source.amount ?? 1) > 1 ? 2 : 0);
   const wanted = Object.keys(needed);

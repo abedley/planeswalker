@@ -8,7 +8,7 @@ import {
 import { CHOICE } from '../src/engine/Game.js';
 import { choose, toggleChoice, confirmChoice } from '../src/engine/actions.js';
 import {
-  setup, state, player, permanent, named, byCard, inHand, decision, ok, passRound, resolveAll, advanceTo, cast, actionFor, activate,
+  setup, state, player, permanent, named, byCard, inHand, decision, ok, passRound, resolveAll, advanceTo, cast, actionFor, activate, untilDecision,
 } from './helpers/ltrGame.js';
 
 const main = (turn = 1) => ({ turn, phase: PHASE.PRECOMBAT_MAIN });
@@ -633,4 +633,396 @@ test('games with the new state survive a serialize round trip', () => {
   const copy = Game.deserialize(game.serialize());
   assert.deepEqual(copy.getState().battlefield, state(game).battlefield);
   assert.deepEqual(game.clone().getState().players, state(game).players);
+});
+
+// Wave B: counters, extra turns and combats, protection, and other contained rules.
+
+test('Arwen, Mortal Queen: an indestructible counter to spend; lifelink counters are keywords', () => {
+  const { game } = setup({ p1: ['arwenMortalQueen', 'bear'], cards: ['arwenMortalQueen'], freeAbilities: true });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'arwenMortalQueen');
+  cast(game, 'p1', 'bear');
+  const arwen = byCard(game, 'arwenMortalQueen')[0];
+  assert.ok(arwen.keywords.includes(KEYWORD.INDESTRUCTIBLE), 'an indestructible counter');
+  const bear = byCard(game, 'bear')[0];
+  activate(game, 'p1', arwen.id, { targets: [bear.id] });
+  resolveAll(game);
+  const after = permanent(game, arwen.id);
+  assert.ok(!after.counters[COUNTER.INDESTRUCTIBLE]);
+  assert.ok(after.keywords.includes(KEYWORD.LIFELINK) && after.power === 3);
+  const b = permanent(game, bear.id);
+  assert.ok(b.keywords.includes(KEYWORD.LIFELINK) && b.keywords.includes(KEYWORD.INDESTRUCTIBLE) && b.power === 3);
+  assert.equal(actionFor(game, ACTION.ACTIVATE_ABILITY, { cardId: arwen.id }), undefined, 'no counter left');
+});
+
+test('Aragorn, Company Leader: a chosen counter, copied onto another creature', () => {
+  const { game } = setup({ p1: ['aragornCompanyLeader', 'bear', 'birthdayEscape'], cards: ['aragornCompanyLeader', 'birthdayEscape'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'aragornCompanyLeader');
+  cast(game, 'p1', 'bear');
+  const bear = byCard(game, 'bear')[0];
+  cast(game, 'p1', 'birthdayEscape');
+  ok(game, choose('p1', bear.id));
+  resolveAll(game);
+  assert.equal(decision(game).kind, CHOICE.COUNTER);
+  ok(game, choose('p1', COUNTER.DEATHTOUCH));
+  resolveAll(game);
+  if (decision(game)?.type === DECISION.CHOOSE_TARGETS) ok(game, chooseTargets('p1', [bear.id]));
+  resolveAll(game);
+  assert.ok(byCard(game, 'aragornCompanyLeader')[0].keywords.includes(KEYWORD.DEATHTOUCH));
+  assert.ok(permanent(game, bear.id).keywords.includes(KEYWORD.DEATHTOUCH));
+});
+
+test('Scroll of Isildur: stun counters keep creatures tapped through untaps', () => {
+  const { game } = setup({ p1: ['scrollOfIsildur'], p2: ['bear', 'orc'], cards: ['scrollOfIsildur'] });
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'bear');
+  cast(game, 'p2', 'orc');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'scrollOfIsildur');
+  resolveAll(game);
+  advanceTo(game, main(5));
+  // II: advanceTo picked the first targets: both creatures, tapped and stunned.
+  const tapped = () => state(game).battlefield.filter((p) => p.controllerId === 'p2' && p.tapped && p.types.includes('Creature'));
+  assert.equal(tapped().length, 2);
+  assert.ok(tapped().every((p) => p.counters[COUNTER.STUN] === 1));
+  advanceTo(game, main(6));
+  assert.equal(tapped().length, 2, 'the stun counters came off instead');
+  assert.ok(tapped().every((p) => !p.counters[COUNTER.STUN]));
+  const hand = player(game, 'p1').hand.length;
+  advanceTo(game, main(7));
+  // III: a card for each tapped creature p2 controls (still tapped: the stun counters kept them so).
+  assert.equal(player(game, 'p1').hand.length, hand + 1 + 2);
+});
+
+test('The Watcher in the Water: enters tapped with nine stun counters; Tentacles on opponents\' turns', () => {
+  const { game } = setup({ p1: ['theWatcherInTheWater'], cards: ['theWatcherInTheWater'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'theWatcherInTheWater');
+  const watcher = byCard(game, 'theWatcherInTheWater')[0];
+  assert.ok(watcher.tapped);
+  assert.equal(watcher.counters[COUNTER.STUN], 9);
+  advanceTo(game, main(3));
+  assert.equal(permanent(game, watcher.id).counters[COUNTER.STUN], 8);
+});
+
+test('Borne Upon a Wind: sorceries and creatures at instant speed this turn', () => {
+  const { game } = setup({ p1: ['borneUponAWind', 'bear'], cards: ['borneUponAWind'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'borneUponAWind');
+  advanceTo(game, { turn: 1, phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT });
+  assert.ok(state(game).validActions.some((a) => a.type === ACTION.CAST_SPELL && a.cardId === inHand(game, 'p1', 'bear')));
+});
+
+test('Elrond, Master of Healing: counters on as many creatures as cards scried', () => {
+  const { game } = setup({ p1: ['elrondMasterOfHealing', 'bear', 'orc', 'galadhrimGuide'], cards: ['elrondMasterOfHealing', 'galadhrimGuide'] });
+  advanceTo(game, main(1));
+  for (const id of ['elrondMasterOfHealing', 'bear', 'orc', 'galadhrimGuide']) cast(game, 'p1', id);
+  ok(game, confirmChoice('p1'));
+  resolveAll(game);
+  const d = decision(game);
+  assert.equal(d.targetKinds.length, 2, 'scry 2: up to two targets');
+  ok(game, chooseTargets('p1', [byCard(game, 'bear')[0].id, byCard(game, 'orc')[0].id]));
+  resolveAll(game);
+  assert.equal(byCard(game, 'bear')[0].counters[COUNTER.PLUS_ONE], 1);
+  assert.equal(byCard(game, 'orc')[0].counters[COUNTER.PLUS_ONE], 1);
+});
+
+test('Fall of Cair Andros amasses the excess of noncombat damage', () => {
+  const { game } = setup({ p1: ['fallOfCairAndros', 'shock'], p2: ['orc'], cards: ['fallOfCairAndros'] });
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'orc');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'fallOfCairAndros');
+  cast(game, 'p1', 'shock', { targets: [byCard(game, 'orc')[0].id] });
+  assert.equal(named(game, 'Orc Army')[0].counters[COUNTER.PLUS_ONE], 1);
+});
+
+test("Faramir, Prince of Ithilien: a card if they didn't attack, Soldiers if they did", () => {
+  const { game } = setup({ p1: ['faramirPrinceOfIthilien'], p2: ['bear'], cards: ['faramirPrinceOfIthilien'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'faramirPrinceOfIthilien');
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'bear');
+  const hand = player(game, 'p1').hand.length;
+  advanceTo(game, main(3));
+  assert.equal(player(game, 'p1').hand.length, hand + 1 + 1, 'they didn\'t attack on turn 2');
+  // Turn 4: p2 attacks with the Bear.
+  advanceTo(game, { turn: 4, phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT });
+  passRound(game);
+  ok(game, toggleAttacker('p2', byCard(game, 'bear')[0].id));
+  ok(game, confirmAttackers('p2'));
+  advanceTo(game, main(5));
+  assert.equal(state(game).battlefield.filter((p) => p.name.includes('Soldier')).length, 3);
+});
+
+test("Frodo, Sauron's Bane: hybrid mana makes him a Scout, then a Rogue who can end the game", () => {
+  const { game } = setup({ p1: ['frodoSauronsBane'], cards: ['frodoSauronsBane'], fill: 'swamp' });
+  for (let turn = 1; turn <= 5; turn += 2) {
+    advanceTo(game, main(turn));
+    const land = state(game).validActions.find((a) => a.type === ACTION.PLAY_LAND && a.playerId === 'p1');
+    if (land) ok(game, land);
+  }
+  cast(game, 'p1', 'frodoSauronsBane');
+  const frodo = byCard(game, 'frodoSauronsBane')[0];
+  for (const swamp of byCard(game, 'swamp').slice(0, 2)) activate(game, 'p1', swamp.id);
+  activate(game, 'p1', frodo.id, { abilityId: 'ability1' });
+  resolveAll(game);
+  const scout = permanent(game, frodo.id);
+  assert.deepEqual([scout.subtypes, scout.power, scout.toughness], [['Halfling', 'Scout'], 2, 3]);
+  assert.ok(scout.keywords.includes(KEYWORD.LIFELINK));
+  advanceTo(game, main(7));
+  assert.equal(permanent(game, frodo.id).power, 2, 'for good');
+});
+
+test('Forge Anew: an Equipment back from the graveyard, and the first equip each turn is free, at instant speed', () => {
+  const shatter = { id: 'shatter', name: 'Shatter', manaCost: {}, types: ['Instant'], target: 'artifact', effects: [{ type: 'destroy' }] };
+  const { game } = setup({ p1: ['stingTheGlintingDagger', 'shatter', 'forgeAnew', 'bear'], cards: ['stingTheGlintingDagger', 'forgeAnew'], extra: { shatter } });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'stingTheGlintingDagger');
+  cast(game, 'p1', 'bear');
+  cast(game, 'p1', 'shatter', { targets: [byCard(game, 'stingTheGlintingDagger')[0].id] });
+  ok(game, castSpell('p1', inHand(game, 'p1', 'forgeAnew')));
+  resolveAll(game);
+  if (decision(game)?.type === DECISION.CHOOSE_TARGETS) ok(game, chooseTargets('p1', [player(game, 'p1').graveyard.find((c) => c.cardId === 'stingTheGlintingDagger').id]));
+  resolveAll(game);
+  const sting = byCard(game, 'stingTheGlintingDagger')[0];
+  assert.ok(sting, 'back on the battlefield');
+  advanceTo(game, { turn: 1, phase: PHASE.COMBAT, step: STEP.BEGINNING_OF_COMBAT });
+  const equip = actionFor(game, ACTION.ACTIVATE_ABILITY, { cardId: sting.id, abilityId: 'equip' });
+  assert.ok(equip, 'during combat, with no mana: free');
+  ok(game, equip);
+  resolveAll(game);
+  assert.equal(byCard(game, 'stingTheGlintingDagger')[0].attachedTo, byCard(game, 'bear')[0].id);
+});
+
+test('Goldberry moves counters onto herself, then off for a card', () => {
+  const { game } = setup({ p1: ['goldberryRiverDaughter', 'arwenMortalQueen'], cards: ['goldberryRiverDaughter', 'arwenMortalQueen'], freeAbilities: true });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'goldberryRiverDaughter');
+  cast(game, 'p1', 'arwenMortalQueen');
+  advanceTo(game, main(3));
+  const goldberry = byCard(game, 'goldberryRiverDaughter')[0];
+  const arwen = byCard(game, 'arwenMortalQueen')[0];
+  activate(game, 'p1', goldberry.id, { abilityId: 'ability1', targets: [arwen.id] });
+  resolveAll(game);
+  assert.ok(permanent(game, goldberry.id).keywords.includes(KEYWORD.INDESTRUCTIBLE));
+  assert.ok(!permanent(game, arwen.id).counters[COUNTER.INDESTRUCTIBLE]);
+});
+
+test('Hew the Entwood: sacrificed lands become a look at that many cards', () => {
+  const { game } = setup({ p1: ['hewTheEntwood'], cards: ['hewTheEntwood'], library1: ['mountain', 'salve', 'mithrilCoat'] });
+  advanceTo(game, main(1));
+  playLand(game, 'forest');
+  advanceTo(game, main(3));
+  playLand(game, 'forest');
+  // p1's library after the hand: turn 3 drew the Mountain, so the top is now Salve, Mithril Coat.
+  cast(game, 'p1', 'hewTheEntwood');
+  const sacrifice = decision(game);
+  assert.equal(sacrifice.kind, CHOICE.SACRIFICE_ANY);
+  for (const id of sacrifice.options) ok(game, toggleChoice('p1', id));
+  ok(game, confirmChoice('p1'));
+  const look = decision(game);
+  assert.equal(look.kind, CHOICE.LOOK);
+  assert.equal(look.cards.length, 2);
+  for (const id of look.options) ok(game, toggleChoice('p1', id));
+  ok(game, confirmChoice('p1'));
+  assert.equal(byCard(game, 'mithrilCoat').length, 1);
+});
+
+test("Lobelia exiles a creature card that died this turn and makes Treasures for its power", () => {
+  const { game } = setup({ p1: ['shock', 'lobeliaSackvilleBaggins'], p2: ['bear'], cards: ['lobeliaSackvilleBaggins'] });
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'bear');
+  advanceTo(game, main(3));
+  cast(game, 'p1', 'shock', { targets: [byCard(game, 'bear')[0].id] });
+  cast(game, 'p1', 'lobeliaSackvilleBaggins');
+  assert.equal(player(game, 'p2').exile.length, 1);
+  assert.equal(named(game, 'Treasure').length, 2);
+});
+
+test('Lost Isle Calling: a verse counter per scry, then cards and, at seven, an extra turn', () => {
+  const scryTwice = { id: 'scryTwice', name: 'Scry Twice', manaCost: {}, types: ['Instant'], effects: [{ type: 'scry', count: 1 }, { type: 'scry', count: 1 }] };
+  const { game } = setup({ p1: ['lostIsleCalling', ...Array(4).fill('scryTwice')], cards: ['lostIsleCalling'], freeAbilities: true, extra: { scryTwice } });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'lostIsleCalling');
+  for (let i = 0; i < 4; i++) {
+    cast(game, 'p1', 'scryTwice');
+    for (let j = 0; j < 2; j++) {
+      ok(game, confirmChoice('p1'));
+      resolveAll(game);
+    }
+  }
+  const isle = byCard(game, 'lostIsleCalling')[0];
+  assert.equal(isle.counters[COUNTER.VERSE], 8);
+  const hand = player(game, 'p1').hand.length;
+  activate(game, 'p1', isle.id);
+  resolveAll(game);
+  assert.equal(byCard(game, 'lostIsleCalling').length, 0, 'exiled as the cost');
+  assert.equal(player(game, 'p1').hand.length, hand + 8);
+  advanceTo(game, main(2));
+  assert.equal(state(game).activePlayerId, 'p1', 'the extra turn');
+  advanceTo(game, main(3));
+  assert.equal(state(game).activePlayerId, 'p2');
+});
+
+test('Orcish Bowmasters: shoot on entering and on extra draws, then amass', () => {
+  const { game } = setup({ p1: ['orcishBowmasters'], p2: ['borneUponAWind'], cards: ['orcishBowmasters', 'borneUponAWind'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'orcishBowmasters');
+  if (decision(game)?.type === DECISION.CHOOSE_TARGETS) ok(game, chooseTargets('p1', ['p2']));
+  resolveAll(game);
+  assert.equal(player(game, 'p2').life, 19);
+  advanceTo(game, main(2));
+  // p2's draw step draw didn't trigger it; their spell's draw does.
+  assert.equal(player(game, 'p2').life, 19);
+  ok(game, castSpell('p2', inHand(game, 'p2', 'borneUponAWind')));
+  resolveAll(game);
+  if (decision(game)?.type === DECISION.CHOOSE_TARGETS) ok(game, chooseTargets('p1', ['p2']));
+  resolveAll(game);
+  assert.equal(player(game, 'p2').life, 18);
+  assert.equal(named(game, 'Orc Army')[0].counters[COUNTER.PLUS_ONE], 2);
+});
+
+test('Palantír of Orthanc: the opponent chooses between your card and their life', () => {
+  const { game } = setup({ p1: ['palantirOfOrthanc'], cards: ['palantirOfOrthanc'], library1: ['giant'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'palantirOfOrthanc');
+  assert.equal(untilDecision(game).kind, CHOICE.SCRY);
+  ok(game, confirmChoice('p1'));
+  const d = decision(game);
+  assert.equal(d.kind, CHOICE.MAY);
+  assert.equal(d.playerId, 'p2');
+  ok(game, choose('p2', 'no'));
+  // p1 mills one card (one influence counter).
+  assert.equal(player(game, 'p1').graveyard.length, 1);
+});
+
+test('Phial of Galadriel: two cards from an empty hand; double life when low', () => {
+  const emptyAndDraw = { id: 'emptyAndDraw', name: 'Empty and Draw', manaCost: {}, types: ['Sorcery'], effects: [{ type: 'discard', all: true }, { type: 'drawCards', count: 1 }] };
+  const pain = { id: 'pain', name: 'Pain', manaCost: {}, types: ['Sorcery'], effects: [{ type: 'loseLife', amount: 15 }] };
+  const { game } = setup({ p1: ['phialOfGaladriel', 'pain', 'salve', 'emptyAndDraw'], cards: ['phialOfGaladriel'], extra: { emptyAndDraw, pain } });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'phialOfGaladriel');
+  cast(game, 'p1', 'pain');
+  cast(game, 'p1', 'salve');
+  assert.equal(player(game, 'p1').life, 5 + 6);
+  cast(game, 'p1', 'emptyAndDraw');
+  assert.equal(player(game, 'p1').hand.length, 2);
+});
+
+test('Radagast looks at cards for a creature of a new type', () => {
+  const elk = { id: 'elk', name: 'Elk', manaCost: { generic: 2 }, types: ['Creature'], subtypes: ['Elk'], power: 2, toughness: 2 };
+  const { game } = setup({ p1: ['radagastTheBrown', 'elk'], cards: ['radagastTheBrown'], library1: ['forest', 'bear', 'hero', 'elk'], extra: { elk } });
+  advanceTo(game, main(1));
+  playLand(game, 'forest');
+  cast(game, 'p1', 'radagastTheBrown');
+  // Radagast itself costs nothing here (mana value 0): nothing to look at.
+  assert.equal(decision(game), null);
+  advanceTo(game, main(3));
+  playLand(game, 'forest');
+  for (const forest of byCard(game, 'forest')) activate(game, 'p1', forest.id);
+  cast(game, 'p1', 'elk');
+  const d = decision(game);
+  assert.equal(d.kind, CHOICE.LOOK);
+  assert.equal(d.cards.length, 2, "the Elk's mana value");
+  assert.equal(d.options.length, 2, 'the Bear and the Hero share no type with Radagast or the Elk');
+  ok(game, toggleChoice('p1', d.options[0]));
+  ok(game, confirmChoice('p1'));
+  assert.ok(inHand(game, 'p1', 'bear'));
+});
+
+test('Sauron, the Dark Lord: ward—sacrifice a legend', () => {
+  const { game } = setup({ p1: ['sauronTheDarkLord'], p2: ['hero', 'shock'], cards: ['sauronTheDarkLord'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'sauronTheDarkLord');
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'hero');
+  ok(game, castSpell('p2', inHand(game, 'p2', 'shock'), [byCard(game, 'sauronTheDarkLord')[0].id]));
+  resolveAll(game);
+  const d = decision(game);
+  assert.equal(d.kind, CHOICE.PAY);
+  ok(game, choose('p2', d.options[0]));
+  resolveAll(game);
+  assert.equal(byCard(game, 'hero').length, 0, 'sacrificed');
+  assert.equal(byCard(game, 'sauronTheDarkLord')[0].damage, 2);
+  // p2 cast two spells: two Armies' worth of counters.
+  assert.equal(named(game, 'Orc Army')[0].counters[COUNTER.PLUS_ONE], 2);
+});
+
+test('The One Ring: protection from everything until your next turn, then burden', () => {
+  const { game } = setup({ p1: ['theOneRing'], p2: ['shock'], cards: ['theOneRing'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'theOneRing');
+  advanceTo(game, main(2));
+  assert.ok(!state(game).validActions.some((a) => a.cardId === inHand(game, 'p2', 'shock') && a.targets?.[0] === 'p1'), 'p1 can\'t be targeted');
+  advanceTo(game, main(3));
+  activate(game, 'p1', byCard(game, 'theOneRing')[0].id);
+  resolveAll(game);
+  assert.equal(byCard(game, 'theOneRing')[0].counters[COUNTER.BURDEN], 1);
+});
+
+test('Éomer, Marshal of Rohan: a legend dying in the attack means another combat', () => {
+  const { game, events } = setup({ p1: ['eomerMarshalOfRohan', 'hero'], p2: ['giant'], cards: ['eomerMarshalOfRohan'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'eomerMarshalOfRohan');
+  cast(game, 'p1', 'hero');
+  advanceTo(game, main(2));
+  cast(game, 'p2', 'giant');
+  const hero = byCard(game, 'hero')[0];
+  const eomer = byCard(game, 'eomerMarshalOfRohan')[0];
+  attack(game, 3, [hero.id, eomer.id], { [byCard(game, 'giant')[0].id]: hero.id });
+  // The second combat: Éomer attacks again.
+  for (let i = 0; i < 30 && decision(game)?.type !== DECISION.DECLARE_ATTACKERS; i++) {
+    if (decision(game)) ok(game, state(game).validActions[0]);
+    else passRound(game);
+  }
+  ok(game, toggleAttacker('p1', eomer.id));
+  ok(game, confirmAttackers('p1'));
+  advanceTo(game, { turn: 3, phase: PHASE.POSTCOMBAT_MAIN });
+  assert.equal(byCard(game, 'hero').length, 0);
+  const combats = events.filter((e) => e.name === 'stepStarted' && e.payload.turn === 3 && e.payload.step === STEP.BEGINNING_OF_COMBAT);
+  assert.equal(combats.length, 2);
+  assert.equal(player(game, 'p2').life, 20 - 4 - 4, 'Éomer attacked again, untapped');
+});
+
+test('Doors of Durin: scry 2, then a creature from the top joins the attack', () => {
+  const { game } = setup({ p1: ['doorsOfDurin', 'bear'], cards: ['doorsOfDurin'], library1: ['forest', 'giant'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'doorsOfDurin');
+  cast(game, 'p1', 'bear');
+  attack(game, 3, [byCard(game, 'bear')[0].id]);
+  resolveAll(game);
+  // Turn 3 drew the Forest; the Giant is on top. Keep it there, then reveal it.
+  const scry = decision(game);
+  assert.equal(scry.kind, CHOICE.SCRY);
+  ok(game, toggleChoice('p1', scry.options[0]));
+  ok(game, confirmChoice('p1'));
+  ok(game, choose('p1', 'yes'));
+  resolveAll(game);
+  const giant = byCard(game, 'giant')[0];
+  assert.ok(giant.tapped);
+  assert.ok(state(game).combat.attackers.some((a) => a.cardId === giant.id));
+});
+
+test('Tom Bombadil: a Saga finishing reveals the next Saga', () => {
+  const { game } = setup({ p1: ['tomBombadil', 'theBathSong'], cards: ['tomBombadil', 'theBathSong'], library1: ['forest', 'forest', 'forest', 'forest', 'forest', 'salve', 'bookOfMazarbul'] });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'tomBombadil');
+  cast(game, 'p1', 'theBathSong');
+  advanceTo(game, main(5));
+  assert.equal(byCard(game, 'bookOfMazarbul').length, 1);
+});
+
+test('Fangorn: attacking Treefolk add green mana, which stays', () => {
+  const treefolk = { id: 'treefolk', name: 'Treefolk', manaCost: {}, types: ['Creature'], subtypes: ['Treefolk'], power: 2, toughness: 4 };
+  const { game } = setup({ p1: ['fangornTreeShepherd', 'treefolk'], cards: ['fangornTreeShepherd'], extra: { treefolk } });
+  advanceTo(game, main(1));
+  cast(game, 'p1', 'fangornTreeShepherd');
+  cast(game, 'p1', 'treefolk');
+  attack(game, 3, [byCard(game, 'fangornTreeShepherd')[0].id, byCard(game, 'treefolk')[0].id]);
+  resolveAll(game);
+  assert.ok(!byCard(game, 'treefolk')[0].tapped, 'vigilance');
+  advanceTo(game, { turn: 3, phase: PHASE.POSTCOMBAT_MAIN });
+  assert.equal(player(game, 'p1').manaPool.G, 4);
 });

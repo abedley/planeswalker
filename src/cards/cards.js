@@ -81,6 +81,8 @@ export const TARGET = Object.freeze({
   PERMANENT_CARD_IN_YOUR_GRAVEYARD: 'permanentCardInYourGraveyard',
   /** Any card in your graveyard, usually narrowed by a filter: "target creature card from your graveyard". */
   CARD_IN_YOUR_GRAVEYARD: 'cardInYourGraveyard',
+  /** A card in an opponent's graveyard (Lobelia Sackville-Baggins). */
+  CARD_IN_OPPONENT_GRAVEYARD: 'cardInOpponentGraveyard',
 });
 
 /**
@@ -96,7 +98,7 @@ export const isOptionalTarget = (spec) => Boolean(spec && typeof spec === 'objec
 /** The target kinds of a card or ability's `target` or `targets`, as a list ([] when it doesn't target). */
 export const targetList = (holder) => (holder?.targets ?? (holder?.target ? [holder.target] : []));
 /** Graveyard target kinds pick cards in a graveyard, not permanents or players. */
-export const GRAVEYARD_TARGETS = Object.freeze(new Set([TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD, TARGET.CARD_IN_YOUR_GRAVEYARD]));
+export const GRAVEYARD_TARGETS = Object.freeze(new Set([TARGET.PERMANENT_CARD_IN_YOUR_GRAVEYARD, TARGET.CARD_IN_YOUR_GRAVEYARD, TARGET.CARD_IN_OPPONENT_GRAVEYARD]));
 
 /** Who or what a static ability or an effect applies to. */
 export const AFFECTED = Object.freeze({
@@ -147,7 +149,18 @@ export const COUNTER = Object.freeze({
   VERSE: 'verse',
   BURDEN: 'burden',
   INFLUENCE: 'influence',
+  /** 122.1d: if a permanent with a stun counter would become untapped, one is removed from it instead. */
+  STUN: 'stun',
+  // 122.1b: keyword counters give the permanent that keyword.
+  FIRST_STRIKE: 'first strike',
+  VIGILANCE: 'vigilance',
+  DEATHTOUCH: 'deathtouch',
+  LIFELINK: 'lifelink',
+  INDESTRUCTIBLE: 'indestructible',
 });
+
+/** 122.1b: counters that give their permanent the keyword of the same name. */
+export const KEYWORD_COUNTERS = Object.freeze(new Set([COUNTER.FIRST_STRIKE, COUNTER.VIGILANCE, COUNTER.DEATHTOUCH, COUNTER.LIFELINK, COUNTER.INDESTRUCTIBLE]));
 
 /** Keyword abilities (702). */
 export const KEYWORD = Object.freeze({
@@ -371,6 +384,20 @@ export const EFFECT = Object.freeze({
   KEEP_AND_DESTROY_REST: 'keepAndDestroyRest',
   /** 701.15: goad the target: until your next turn, it attacks each combat if able. */
   GOAD: 'goad',
+  /** `{ mode: 'eachKindNotOnSource' | 'chosen' }`: move counters between the target and the source (Goldberry). */
+  MOVE_COUNTERS: 'moveCounters',
+  /** Exile the target card from a graveyard. */
+  EXILE_FROM_GRAVEYARD: 'exileFromGraveyard',
+  /** The affected players lose the game (104.3e). */
+  LOSE_GAME: 'loseGame',
+  /** `{ flag }`: something that lasts the rest of the turn for you ('flashSpells': cast spells as though they had flash). */
+  TURN_PERMISSION: 'turnPermission',
+  /** Take an extra turn after this one (500.7). */
+  EXTRA_TURN: 'extraTurn',
+  /** After this combat phase, there is an additional combat phase (500.8). */
+  EXTRA_COMBAT: 'extraCombat',
+  /** `{ until: 'yourNextTurn' }`: you gain protection from everything (702.16j): damage to you is prevented and you can't be targeted. */
+  PLAYER_PROTECTION: 'playerProtection',
 });
 
 /** Effects that apply to the spell's or ability's target (unless `affected` says otherwise). */
@@ -378,7 +405,7 @@ export const TARGETED_EFFECTS = Object.freeze(new Set([
   EFFECT.ATTACH, EFFECT.DEAL_DAMAGE, EFFECT.DESTROY, EFFECT.EXILE, EFFECT.RETURN_TO_HAND, EFFECT.TAP,
   EFFECT.UNTAP, EFFECT.PUMP, EFFECT.ADD_COUNTERS, EFFECT.COUNTER_SPELL, EFFECT.FIGHT, EFFECT.RETURN_FROM_GRAVEYARD,
   EFFECT.RETURN_SPELL_TO_HAND, EFFECT.PUT_INTO_LIBRARY, EFFECT.GAIN_CONTROL, EFFECT.FLICKER, EFFECT.EXILE_UNTIL_SOURCE_LEAVES,
-  EFFECT.COUNTER_UNLESS_PAID, EFFECT.REVEAL_HAND_DISCARD, EFFECT.GOAD,
+  EFFECT.COUNTER_UNLESS_PAID, EFFECT.REVEAL_HAND_DISCARD, EFFECT.GOAD, EFFECT.MOVE_COUNTERS, EFFECT.EXILE_FROM_GRAVEYARD,
 ]));
 /** Effects that hurt whatever they affect, for AI decisions. */
 export const HARMFUL_EFFECTS = Object.freeze(new Set([
@@ -460,6 +487,12 @@ export const TRIGGER = Object.freeze({
   EQUIPPED_ATTACKS: 'equippedAttacks',
   /** "Whenever one or more creatures deal combat damage to you" (once per combat damage step). */
   COMBAT_DAMAGE_TO_YOU: 'combatDamageToYou',
+  /** "Whenever you put one or more counters on Aragorn": the subject's `counters` are the kinds put on. */
+  COUNTERS_PUT_ON: 'countersPutOn',
+  /** "Whenever you draw a card during an opponent's turn" (once per card). */
+  DRAW_ON_OPPONENTS_TURN: 'drawOnOpponentsTurn',
+  /** "Whenever an opponent draws a card except the first one they draw in each of their draw steps". */
+  OPPONENT_DRAWS: 'opponentDraws',
   /** A Saga's chapter ability (714.2b): `chapters` lists the chapter numbers it has. */
   CHAPTER: 'chapter',
   // These watch other objects, through `filter`.
@@ -481,6 +514,12 @@ export const TRIGGER = Object.freeze({
   TOKEN_CREATED: 'tokenCreated',
   /** "Whenever you sacrifice a token". */
   TOKEN_SACRIFICED: 'tokenSacrificed',
+  /** "Whenever a creature you control … becomes the target of a spell or ability": the subject's `targetedBy` is that spell's controller. */
+  BECOMES_TARGET: 'becomesTarget',
+  /** "Whenever a creature an opponent controls is dealt excess noncombat damage": the subject's `count` is the excess (120.4a). */
+  EXCESS_DAMAGE: 'excessDamage',
+  /** "Whenever the final chapter ability of a Saga you control resolves" (the subject is the Saga). */
+  FINAL_CHAPTER_RESOLVED: 'finalChapterResolved',
   // These trigger at the beginning of a step of the controller's turn (603.2, 503.1, 507.1, 513.1), or of
   // every turn with `eachTurn: true` ("At the beginning of each combat").
   UPKEEP: 'upkeep',
@@ -491,7 +530,8 @@ export const TRIGGER = Object.freeze({
 /** Triggers about other objects (or the game), matched against an ability's `filter` rather than the permanent itself. */
 export const WATCHER_TRIGGERS = Object.freeze(new Set([
   TRIGGER.CREATURE_ENTERS, TRIGGER.LAND_ENTERS, TRIGGER.SPELL_CAST, TRIGGER.CREATURE_DIES, TRIGGER.CREATURE_ATTACKS,
-  TRIGGER.CREATURE_DEALS_COMBAT_DAMAGE_TO_PLAYER, TRIGGER.TOKEN_CREATED, TRIGGER.TOKEN_SACRIFICED,
+  TRIGGER.CREATURE_DEALS_COMBAT_DAMAGE_TO_PLAYER, TRIGGER.TOKEN_CREATED, TRIGGER.TOKEN_SACRIFICED, TRIGGER.BECOMES_TARGET,
+  TRIGGER.EXCESS_DAMAGE, TRIGGER.FINAL_CHAPTER_RESOLVED,
 ]));
 
 /** Whether an ability triggers on `type`: its `trigger` may be one TRIGGER or a list ("enters or leaves"). */
@@ -654,7 +694,8 @@ export const castsAtInstantSpeed = (card) => isInstant(card) || hasKeyword(card,
 export const cantAttack = (card) => hasKeyword(card, KEYWORD.DEFENDER) || hasKeyword(card, KEYWORD.CANT_ATTACK);
 
 /** Mana value (202.3): the total amount of mana in a mana cost. */
-export const manaValue = (manaCost) => Object.entries(manaCost ?? {}).reduce((sum, [type, n]) => (type === 'X' ? sum : sum + n), 0);
+export const manaValue = (manaCost) => Object.entries(manaCost ?? {})
+  .reduce((sum, [type, n]) => (type === 'X' ? sum : type === 'hybrid' ? sum + n.length : sum + n), 0);
 
 /** "Equip {N}" (702.6): attach to target creature you control, sorcery speed only. */
 export const equipAbility = (mana, text = `Equip ${'{'}${mana.generic ?? 0}${'}'}`) => ({
@@ -720,7 +761,7 @@ export const isToken = (card) => Boolean(card.token);
  * - `keywords` / `withoutKeywords`: has one of them / none of them ("creature with flying")
  * - `power` / `toughness`: `{ min?, max? }`, or `{ equalsX: true }` (`x` from the context);
  *   `powerOrToughnessAtMost`: n
- * - `enteredThisTurn`, `dealtDamageThisTurn`, `blockedByOrBlockedLegendaryThisTurn`
+ * - `enteredThisTurn`, `dealtDamageThisTurn`, `blockedByOrBlockedLegendaryThisTurn`, `hasCounter` (a COUNTER kind)
  * - `diedThisTurn`: a card put into a graveyard from the battlefield this turn (`turn` from the context)
  * - `attacking`, `blocking` (`combat` from the context)
  * - `anyOf`: a list of filters, one of which must match
@@ -754,6 +795,8 @@ export function matchesFilter(object, filter = {}, {
   if (filter.toughness && !inRange(object.toughness ?? 0, filter.toughness)) return false;
   if (filter.powerOrToughnessAtMost !== undefined
     && !((object.power ?? Infinity) <= filter.powerOrToughnessAtMost || (object.toughness ?? Infinity) <= filter.powerOrToughnessAtMost)) return false;
+  // "a creature you control with a +1/+1 counter on it".
+  if (filter.hasCounter && !(object.counters?.[filter.hasCounter] > 0)) return false;
   if (filter.enteredThisTurn && !object.enteredThisTurn) return false;
   if (filter.dealtDamageThisTurn && !object.dealtDamageThisTurn) return false;
   if (filter.blockedByOrBlockedLegendaryThisTurn && !object.blockedByOrBlockedLegendaryThisTurn) return false;

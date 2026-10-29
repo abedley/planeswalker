@@ -147,6 +147,18 @@ export const TOKEN_PRESENTATION = {
     "typeLine": "Token Creature — Spirit",
     "scryfallId": "b53ee2f0-afbd-491f-b3b8-c9997f175199"
   },
+  "token:Tentacle Token:1/1:blue:": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/d/3d9415be-356d-45a5-a62b-a75368629481.jpg?1783916046",
+      "card": "https://cards.scryfall.io/normal/front/3/d/3d9415be-356d-45a5-a62b-a75368629481.jpg?1783916046"
+    },
+    "artist": "Chris Cold",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "17",
+    "typeLine": "Token Creature — Tentacle",
+    "scryfallId": "3d9415be-356d-45a5-a62b-a75368629481"
+  },
   "token:treasure": {
     "image": {
       "art": "https://cards.scryfall.io/art_crop/front/4/2/42e54aad-ec80-4914-9ba8-91bd53924778.jpg?1783932854",

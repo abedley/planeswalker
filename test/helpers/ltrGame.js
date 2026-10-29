@@ -78,10 +78,17 @@ export function advanceTo(game, { turn, phase, step = null }) {
     const d = s.pendingDecision;
     if (d?.type === DECISION.DECLARE_ATTACKERS) ok(game, confirmAttackers(d.playerId));
     else if (d?.type === DECISION.DECLARE_BLOCKERS) ok(game, confirmBlockers(d.playerId));
+    else if (d?.type === DECISION.CHOOSE_MANY) ok(game, s.validActions.find((a) => a.type === ACTION.CONFIRM_CHOICE) ?? s.validActions[0]);
     else if (d) ok(game, s.validActions[0]);
     else passRound(game);
   }
   throw new Error('advanceTo: stuck');
+}
+
+/** Passes priority until a player must decide something (or `limit` rounds go by). */
+export function untilDecision(game, limit = 40) {
+  for (let i = 0; i < limit && !decision(game); i++) passRound(game);
+  return decision(game);
 }
 
 /** Casts a card from hand and resolves it. */

@@ -280,7 +280,8 @@ export class BasicAIController extends EventEmitter {
       }
       // Not castable yet: tap mana for it if that can work, otherwise try the next idea.
       if (canPayMana(player.manaPool, intent.manaCost) || !canReach(intent.manaCost, player.manaPool, sources)) continue;
-      return chooseManaAction(sources, neededColors(intent.manaCost, player.manaPool));
+      const tap = chooseManaAction(sources, neededColors(intent.manaCost, player.manaPool));
+      if (tap) return tap;
     }
     return null;
   }
@@ -736,6 +737,7 @@ function choiceScore(state, me, decision, choice) {
       const card = cardIn(decision.cards, choice);
       return card ? (isCreature(card) ? permanentValue(card) : 3) + manaValue(card.manaCost ?? {}) : 0;
     }
+    case CHOICE.COUNTER:
     case CHOICE.KEYWORD: {
       const creature = permanent(decision.ids?.[0]);
       const fighting = creature && state.combat.attackers.some((a) => a.cardId === creature.id || a.blockerIds.includes(creature.id));
@@ -745,10 +747,19 @@ function choiceScore(state, me, decision, choice) {
         [KEYWORD.VIGILANCE]: fighting ? 0 : 2,
         [KEYWORD.INDESTRUCTIBLE]: fighting || threatened ? 3 : 1,
         [KEYWORD.LIFELINK]: fighting ? 2 : 1.5,
+        // A counter lasts: deathtouch makes any blocker a trade.
+        [KEYWORD.DEATHTOUCH]: decision.kind === CHOICE.COUNTER ? 2.5 : 2,
       };
       return scores[choice] ?? 0;
     }
     case CHOICE.MAY: {
+      // Palantír of Orthanc, asked of us: let them draw, or lose life for what they mill (about 2 per card).
+      if (decision.playerId === me && state.resolving && state.resolving.controllerId !== me) {
+        const counters = state.battlefield.find((p) => p.id === decision.sourceId)?.counters?.influence ?? 1;
+        const lifeLoss = 2 * counters;
+        const yes = lifeOf(me) - lifeLoss <= 5 ? 1 : 3 - lifeLoss / 2;
+        return choice === 'yes' ? yes : 0;
+      }
       if (choice === 'no') return 0;
       // Gorbag: sacrificing the creature that hit is worth a card only if it's a small one.
       const sacrifices = (decision.effects ?? []).some((e) => e.type === EFFECT.SACRIFICE);
@@ -768,6 +779,12 @@ function choiceScore(state, me, decision, choice) {
     }
     case CHOICE.PAY: {
       if (choice === 'decline') return 0;
+      // Ward—sacrifice a legend: worth it only for a cheap legend.
+      if (String(choice).includes(':')) {
+        const lost = String(choice).split(':')[1].split(',').map(permanent).filter(Boolean)
+          .reduce((sum, p) => sum + (isCreature(p) ? creatureValue(p) : permanentValue(p)), 0);
+        return 3 - lost;
+      }
       // Life to keep a creature (Morgul-Knife Wound): only with life to spare. Mana (ward): worth it.
       if (decision.cost?.life) return lifeOf(me) - decision.cost.life > 6 ? 1 : -1;
       return 1;
@@ -831,6 +848,14 @@ function wantedSelection(state, me, decision) {
     case CHOICE.HAND_CARDS:
       // Last March of the Ents: every creature we can.
       return [...decision.options];
+    case CHOICE.COUNTERS:
+      // Goldberry: one counter is enough for the card.
+      return decision.options.slice(0, 1);
+    case CHOICE.SACRIFICE_ANY: {
+      // Hew the Entwood: lands beyond the fifth.
+      const lands = decision.options.map((id) => state.battlefield.find((p) => p.id === id)).filter(Boolean);
+      return lands.slice(5).map((p) => p.id);
+    }
     default:
       return decision.selected.length >= (decision.min ?? 0) ? decision.selected
         : [...decision.selected, ...decision.options.filter((id) => !decision.selected.includes(id))].slice(0, decision.min);

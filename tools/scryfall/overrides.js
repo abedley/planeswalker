@@ -69,6 +69,13 @@ const equip = (generic, text = `Equip {${generic}}`) => equipAbility({ generic }
 const tapForC = { id: 'tapForC', text: '{T}: Add {C}.', cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, mana: { C: 1 } }] };
 const tapForAny = { id: 'tapForAnyColor', text: '{T}: Add one mana of any color.', cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, anyColor: 1 }] };
 const tapFor = (color) => ({ id: `tapFor${color}`, text: `{T}: Add {${color}}.`, cost: { tap: true }, effects: [{ type: EFFECT.ADD_MANA, mana: { [color]: 1 } }] });
+const tentacle = { colors: ['blue'], subtypes: ['Tentacle'], power: 1, toughness: 1 };
+const frodoRogue = {
+  id: 'frodoRogue',
+  trigger: TRIGGER.DEALS_COMBAT_DAMAGE_TO_PLAYER,
+  text: 'Whenever this creature deals combat damage to a player, that player loses the game if the Ring has tempted you four or more times this game. Otherwise, the Ring tempts you.',
+  effects: [ifThen({ temptedAtLeast: 4 }, [{ type: EFFECT.LOSE_GAME, affected: AFFECTED.SUBJECT_CONTROLLER }], [ringTempts])],
+};
 const smaug = {
   name: 'Smaug', supertypes: ['Legendary'], colors: ['red'], subtypes: ['Dragon'], power: 6, toughness: 6, keywords: [KEYWORD.FLYING, KEYWORD.HASTE],
   triggeredAbilities: [{ id: 'smaugDies', trigger: TRIGGER.DIES, text: 'When Smaug dies, create fourteen Treasure tokens.', effects: [treasure(14)] }],
@@ -1134,6 +1141,211 @@ export const OVERRIDES = {
       ]),
       chapter([3], 'III — Creatures you control gain double strike until end of turn. The Ring tempts you.', [grant([KEYWORD.DOUBLE_STRIKE], yourCreatures), ringTempts]),
     ],
+  },
+  'Aragorn, Company Leader': {
+    triggeredAbilities: [
+      when(TRIGGER.RING_TEMPTS, 'Whenever the Ring tempts you, if you chose a creature other than Aragorn as your Ring-bearer, put your choice of a counter from among first strike, vigilance, deathtouch, and lifelink on Aragorn.', [
+        { type: EFFECT.ADD_COUNTERS, counterChoice: [COUNTER.FIRST_STRIKE, COUNTER.VIGILANCE, COUNTER.DEATHTOUCH, COUNTER.LIFELINK], ...source },
+      ], { condition: { chosenOtherThanSource: true } }),
+      when(TRIGGER.COUNTERS_PUT_ON, 'Whenever you put one or more counters on Aragorn, put one of each of those kinds of counters on up to one other target creature.', [
+        { type: EFFECT.ADD_COUNTERS, kindsFromSubject: true },
+      ], { target: target(TARGET.CREATURE, null, { optional: true, other: true }) }),
+    ],
+  },
+  'Arwen, Mortal Queen': {
+    entersWithCounters: { counter: COUNTER.INDESTRUCTIBLE, count: 1 },
+    abilities: [ability('{1}, Remove an indestructible counter from Arwen: Another target creature gains indestructible until end of turn. Put a +1/+1 counter and a lifelink counter on that creature and a +1/+1 counter and a lifelink counter on Arwen.', {
+      mana: { generic: 1 }, removeCounter: { counter: COUNTER.INDESTRUCTIBLE },
+    }, [
+      grant([KEYWORD.INDESTRUCTIBLE]), counters(1), { type: EFFECT.ADD_COUNTERS, counter: COUNTER.LIFELINK, count: 1 },
+      counters(1, source), { type: EFFECT.ADD_COUNTERS, counter: COUNTER.LIFELINK, count: 1, ...source },
+    ], { target: target(TARGET.CREATURE, null, { other: true }) })],
+  },
+  'Borne Upon a Wind': {
+    effects: [{ type: EFFECT.TURN_PERMISSION, flag: 'flashSpells' }, draw(1)],
+  },
+  'Doors of Durin': {
+    triggeredAbilities: [when(TRIGGER.ATTACKS_WITH, 'Whenever you attack, scry 2, then you may reveal the top card of your library. If a creature card is revealed this way, put it onto the battlefield tapped and attacking. Until your next turn, it gains trample if you control a Dwarf and hexproof if you control an Elf.', [
+      scry(2),
+      {
+        type: EFFECT.MAY,
+        text: 'Reveal the top card of your library?',
+        effects: [
+          { type: EFFECT.REVEAL_TOP },
+          ifThen({ revealedMatches: { types: [CREATURE] } }, [
+            { type: EFFECT.PUT_REVEALED_ONTO_BATTLEFIELD, tapped: true, attacking: true },
+            grant([KEYWORD.TRAMPLE], { ...subject, untilYourNextTurn: true, condition: youControl({ subtypes: ['Dwarf'] }) }),
+            grant([KEYWORD.HEXPROOF], { ...subject, untilYourNextTurn: true, condition: youControl({ subtypes: ['Elf'] }) }),
+          ]),
+        ],
+      },
+    ], { filter: {} })],
+  },
+  'Elrond, Master of Healing': {
+    triggeredAbilities: [
+      when(TRIGGER.SCRY, 'Whenever you scry, put a +1/+1 counter on each of up to X target creatures, where X is the number of cards looked at while scrying this way.', [counters(1)], {
+        targetPerEventCount: upTo(TARGET.CREATURE),
+      }),
+      when(TRIGGER.BECOMES_TARGET, 'Whenever a creature you control with a +1/+1 counter on it becomes the target of a spell or ability an opponent controls, you may draw a card.', [draw(1)], {
+        filter: { types: [CREATURE], hasCounter: COUNTER.PLUS_ONE }, byOpponent: true, optional: true,
+      }),
+    ],
+  },
+  'Fall of Cair Andros': {
+    triggeredAbilities: [when(TRIGGER.EXCESS_DAMAGE, 'Whenever a creature an opponent controls is dealt excess noncombat damage, amass Orcs X, where X is that excess damage.', [
+      amass(1, { per: { of: 'eventCount' } }),
+    ], { filter: { controller: 'opponent', types: [CREATURE] } })],
+    abilities: [ability('{7}{R}: This enchantment deals 7 damage to target creature.', { mana: { generic: 7, R: 1 } }, [damage(7)], { target: TARGET.CREATURE })],
+  },
+  'Fangorn, Tree Shepherd': {
+    staticAbilities: [anthem({ keywords: [KEYWORD.VIGILANCE], subtypes: ['Treefolk'] }), { rule: 'keepGreenMana' }],
+    triggeredAbilities: [when(TRIGGER.ATTACKS_WITH, 'Whenever one or more Treefolk you control attack, add twice that much {G}.', [
+      { type: EFFECT.ADD_MANA, mana: { G: 2 }, per: { of: 'creatures', subtypes: ['Treefolk'], attacking: true } },
+    ], { filter: { subtypes: ['Treefolk'] } })],
+  },
+  'Faramir, Prince of Ithilien': {
+    triggeredAbilities: [when(TRIGGER.END_STEP, "At the beginning of your end step, choose an opponent. At the beginning of that player's next end step, you draw a card if they didn't attack you that turn. Otherwise, create three 1/1 white Human Soldier creature tokens.", [
+      {
+        type: EFFECT.DELAYED_TRIGGER, at: 'endStep', whose: 'opponent',
+        text: "Draw a card if they didn't attack you this turn. Otherwise, create three 1/1 white Human Soldier creature tokens.",
+        effects: [ifThen({ subjectAttackedThisTurn: true }, [tokens(soldier, 3)], [draw(1)])],
+      },
+    ])],
+  },
+  'Forge Anew': {
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, 'When this enchantment enters, return target Equipment card from your graveyard to the battlefield.', [
+      { type: EFFECT.RETURN_FROM_GRAVEYARD, to: 'battlefield' },
+    ], { target: target(TARGET.CARD_IN_YOUR_GRAVEYARD, { subtypes: ['Equipment'] }) })],
+    staticAbilities: [{ rule: 'equipAtInstantSpeed' }, { rule: 'firstEquipFree' }],
+  },
+  "Frodo, Sauron's Bane": {
+    abilities: [
+      ability('{W/B}{W/B}: If Frodo is a Citizen, it becomes a Halfling Scout with base power and toughness 2/3 and lifelink.', { mana: { hybrid: [['W', 'B'], ['W', 'B']] } }, [{
+        type: EFFECT.PUMP, ...source, setSubtypes: ['Halfling', 'Scout'], setBase: { power: 2, toughness: 3 }, keywords: [KEYWORD.LIFELINK], permanent: true,
+        condition: { sourceMatches: { subtypes: ['Citizen'] } },
+      }]),
+      ability('{B}{B}{B}: If Frodo is a Scout, it becomes a Halfling Rogue with "Whenever this creature deals combat damage to a player, that player loses the game if the Ring has tempted you four or more times this game. Otherwise, the Ring tempts you."', { mana: { B: 3 } }, [{
+        type: EFFECT.PUMP, ...source, setSubtypes: ['Halfling', 'Rogue'], grantTriggers: [frodoRogue], permanent: true, condition: { sourceMatches: { subtypes: ['Scout'] } },
+      }]),
+    ],
+  },
+  'Goldberry, River-Daughter': {
+    abilities: [
+      ability('{T}: Move a counter of each kind not on Goldberry from another target permanent you control onto Goldberry.', { tap: true }, [{ type: EFFECT.MOVE_COUNTERS, mode: 'eachKindNotOnSource' }], {
+        target: target(TARGET.PERMANENT, { controller: 'you' }, { other: true }),
+      }),
+      ability('{U}, {T}: Move one or more counters from Goldberry onto another target permanent you control. If you do, draw a card.', { mana: { U: 1 }, tap: true }, [
+        { type: EFFECT.MOVE_COUNTERS, mode: 'chosen' }, draw(1, { condition: { paid: true } }),
+      ], { target: target(TARGET.PERMANENT, { controller: 'you' }, { other: true }) }),
+    ],
+  },
+  'Hew the Entwood': {
+    effects: [
+      { type: EFFECT.SACRIFICE, any: true, filter: { types: [LAND] } },
+      { type: EFFECT.LOOK_AT_TOP, count: 1, per: { of: 'sacrificedCount' }, filter: { types: [ARTIFACT, LAND] }, max: 'all', destination: 'battlefield' },
+    ],
+  },
+  'Lobelia Sackville-Baggins': {
+    keywords: [KEYWORD.FLASH, KEYWORD.MENACE],
+    triggeredAbilities: [when(TRIGGER.ENTERS_BATTLEFIELD, "When Lobelia enters, exile target creature card from an opponent's graveyard that was put there from the battlefield this turn, then create X Treasure tokens, where X is the exiled card's power.", [
+      { type: EFFECT.EXILE_FROM_GRAVEYARD }, tokens(TOKEN.TREASURE, 1, { per: { of: 'powerOf', index: 0 } }),
+    ], { target: target(TARGET.CARD_IN_OPPONENT_GRAVEYARD, { types: [CREATURE], diedThisTurn: true }) })],
+  },
+  'Lost Isle Calling': {
+    triggeredAbilities: [when(TRIGGER.SCRY, 'Whenever you scry, put a verse counter on this enchantment.', [{ type: EFFECT.ADD_COUNTERS, counter: COUNTER.VERSE, count: 1, ...source }])],
+    abilities: [ability('{4}{U}{U}, Exile this enchantment: Draw a card for each verse counter on this enchantment. If it had seven or more verse counters on it, take an extra turn after this one. Activate only as a sorcery.', {
+      mana: { generic: 4, U: 2 }, exileSelf: true,
+    }, [
+      draw(1, { per: { of: 'sourceCounters', counter: COUNTER.VERSE } }),
+      { type: EFFECT.EXTRA_TURN, condition: { sourceCounters: { counter: COUNTER.VERSE, min: 7 } } },
+    ], { timing: SORCERY_SPEED })],
+  },
+  'Orcish Bowmasters': {
+    keywords: [KEYWORD.FLASH],
+    triggeredAbilities: [when([TRIGGER.ENTERS_BATTLEFIELD, TRIGGER.OPPONENT_DRAWS], 'When this creature enters and whenever an opponent draws a card except the first one they draw in each of their draw steps, this creature deals 1 damage to any target. Then amass Orcs 1.', [
+      damage(1), amass(1),
+    ], { target: TARGET.ANY })],
+  },
+  'Palantír of Orthanc': {
+    triggeredAbilities: [when(TRIGGER.END_STEP, 'At the beginning of your end step, put an influence counter on Palantír of Orthanc and scry 2. Then target opponent may have you draw a card. If that player doesn\'t, you mill X cards, where X is the number of influence counters on Palantír of Orthanc, and that player loses life equal to the total mana value of those cards.', [
+      { type: EFFECT.ADD_COUNTERS, counter: COUNTER.INFLUENCE, count: 1, ...source },
+      scry(2),
+      {
+        type: EFFECT.MAY, chooser: 'target', text: 'Let them draw a card?',
+        effects: [draw(1)],
+        else: [
+          { type: EFFECT.MILL, count: 1, affected: AFFECTED.YOU, per: { of: 'sourceCounters', counter: COUNTER.INFLUENCE } },
+          loseLife(1, { affected: AFFECTED.TARGET, per: { of: 'milledManaValue' } }),
+        ],
+      },
+    ], { target: TARGET.OPPONENT })],
+  },
+  'Phial of Galadriel': {
+    staticAbilities: [{ rule: 'drawTwoFromEmptyHand' }, { rule: 'doubleLifeGainWhenLow' }],
+    abilities: [tapForAny],
+  },
+  'Radagast the Brown': {
+    triggeredAbilities: [when(TRIGGER.CREATURE_ENTERS, "Whenever Radagast or another nontoken creature you control enters, look at the top X cards of your library, where X is that creature's mana value. You may reveal a creature card that doesn't share a creature type with a creature you control from among those cards and put it into your hand. Put the rest on the bottom of your library in a random order.", [
+      { type: EFFECT.LOOK_AT_TOP, count: 1, per: { of: 'subjectManaValue' }, filter: { types: [CREATURE] }, sharesNoCreatureType: true, max: 1 },
+    ], { filter: { token: false } })],
+  },
+  'Sauron, the Dark Lord': {
+    keywords: [KEYWORD.WARD],
+    ward: { sacrifice: { kind: TARGET.PERMANENT, filter: { supertypes: ['Legendary'], types: [ARTIFACT, CREATURE] } }, text: 'Sacrifice a legendary artifact or legendary creature.' },
+    triggeredAbilities: [
+      when(TRIGGER.SPELL_CAST, 'Whenever an opponent casts a spell, amass Orcs 1.', [amass(1)], { filter: { controller: 'opponent' } }),
+      when(TRIGGER.CREATURE_DEALS_COMBAT_DAMAGE_TO_PLAYER, 'Whenever an Army you control deals combat damage to a player, the Ring tempts you.', [ringTempts], { filter: { subtypes: ['Army'] } }),
+      when(TRIGGER.RING_TEMPTS, 'Whenever the Ring tempts you, you may discard your hand. If you do, draw four cards.', [{ type: EFFECT.DISCARD, all: true }, draw(4)], { optional: true }),
+    ],
+  },
+  'Scroll of Isildur': {
+    triggeredAbilities: [
+      chapter([1], 'I — Gain control of up to one target artifact for as long as you control this Saga. The Ring tempts you.', [
+        { type: EFFECT.GAIN_CONTROL, whileSourceControlled: true }, ringTempts,
+      ], { target: upTo(TARGET.ARTIFACT) }),
+      chapter([2], 'II — Tap up to two target creatures. Put a stun counter on each of them.', [{ type: EFFECT.TAP }, { type: EFFECT.ADD_COUNTERS, counter: COUNTER.STUN, count: 1 }], {
+        targets: [upTo(TARGET.CREATURE), upTo(TARGET.CREATURE)],
+      }),
+      chapter([3], 'III — Draw a card for each tapped creature target opponent controls.', [
+        draw(1, { per: { of: 'permanentsOfTarget', filter: { types: [CREATURE], tapped: true } } }),
+      ], { target: TARGET.OPPONENT }),
+    ],
+  },
+  'The One Ring': {
+    keywords: [KEYWORD.INDESTRUCTIBLE],
+    triggeredAbilities: [
+      when(TRIGGER.ENTERS_BATTLEFIELD, 'When The One Ring enters, if you cast it, you gain protection from everything until your next turn.', [{ type: EFFECT.PLAYER_PROTECTION }], {
+        condition: { sourceWasCast: true },
+      }),
+      when(TRIGGER.UPKEEP, 'At the beginning of your upkeep, you lose 1 life for each burden counter on The One Ring.', [
+        loseLife(1, { per: { of: 'sourceCounters', counter: COUNTER.BURDEN } }),
+      ]),
+    ],
+    abilities: [ability('{T}: Put a burden counter on The One Ring, then draw a card for each burden counter on The One Ring.', { tap: true }, [
+      { type: EFFECT.ADD_COUNTERS, counter: COUNTER.BURDEN, count: 1, ...source }, draw(1, { per: { of: 'sourceCounters', counter: COUNTER.BURDEN } }),
+    ])],
+  },
+  'The Watcher in the Water': {
+    entersTapped: true,
+    entersWithCounters: { counter: COUNTER.STUN, count: 9 },
+    triggeredAbilities: [
+      when(TRIGGER.DRAW_ON_OPPONENTS_TURN, "Whenever you draw a card during an opponent's turn, create a 1/1 blue Tentacle creature token.", [tokens(tentacle)]),
+      when(TRIGGER.CREATURE_DIES, 'Whenever a Tentacle you control dies, untap up to one target Kraken and put a stun counter on up to one target nonland permanent.', [
+        { type: EFFECT.UNTAP, targetIndex: 0 }, { type: EFFECT.ADD_COUNTERS, counter: COUNTER.STUN, count: 1, targetIndex: 1 },
+      ], { filter: { subtypes: ['Tentacle'] }, targets: [upTo(TARGET.CREATURE, { subtypes: ['Kraken'] }), upTo(TARGET.NONLAND_PERMANENT)] }),
+    ],
+  },
+  'Tom Bombadil': {
+    staticAbilities: [self({ keywords: [KEYWORD.HEXPROOF, KEYWORD.INDESTRUCTIBLE], condition: { loreCountersAtLeast: 4 } })],
+    triggeredAbilities: [when(TRIGGER.FINAL_CHAPTER_RESOLVED, 'Whenever the final chapter ability of a Saga you control resolves, reveal cards from the top of your library until you reveal a Saga card. Put that card onto the battlefield and the rest on the bottom of your library in a random order. This ability triggers only once each turn.', [
+      { type: EFFECT.REVEAL_UNTIL, affected: AFFECTED.YOU, filter: { subtypes: ['Saga'] }, count: 1, rest: 'bottom' },
+    ], { filter: {}, oncePerTurn: true })],
+  },
+  'Éomer, Marshal of Rohan': {
+    keywords: [KEYWORD.HASTE],
+    triggeredAbilities: [when(TRIGGER.CREATURE_DIES, 'Whenever one or more other attacking legendary creatures you control die, untap all creatures you control. After this phase, there is an additional combat phase. This ability triggers only once each turn.', [
+      { type: EFFECT.UNTAP, ...yourCreatures }, { type: EFFECT.EXTRA_COMBAT },
+    ], { filter: { other: true, supertypes: ['Legendary'], attacking: true }, oncePerTurn: true })],
   },
   'Witch-king of Angmar': {
     keywords: [KEYWORD.FLYING],

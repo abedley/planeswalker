@@ -289,7 +289,8 @@ function payAndAct(state, me, mine, macro) {
   if (manaCost === undefined) return null;
   const sources = manaSources(state, mine);
   if (canPayMana(player.manaPool, manaCost) || !canReach(manaCost, player.manaPool, sources)) return null;
-  return { action: chooseManaAction(sources, neededColors(manaCost, player.manaPool)), done: false };
+  const tap = chooseManaAction(sources, neededColors(manaCost, player.manaPool));
+  return tap ? { action: tap, done: false } : null;
 }
 
 function costsOf(state, me, macro) {

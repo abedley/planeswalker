@@ -1,0 +1,327 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 740" width="1000" height="740">
+  <!-- Art for Shire Bounder (src/cards/cards.js): a hobbit border guard with a glaive, at
+       golden hour in the Shire. Rendered to app/art/shire-bounder.jpg; see tools/render-art.js. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7f9fbd"/>
+      <stop offset=".35" stop-color="#bcc8c4"/>
+      <stop offset=".62" stop-color="#f0d49a"/>
+      <stop offset=".78" stop-color="#f7c77c"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="210" cy="330" r="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6d8" stop-opacity="1"/>
+      <stop offset=".12" stop-color="#ffe7a8" stop-opacity=".9"/>
+      <stop offset=".45" stop-color="#ffcf80" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#ffcf80" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="farHill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fae86"/>
+      <stop offset="1" stop-color="#7d9468"/>
+    </linearGradient>
+    <linearGradient id="midHill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9dba57"/>
+      <stop offset=".5" stop-color="#6f9440"/>
+      <stop offset="1" stop-color="#4f7330"/>
+    </linearGradient>
+    <linearGradient id="nearHill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb04a"/>
+      <stop offset=".45" stop-color="#5d8430"/>
+      <stop offset="1" stop-color="#2f4a1d"/>
+    </linearGradient>
+    <linearGradient id="path" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e3c48a"/>
+      <stop offset="1" stop-color="#9c7444"/>
+    </linearGradient>
+    <linearGradient id="cloak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5f7d3a"/>
+      <stop offset=".5" stop-color="#3f5a28"/>
+      <stop offset="1" stop-color="#22351a"/>
+    </linearGradient>
+    <linearGradient id="vest" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e2a948"/>
+      <stop offset="1" stop-color="#9c6a24"/>
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fbf0d6"/>
+      <stop offset="1" stop-color="#c9b48d"/>
+    </linearGradient>
+    <linearGradient id="breeches" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8a6240"/>
+      <stop offset="1" stop-color="#4e3522"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fbd2a8"/>
+      <stop offset="1" stop-color="#c98d64"/>
+    </linearGradient>
+    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fffbea"/>
+      <stop offset=".45" stop-color="#d8d4c6"/>
+      <stop offset="1" stop-color="#7d7a72"/>
+    </linearGradient>
+    <linearGradient id="haft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#b98a52"/>
+      <stop offset="1" stop-color="#5d3d20"/>
+    </linearGradient>
+    <radialGradient id="rim" cx="0" cy="0" r="1">
+      <stop offset="0" stop-color="#ffe9b0" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffe9b0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="500" cy="380" r="640" gradientUnits="userSpaceOnUse">
+      <stop offset=".55" stop-color="#1a1208" stop-opacity="0"/>
+      <stop offset="1" stop-color="#2a1a08" stop-opacity=".38"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="softer" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="haze" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <filter id="leafy" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="26" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- Brushwork: wobble every edge a little, then lay canvas grain over it. -->
+    <filter id="paint" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="2" seed="3" result="warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="7" xChannelSelector="R" yChannelSelector="G" result="wobbly"/>
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="11" result="grain"/>
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 .5  0 0 0 0 .45  0 0 0 0 .38  0 0 0 .5 -.12" result="grainTint"/>
+      <feComposite in="grainTint" in2="wobbly" operator="atop" result="grained"/>
+      <feBlend in="grained" in2="wobbly" mode="multiply"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#paint)">
+    <!-- Sky, sun and clouds -->
+    <rect x="-60" y="-60" width="1120" height="860" fill="url(#sky)"/>
+    <rect x="-60" y="-60" width="1120" height="860" fill="url(#sun)"/>
+    <g filter="url(#softer)" opacity=".85">
+      <ellipse cx="760" cy="120" rx="210" ry="38" fill="#f6e2c4"/>
+      <ellipse cx="860" cy="95" rx="120" ry="30" fill="#fff0da"/>
+      <ellipse cx="420" cy="170" rx="180" ry="26" fill="#f9dcb6"/>
+      <ellipse cx="120" cy="90" rx="160" ry="30" fill="#e7d6c6"/>
+      <ellipse cx="600" cy="230" rx="240" ry="18" fill="#ffd9a0"/>
+    </g>
+    <g filter="url(#soft)" opacity=".7">
+      <ellipse cx="780" cy="135" rx="150" ry="16" fill="#e8b98e"/>
+      <ellipse cx="440" cy="182" rx="110" ry="10" fill="#e9b88a"/>
+    </g>
+
+    <!-- Far hills, blue with distance -->
+    <path d="M-60 400 L0 395 C 120 350 220 360 330 380 S 560 340 680 362 S 880 330 1000 352 L1060 350 L1060 520 L-60 520 Z" fill="url(#farHill)" filter="url(#haze)" opacity=".9"/>
+    <path d="M0 395 C 120 350 220 360 330 380 S 560 340 680 362 S 880 330 1000 352 L1000 380 L0 420 Z" fill="#f3d59a" opacity=".25" filter="url(#soft)"/>
+    <!-- Distant trees along the far hills -->
+    <g fill="#6e855c" filter="url(#haze)" opacity=".8">
+      <ellipse cx="520" cy="360" rx="22" ry="16"/><ellipse cx="545" cy="364" rx="16" ry="12"/>
+      <ellipse cx="850" cy="342" rx="26" ry="18"/><ellipse cx="880" cy="347" rx="18" ry="13"/>
+      <ellipse cx="300" cy="378" rx="18" ry="12"/>
+    </g>
+
+    <!-- Middle hill with a smial: round green door, round window, chimney -->
+    <path d="M-20 470 C 60 400 170 385 260 400 C 350 415 430 450 520 490 C 600 520 680 520 760 530 L 760 600 L -60 600 L -60 480 Z" fill="url(#midHill)"/>
+    <path d="M-20 470 C 60 400 170 385 260 400 C 350 415 410 450 470 470 L 480 462 C 400 430 340 400 260 388 C 170 375 60 392 -20 455 Z" fill="#d9d777" opacity=".55" filter="url(#haze)"/>
+    <g>
+      <!-- stone surround and door -->
+      <circle cx="185" cy="468" r="40" fill="#b9a58a"/>
+      <circle cx="185" cy="468" r="33" fill="#3f6e35"/>
+      <path d="M152 468 A33 33 0 0 1 218 468 L218 500 L152 500 Z" fill="#3f6e35"/>
+      <rect x="146" y="498" width="78" height="10" fill="#6d8f3c"/>
+      <circle cx="185" cy="468" r="33" fill="none" stroke="#2c4d25" stroke-width="2"/>
+      <g stroke="#2e5427" stroke-width="2" opacity=".7">
+        <line x1="163" y1="444" x2="163" y2="500"/><line x1="174" y1="437" x2="174" y2="500"/>
+        <line x1="185" y1="435" x2="185" y2="500"/><line x1="196" y1="437" x2="196" y2="500"/>
+        <line x1="207" y1="444" x2="207" y2="500"/>
+      </g>
+      <circle cx="185" cy="471" r="4.5" fill="#f2cf5a"/>
+      <circle cx="184" cy="470" r="1.6" fill="#fff4c4"/>
+      <!-- round window, lit warm from inside -->
+      <circle cx="262" cy="455" r="15" fill="#b9a58a"/>
+      <circle cx="262" cy="455" r="11" fill="#ffd77a"/>
+      <circle cx="262" cy="455" r="16" fill="#ffcf6b" opacity=".35" filter="url(#haze)"/>
+      <path d="M262 444 V466 M251 455 H273" stroke="#6b4a2a" stroke-width="2"/>
+      <!-- chimney and smoke -->
+      <rect x="236" y="384" width="12" height="22" fill="#8c7a66"/>
+      <path d="M242 382 C 230 360 256 345 244 322 C 236 305 254 292 248 270" stroke="#efe3cf" stroke-width="10" fill="none" stroke-linecap="round" opacity=".5" filter="url(#soft)"/>
+      <!-- garden: little fence and flowers -->
+      <g stroke="#8b6a45" stroke-width="3">
+        <line x1="120" y1="500" x2="120" y2="525"/><line x1="140" y1="502" x2="140" y2="527"/>
+        <line x1="230" y1="502" x2="230" y2="527"/><line x1="250" y1="500" x2="250" y2="525"/>
+        <line x1="270" y1="498" x2="270" y2="523"/><line x1="290" y1="497" x2="290" y2="522"/>
+        <line x1="115" y1="510" x2="145" y2="512"/><line x1="226" y1="512" x2="294" y2="507"/>
+      </g>
+      <g>
+        <circle cx="128" cy="520" r="4" fill="#e66f5a"/><circle cx="110" cy="515" r="3.5" fill="#f2c94f"/>
+        <circle cx="240" cy="520" r="4" fill="#e9a1c0"/><circle cx="262" cy="516" r="3.5" fill="#f4e3a0"/>
+        <circle cx="280" cy="518" r="4" fill="#e66f5a"/><circle cx="300" cy="512" r="3" fill="#b6a4e8"/>
+        <circle cx="98" cy="508" r="3" fill="#e9a1c0"/>
+      </g>
+    </g>
+
+    <!-- A big oak on the right, catching the sunset -->
+    <g>
+      <path d="M868 560 C 872 500 860 450 846 410 L 872 404 C 884 450 896 490 900 560 Z" fill="#4e3a26"/>
+      <path d="M856 430 C 830 410 812 400 790 398 M866 418 C 890 390 910 380 940 382" stroke="#4e3a26" stroke-width="8" fill="none"/>
+      <g filter="url(#leafy)">
+        <ellipse cx="860" cy="330" rx="150" ry="95" fill="#40612b"/>
+        <ellipse cx="790" cy="380" rx="80" ry="50" fill="#3c5a27"/>
+        <ellipse cx="950" cy="370" rx="90" ry="60" fill="#344f22"/>
+        <ellipse cx="830" cy="300" rx="95" ry="55" fill="#7c9a3c"/>
+        <ellipse cx="800" cy="335" rx="55" ry="35" fill="#a4b54c" opacity=".8"/>
+      </g>
+    </g>
+
+    <!-- Near hill and the path the bounder walks -->
+    <path d="M-60 575 L-20 560 C 140 505 300 500 470 520 C 640 540 820 520 1020 540 L 1060 540 L 1060 800 L -60 800 Z" fill="url(#nearHill)"/>
+    <path d="M-20 560 C 140 505 300 500 470 520 C 640 540 820 520 1020 540 L 1020 552 C 820 534 640 552 470 532 C 300 512 140 518 -20 574 Z" fill="#dfe08a" opacity=".5" filter="url(#haze)"/>
+    <path d="M330 524 C 420 540 470 560 520 600 C 570 640 600 690 610 760 L 860 760 C 800 690 700 640 620 600 C 560 570 470 540 390 522 Z" fill="url(#path)"/>
+    <path d="M350 524 C 430 540 480 560 530 598" stroke="#f7e1ad" stroke-width="5" fill="none" opacity=".6" filter="url(#haze)"/>
+    <!-- Hedgerow along the path -->
+    <g filter="url(#leafy)">
+      <path d="M-20 600 C 60 570 150 565 230 580 C 280 590 300 610 290 640 L -20 660 Z" fill="#3c5c25"/>
+      <path d="M-20 600 C 60 572 150 568 228 582" stroke="#86a540" stroke-width="12" fill="none" opacity=".8"/>
+    </g>
+    <!-- Grass and wildflowers in the foreground -->
+    <g stroke="#2b4519" stroke-width="3" stroke-linecap="round" opacity=".8">
+      <path d="M40 740 L 48 690"/><path d="M60 740 L 58 700"/><path d="M80 740 L 92 695"/>
+      <path d="M150 740 L 140 700"/><path d="M200 740 L 210 690"/><path d="M260 740 L 255 705"/>
+      <path d="M920 740 L 910 690"/><path d="M950 740 L 960 700"/><path d="M980 740 L 972 696"/>
+    </g>
+    <g>
+      <circle cx="70" cy="690" r="6" fill="#f3d046"/><circle cx="120" cy="705" r="5" fill="#f7f1df"/>
+      <circle cx="190" cy="685" r="6" fill="#e9785e"/><circle cx="240" cy="700" r="5" fill="#f3d046"/>
+      <circle cx="320" cy="660" r="4" fill="#f7f1df"/><circle cx="350" cy="690" r="5" fill="#e9a1c0"/>
+      <circle cx="905" cy="680" r="6" fill="#f3d046"/><circle cx="950" cy="660" r="5" fill="#f7f1df"/>
+      <circle cx="975" cy="700" r="6" fill="#e9785e"/><circle cx="880" cy="640" r="4" fill="#f7f1df"/>
+      <circle cx="40" cy="650" r="4" fill="#f7f1df"/><circle cx="160" cy="640" r="4" fill="#f3d046"/>
+    </g>
+
+    <!-- A wooden signpost at the edge of the Shire -->
+    <g>
+      <ellipse cx="380" cy="584" rx="30" ry="6" fill="#2f4a1d" opacity=".5"/>
+      <rect x="374" y="492" width="11" height="92" fill="#6b4a2a"/>
+      <rect x="374" y="492" width="4" height="92" fill="#a77a48"/>
+      <path d="M332 502 L 420 496 L 434 509 L 421 521 L 333 526 Z" fill="#9a7046"/>
+      <path d="M332 502 L 420 496 L 434 509" stroke="#e8c48a" stroke-width="2" fill="none"/>
+      <path d="M346 512 L 406 508" stroke="#4a311a" stroke-width="2.5" stroke-dasharray="7 5"/>
+      <path d="M424 532 L 344 536 L 332 547 L 344 557 L 424 552 Z" fill="#8a6440"/>
+      <path d="M352 546 L 410 543" stroke="#4a311a" stroke-width="2.5" stroke-dasharray="6 5"/>
+    </g>
+
+    <!-- ===================== The Shire Bounder ===================== -->
+    <g transform="translate(548 270)">
+      <!-- shadow on the path -->
+      <ellipse cx="85" cy="398" rx="120" ry="18" fill="#3b2a16" opacity=".45" filter="url(#haze)"/>
+
+      <!-- glaive haft, held upright in the right hand (viewer's left) -->
+      <rect x="-14" y="-150" width="11" height="545" rx="5" fill="url(#haft)" transform="rotate(-6 -9 120)"/>
+      <!-- the glaive's head: a long single-edged blade with a back spike, lit by the sun -->
+      <g transform="rotate(-6 -9 120)">
+        <path d="M-14 -136 C -52 -160 -64 -210 -40 -268 C -30 -236 -6 -214 -2 -190 L -2 -136 Z" fill="url(#blade)"/>
+        <path d="M-40 -268 C -62 -212 -50 -162 -14 -138" stroke="#fffdf2" stroke-width="3" fill="none" opacity=".95"/>
+        <path d="M-34 -236 C -40 -206 -32 -176 -12 -156" stroke="#a9a596" stroke-width="1.5" fill="none" opacity=".8"/>
+        <path d="M-2 -176 L 18 -196 L 12 -178 L -2 -162 Z" fill="#8f8a7d"/>
+        <rect x="-17" y="-142" width="17" height="12" rx="2" fill="#b58a3e"/>
+        <rect x="-17" y="-120" width="17" height="6" rx="2" fill="#b58a3e"/>
+        <!-- green ribbon, a Shire touch -->
+        <path d="M-3 -128 C 12 -122 22 -110 18 -92 C 12 -104 6 -112 -3 -114 Z" fill="#4f8a3a"/>
+        <path d="M-3 -126 C 20 -128 32 -118 36 -104 C 24 -112 12 -116 -3 -118 Z" fill="#3f7330"/>
+      </g>
+
+      <!-- cloak, back layer -->
+      <path d="M40 95 C 20 150 10 230 4 300 C 40 318 140 320 186 300 C 180 230 170 150 150 95 Z" fill="url(#cloak)"/>
+
+      <!-- legs: breeches to the knee, then bare shins and big hairy feet -->
+      <path d="M58 250 L 58 318 L 92 318 L 96 250 Z" fill="url(#breeches)"/>
+      <path d="M104 250 L 110 318 L 142 318 L 140 250 Z" fill="url(#breeches)"/>
+      <path d="M62 316 L 64 362 L 86 362 L 88 316 Z" fill="url(#skin)"/>
+      <path d="M114 316 L 116 362 L 138 362 L 138 316 Z" fill="url(#skin)"/>
+      <!-- feet -->
+      <path d="M36 372 C 34 356 52 350 66 352 C 80 354 90 356 92 366 C 94 378 80 384 60 384 C 46 384 38 380 36 372 Z" fill="#e8b48a"/>
+      <path d="M112 366 C 112 354 128 350 144 352 C 162 354 176 360 176 372 C 176 382 160 386 140 385 C 122 384 112 378 112 366 Z" fill="#d9a07a"/>
+      <!-- toe lines -->
+      <g stroke="#a26a48" stroke-width="1.5" opacity=".7">
+        <path d="M42 372 C 44 378 48 381 52 381"/><path d="M164 372 C 166 378 170 381 172 380"/>
+      </g>
+      <!-- curly hair on the feet -->
+      <g fill="#6b3d1e">
+        <circle cx="64" cy="354" r="6"/><circle cx="74" cy="353" r="6"/><circle cx="82" cy="356" r="5.5"/><circle cx="56" cy="356" r="5"/>
+        <circle cx="128" cy="353" r="6"/><circle cx="138" cy="352" r="6"/><circle cx="148" cy="354" r="5.5"/><circle cx="120" cy="356" r="5"/>
+      </g>
+      <g fill="#a86a34">
+        <circle cx="66" cy="352" r="2.5"/><circle cx="78" cy="352" r="2.5"/><circle cx="130" cy="351" r="2.5"/><circle cx="142" cy="351" r="2.5"/>
+      </g>
+
+      <!-- shirt sleeves and waistcoat -->
+      <path d="M48 120 C 46 160 50 210 56 258 L 144 258 C 150 210 152 160 148 120 C 120 104 76 104 48 120 Z" fill="url(#shirt)"/>
+      <path d="M62 116 C 58 160 60 210 64 258 L 136 258 C 140 210 140 160 136 116 C 114 108 84 108 62 116 Z" fill="url(#vest)"/>
+      <path d="M99 112 L 99 258" stroke="#7a4f1c" stroke-width="2"/>
+      <g fill="#f6dc7a" stroke="#8a6020" stroke-width="1">
+        <circle cx="106" cy="140" r="3.5"/><circle cx="106" cy="166" r="3.5"/><circle cx="106" cy="192" r="3.5"/><circle cx="106" cy="218" r="3.5"/>
+      </g>
+      <!-- belt -->
+      <rect x="58" y="236" width="86" height="12" fill="#4a2f18"/>
+      <rect x="92" y="234" width="16" height="16" rx="2" fill="none" stroke="#e4c25c" stroke-width="3"/>
+      <!-- a short sword at the hip -->
+      <path d="M140 244 L 176 300" stroke="#5b3a1e" stroke-width="7" stroke-linecap="round"/>
+      <path d="M134 236 L 148 252" stroke="#c9a24a" stroke-width="5" stroke-linecap="round"/>
+
+      <!-- cloak, front edges and clasp -->
+      <path d="M44 100 C 30 160 26 230 24 300 C 36 304 46 304 52 300 C 54 230 58 160 66 112 Z" fill="#4c6a2e"/>
+      <path d="M150 98 C 166 160 176 230 182 296 C 172 304 160 304 152 298 C 146 230 140 160 134 112 Z" fill="#2c4220"/>
+      <path d="M44 100 C 30 160 26 230 24 300" stroke="#ffe0a0" stroke-width="3" fill="none" opacity=".55"/>
+      <path d="M50 100 C 70 112 128 112 150 98 C 140 88 120 84 100 84 C 80 84 60 88 50 100 Z" fill="#5a7a36"/>
+      <circle cx="100" cy="106" r="7" fill="#e8c05a" stroke="#8a6020" stroke-width="1.5"/>
+      <path d="M95 106 L 105 106 M100 101 L 100 111" stroke="#8a6020" stroke-width="1.2"/>
+
+      <!-- arms: the right (viewer's left) grips the haft, the left rests on the belt -->
+      <path d="M52 118 C 30 140 14 170 4 196 L 22 206 C 34 180 50 158 66 140 Z" fill="#f4e6c6"/>
+      <path d="M52 118 C 30 140 14 170 4 196" stroke="#fff3d6" stroke-width="3" fill="none"/>
+      <ellipse cx="2" cy="204" rx="13" ry="11" fill="url(#skin)"/>
+      <path d="M-8 198 C -2 194 6 194 12 198" stroke="#b47a54" stroke-width="1.5" fill="none"/>
+      <path d="M146 118 C 162 150 168 186 160 220 L 140 228 C 148 196 146 166 134 140 Z" fill="#d2bf98"/>
+      <ellipse cx="146" cy="230" rx="12" ry="10" fill="#d9a07a"/>
+
+      <!-- sunlight along the left edges -->
+      <path d="M40 100 C 24 160 18 230 18 300" stroke="#ffd98f" stroke-width="5" fill="none" opacity=".55" filter="url(#haze)"/>
+      <path d="M36 372 C 34 356 52 350 66 352" stroke="#ffe3bd" stroke-width="3" fill="none" opacity=".7"/>
+      <path d="M58 252 L 58 318" stroke="#c99a6a" stroke-width="3" opacity=".7"/>
+
+      <!-- head: round face, pointed ears, chestnut curls -->
+      <path d="M86 90 L 114 90 L 112 104 L 88 104 Z" fill="#e6b088"/>
+      <ellipse cx="100" cy="58" rx="36" ry="40" fill="url(#skin)"/>
+      <!-- ears -->
+      <path d="M64 56 C 56 46 54 34 58 24 C 66 34 70 44 72 56 Z" fill="#f2c39a"/>
+      <path d="M136 56 C 144 46 148 34 144 24 C 136 34 130 44 128 56 Z" fill="#c98d64"/>
+      <path d="M62 50 C 60 42 60 36 61 30" stroke="#d08f68" stroke-width="1.5" fill="none"/>
+      <!-- hair -->
+      <g fill="#5a3218">
+        <circle cx="72" cy="34" r="12"/><circle cx="84" cy="22" r="13"/><circle cx="100" cy="18" r="14"/>
+        <circle cx="116" cy="22" r="13"/><circle cx="128" cy="34" r="12"/><circle cx="134" cy="48" r="9"/>
+        <circle cx="66" cy="46" r="8"/><circle cx="92" cy="28" r="10"/><circle cx="110" cy="28" r="10"/>
+      </g>
+      <g fill="#9a5a2a">
+        <circle cx="76" cy="30" r="5"/><circle cx="88" cy="18" r="5"/><circle cx="102" cy="14" r="5"/>
+        <circle cx="70" cy="42" r="4"/><circle cx="96" cy="26" r="4"/>
+      </g>
+      <!-- a bounder's cap with a feather in it -->
+      <path d="M70 26 C 74 4 96 -6 118 -2 C 134 2 140 14 136 26 C 116 18 92 18 70 26 Z" fill="#6b4a2c"/>
+      <path d="M64 28 C 90 16 120 16 142 26 C 142 32 136 34 130 32 C 110 24 92 24 72 34 C 66 34 62 32 64 28 Z" fill="#4e331c"/>
+      <path d="M74 22 C 80 8 96 -2 112 -2" stroke="#a6774a" stroke-width="3" fill="none" opacity=".8"/>
+      <path d="M124 14 C 140 -10 160 -30 186 -44 C 176 -24 158 -4 132 18 Z" fill="#c8402e"/>
+      <path d="M128 16 C 146 -8 166 -28 186 -44" stroke="#f3dcb8" stroke-width="1.5" fill="none"/>
+      <!-- sun on the left side of the face and hair -->
+      <path d="M68 40 C 64 56 66 74 76 88" stroke="#ffe9c4" stroke-width="4" fill="none" opacity=".6" filter="url(#haze)"/>
+      <!-- face -->
+      <path d="M80 54 C 84 50 90 50 94 53" stroke="#5a3218" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M106 53 C 110 50 116 50 120 54" stroke="#5a3218" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="87" cy="62" rx="3.6" ry="4.2" fill="#2e2318"/>
+      <ellipse cx="113" cy="62" rx="3.6" ry="4.2" fill="#2e2318"/>
+      <circle cx="88.3" cy="60.6" r="1.2" fill="#fff"/><circle cx="114.3" cy="60.6" r="1.2" fill="#fff"/>
+      <path d="M100 64 C 98 72 97 76 101 78" stroke="#b47450" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <ellipse cx="80" cy="76" rx="8" ry="5" fill="#ef9a7e" opacity=".55"/>
+      <ellipse cx="120" cy="76" rx="8" ry="5" fill="#d9806a" opacity=".45"/>
+      <path d="M89 85 C 95 90 105 90 111 85" stroke="#8a4a32" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Golden-hour glow from the left, and the vignette -->
+    <rect x="-60" y="-60" width="1120" height="860" fill="url(#sun)" opacity=".25"/>
+    <rect x="-60" y="-60" width="1120" height="860" fill="url(#vignette)"/>
+  </g>
+</svg>

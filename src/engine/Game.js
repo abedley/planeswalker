@@ -3,7 +3,7 @@ import { ACTION } from './actions.js';
 import { TURN_STRUCTURE, PHASE, STEP, PHASE_NAMES, STEP_NAMES } from './turnStructure.js';
 import { seededRandom, shuffle } from './random.js';
 import {
-  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, COUNTER, CARD_TYPE, SPELL_TARGETS, TRIGGER,
+  CARDS, DEFAULT_DECK, EFFECT, KEYWORD, ACTIVATION_TIMING, TARGET, AFFECTED, CONDITION, COUNTER, CARD_TYPE, SPELL_TARGETS, TRIGGER,
   isLand, isCreature, isAura, isEquipment, isPermanentCard, isManaAbility, hasKeyword, anthemApplies,
   abilityEffects, effectAffects, matchesPermanentKind, TOKENS, COLORS_OF_MANA, needsManaColor, castsAtInstantSpeed,
   isLegendary, matchesFilter, countOf, scaleEffect, spellCost, canBlockCreature, colorsOf, tokenCardId, creatureTokenName,
@@ -1844,6 +1844,11 @@ export class Game extends EventEmitter {
     this.#applyContinuousEffects();
   }
 
+  /** 301.5: whether an Equipment is attached to `permanent`. */
+  #isEquipped(permanent) {
+    return this.#battlefield.some((p) => p.attachedTo === permanent.id && isEquipment(p));
+  }
+
   #unattach(permanent) {
     const from = permanent.attachedTo;
     permanent.attachedTo = null;
@@ -1883,6 +1888,9 @@ export class Game extends EventEmitter {
             battlefield: this.#battlefield, controllerId: source.controllerId, sourceId: source.id, subject: host, combat: this.#combat,
           })) : effect;
           if (host) grant(host, scaled);
+        } else if (effect.affected === AFFECTED.SOURCE) {
+          // "As long as this creature is equipped, it gets +1/+1 and has first strike." (Auriok Glaivemaster)
+          if (!effect.condition || (effect.condition === CONDITION.EQUIPPED && this.#isEquipped(source))) grant(source, effect);
         } else if (effect.affected === AFFECTED.EACH_CREATURE_YOU_CONTROL) {
           // Anthems and lords (613.1): every creature they apply to, as it is now.
           for (const creature of this.#battlefield) if (anthemApplies(effect, source, creature)) grant(creature, effect);

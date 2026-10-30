@@ -29,7 +29,9 @@
  * when it's missing, effects in TARGETED_EFFECTS apply to the target and the rest
  * to the controller ("you").
  * - `staticAbilities`: continuous effects, e.g. an Aura's or Equipment's
- *   `{ affected: 'attachedPermanent', power: 2, toughness: 0, keywords: ['flying'] }`
+ *   `{ affected: 'attachedPermanent', power: 2, toughness: 0, keywords: ['flying'] }`,
+ *   or a creature's own `{ affected: 'source', condition: 'equipped', power: 1, ... }`
+ *   ("As long as this creature is equipped, it gets +1/+1 ...")
  * - `text`: rules text, for display
  */
 import { IMPORTED_CARDS } from './importedCards.js';
@@ -102,6 +104,12 @@ export const AFFECTED = Object.freeze({
   EACH_CREATURE_OPPONENTS_CONTROL: 'eachCreatureOpponentsControl',
   /** The ability's source, the permanent itself ("this creature"). */
   SOURCE: 'source',
+});
+
+/** When a static ability applies ("As long as this creature is equipped, ..."); none means always. */
+export const CONDITION = Object.freeze({
+  /** An Equipment is attached to the source (301.5). */
+  EQUIPPED: 'equipped',
 });
 
 /** Kinds of counters (122). */
@@ -289,6 +297,23 @@ export const HAND_WRITTEN_CARDS = deepFreeze({
     power: 1,
     toughness: 1,
     abilities: [TAP_FOR_G],
+  },
+  // Auriok Glaivemaster, made a hobbit. The art is generated (app/art/, see tools/shire-bounder-art.svg).
+  shireBounder: {
+    id: 'shireBounder',
+    name: 'Shire Bounder',
+    manaCost: { W: 1 },
+    types: [CARD_TYPE.CREATURE],
+    subtypes: ['Halfling', 'Soldier'],
+    power: 1,
+    toughness: 1,
+    staticAbilities: [{
+      affected: AFFECTED.SOURCE, condition: CONDITION.EQUIPPED, power: 1, toughness: 1, keywords: [KEYWORD.FIRST_STRIKE],
+    }],
+    text: 'As long as Shire Bounder is equipped, it gets +1/+1 and has first strike.',
+    image: { art: 'app/art/shire-bounder.jpg' },
+    colors: ['W'],
+    rarity: 'common',
   },
 });
 

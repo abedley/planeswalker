@@ -58,6 +58,8 @@ export class Battle {
   #state = null;
   #options = [];
   #interactive = false;
+  // The main button shows the opponent's move: kept until the player can act, so it doesn't flash.
+  #waitingShown = false;
   #mode = { kind: 'idle' };
   #endTurnOf = null;
   #fullControl = false;
@@ -336,6 +338,7 @@ export class Battle {
 
   #setInteractive(on) {
     this.#interactive = on;
+    if (on) this.#waitingShown = false;
     // Inspecting a hand card outlasts the opponent's moves; other modes don't.
     if (!on && !this.#mode.inspecting) this.#mode = { kind: 'idle' };
     this.#refresh();
@@ -351,7 +354,9 @@ export class Battle {
     const primary = primaryAction(state, me);
     const ctx = { prompt: promptFor(state, me), main: { ...primary, disabled: !this.#interactive || !(primary.action || primary.reopen), fullControl: this.#fullControl } };
     if (!this.#interactive) {
-      ctx.main.waiting = actingPlayerId(state) !== me && state.status === GAME_STATUS.IN_PROGRESS;
+      const inProgress = state.status === GAME_STATUS.IN_PROGRESS;
+      this.#waitingShown = inProgress && (this.#waitingShown || actingPlayerId(state) !== me);
+      if (this.#waitingShown) ctx.main = { ...ctx.main, label: 'Opponent', waiting: true };
       ctx.main.disabled = true;
       if (this.#mode.inspecting) {
         ctx.selected = this.#mode.id;

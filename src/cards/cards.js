@@ -298,7 +298,7 @@ export const HAND_WRITTEN_CARDS = deepFreeze({
     toughness: 1,
     abilities: [TAP_FOR_G],
   },
-  // Auriok Glaivemaster, made a hobbit. The art is generated (app/art/, see tools/shire-bounder-art.svg).
+  // Auriok Glaivemaster, made a hobbit. The art (app/art/) was generated with Gemini.
   shireBounder: {
     id: 'shireBounder',
     name: 'Shire Bounder',

@@ -351,8 +351,7 @@ the Pathfinder's Elf deck and its sideboard in the printings of its Moxfield lis
 are defined by hand, so for those the importer records only their art, in `CARD_PRESENTATION`.
 **Shire Bounder** (Auriok Glaivemaster made a hobbit: {W}, 1/1 Halfling Soldier, "As long as Shire
 Bounder is equipped, it gets +1/+1 and has first strike.") is also hand-written, and offered as a
-reward. Its art is painted in SVG (`tools/shire-bounder-art.svg`) and rendered to
-`app/art/shire-bounder.jpg` with `node tools/render-art.js tools/shire-bounder-art.svg app/art/shire-bounder.jpg`.
+reward. Its art, `app/art/shire-bounder.jpg`, was generated with Gemini.
 
 Each imported card also keeps what the app needs to show it: `image: { art, card }` (Scryfall's
 art crop and full-card image URLs, loaded from Scryfall's image CDN), `artist`, `colors`, `rarity`, `set` and `collectorNumber`.

@@ -1,6 +1,6 @@
 import { Game, copyGameData } from '../engine/Game.js';
 import { shuffle } from '../engine/random.js';
-import { isLand, castsAtInstantSpeed, manaValue } from '../cards/cards.js';
+import { isLand, castsAtInstantSpeed, manaValue, matchesFilter } from '../cards/cards.js';
 
 /**
  * How much less likely a card is in a hidden hand slot, given what the opponent
@@ -44,8 +44,22 @@ export function determinize(view, random, { inference = false } = {}) {
       delete zone.handSize;
       delete zone.handInfo;
     }
-    zone.library = cards;
+    // Cards the viewer is looking at right now (scrying, searching) are known, on top.
+    zone.library = [...(zone.knownTop ?? []), ...cards];
+    delete zone.knownTop;
     delete zone.librarySize;
+  }
+  // Another player choosing among cards of their library: the guessed library's cards stand in.
+  const decision = snapshot.pendingDecision;
+  if (decision && decision.playerId !== viewerId && (decision.libraryTop || decision.wholeLibrary)) {
+    const { library } = snapshot.zones[decision.playerId];
+    const options = decision.libraryTop
+      ? library.slice(0, decision.libraryTop)
+      : library.filter((c) => matchesFilter(c, decision.searchFilter ?? { controller: 'any' }, { controllerId: decision.playerId }));
+    decision.options = options.map((c) => c.id);
+    decision.selected = [];
+    decision.max = Math.min(decision.max, options.length);
+    decision.cards = options.map((c) => ({ ...c }));
   }
   delete snapshot.unknownCards;
   delete snapshot.viewerId;

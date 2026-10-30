@@ -2,7 +2,7 @@
  * Finds Scryfall's printed tokens for the tokens the game creates, so they can
  * show real art instead of generated art (see tools/import-tokens.js).
  */
-import { TOKENS, creatureTokenName, tokenCardId } from '../../src/cards/cards.js';
+import { TOKENS, creatureTokenName, tokenCardId, amassArmyToken } from '../../src/cards/cards.js';
 import { presentation } from './convert.js';
 
 const COLOR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G' };
@@ -19,9 +19,11 @@ export function collectTokens(sources) {
   const walk = (value, creator) => {
     if (!value || typeof value !== 'object' || seen.has(value)) return;
     seen.add(value);
-    if (value.type === 'createToken' && value.token) {
-      const id = tokenCardId(value.token);
-      if (!tokens.has(id)) tokens.set(id, { token: value.token, creators: new Set() });
+    // Amass (701.47a) creates an Army token when there's none.
+    const made = value.type === 'createToken' ? value.token : value.type === 'amass' ? amassArmyToken(value.subtype) : null;
+    if (made) {
+      const id = tokenCardId(made);
+      if (!tokens.has(id)) tokens.set(id, { token: made, creators: new Set() });
       if (creator) tokens.get(id).creators.add(creator);
     }
     // A card definition (with an id) is the creator of the tokens inside it.
@@ -47,13 +49,20 @@ export function tokenMatches(card, token) {
   const name = token.name ?? subtypes.join(' ');
   const colors = (token.colors ?? []).map((c) => COLOR_LETTERS[c] ?? c).sort();
   const keywords = (token.keywords ?? []).map((k) => k.toLowerCase()).sort();
-  // Rules text other than its keywords (and their reminder text) means it does something else.
-  const textParts = (card.oracle_text ?? '').replace(/\([^)]*\)/g, '').split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  // Rules text other than its keywords (and their reminder text) and its own abilities (Smaug's "When Smaug
+  // dies, …") means it does something else.
+  let text = (card.oracle_text ?? '').replace(/\([^)]*\)/g, '');
+  const abilityTexts = (token.triggeredAbilities ?? []).map((a) => a.text.replace(name, 'this creature'));
+  for (const ability of abilityTexts) text = text.replace(ability, '');
+  // Scryfall lists keyword actions in an ability's text ("create … Treasure tokens") as keywords too.
+  const cardKeywords = (card.keywords ?? []).map((k) => k.toLowerCase()).filter((k) => !abilityTexts.some((t) => t.toLowerCase().includes(k)));
+  const textParts = text.split(/[\n,]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const types = [...(token.supertypes ?? []), ...(token.types ?? ['Creature'])];
   return card.name === name
-    && card.type_line === `Token Creature — ${subtypes.join(' ')}`
+    && card.type_line === `Token ${types.join(' ')} — ${subtypes.join(' ')}`
     && card.power === String(token.power) && card.toughness === String(token.toughness)
     && [...(card.colors ?? [])].sort().join() === colors.join()
-    && (card.keywords ?? []).map((k) => k.toLowerCase()).sort().join() === keywords.join()
+    && cardKeywords.sort().join() === keywords.join()
     && textParts.every((part) => keywords.includes(part));
 }
 
@@ -84,7 +93,7 @@ export function tokenQuery(token) {
   }
   const colors = (token.colors ?? []).map((c) => COLOR_LETTERS[c] ?? c).join('') || 'c';
   return [
-    't:token', 't:creature', ...(token.subtypes ?? []).map((s) => `t:${s.toLowerCase()}`),
+    't:token', ...(token.types ?? ['Creature']).map((t) => `t:${t.toLowerCase()}`), ...(token.subtypes ?? []).map((s) => `t:${s.toLowerCase()}`),
     `pow=${token.power}`, `tou=${token.toughness}`, `c=${colors}`,
     ...(token.keywords ?? []).map((k) => `keyword:"${k}"`),
   ].join(' ');

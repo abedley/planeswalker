@@ -1,5 +1,5 @@
 /** Words for things on the battlefield: names, choices, phases and prompts. */
-import { DECISION, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
+import { DECISION, CHOICE, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
 import { PHASE } from '../../src/engine/turnStructure.js';
 import { formatMana } from '../../src/engine/mana.js';
 
@@ -44,6 +44,52 @@ export function variantLabel(state, variant, me) {
   return parts.join(' · ') || 'Play';
 }
 
+/** Choices made by tapping a permanent on the board. */
+export const BOARD_CHOICES = new Set([CHOICE.RING_BEARER, CHOICE.ARMY, CHOICE.SACRIFICE]);
+/** Choices made by tapping a card in your hand. */
+export const HAND_CHOICES = new Set([CHOICE.DISCARD, CHOICE.BOTTOM_FROM_HAND]);
+
+const capitalize = (text) => text[0].toUpperCase() + text.slice(1);
+
+/** A cost as words, for "you may pay" choices: "Sacrifice a Food", "Pay {2}{W}", "Pay 2 life". */
+function costWords(state, cost, ids, me) {
+  const parts = [];
+  if (ids.length) parts.push(`Sacrifice ${ids.map((id) => nameOf(state, id, me)).join(', ')}`);
+  if (cost?.mana) parts.push(`Pay ${formatMana(cost.mana)}`);
+  if (cost?.life) parts.push(`Pay ${cost.life} life`);
+  return parts.join(', ') || 'Pay';
+}
+
+/** What one option of a DECISION.CHOOSE reads as. */
+export function choiceLabel(state, decision, choice, me) {
+  if (choice === 'decline') return decision.kind === CHOICE.OPTIONAL_COST ? 'Don\'t pay' : 'Don\'t';
+  switch (decision.kind) {
+    case CHOICE.MAY: return choice === 'yes' ? 'Yes' : 'No';
+    case CHOICE.PAY:
+      // Ward—sacrifice a legend (Sauron, the Dark Lord): '0:<id>'.
+      if (String(choice).includes(':')) return costWords(state, decision.cost, String(choice).split(':')[1].split(','), me);
+      return choice === 'pay' ? costWords(state, decision.cost, [], me) : decision.counterId ? 'Don\'t pay (it\'s countered)' : 'Don\'t pay';
+    case CHOICE.OPTIONAL_COST: {
+      const [index, ids] = String(choice).split(':');
+      return costWords(state, decision.costs[Number(index)], ids ? ids.split(',') : [], me);
+    }
+    case CHOICE.KEYWORD: return capitalize(choice);
+    case CHOICE.COUNTER: return `${capitalize(choice)} counter`;
+    case CHOICE.CARD_TYPE: return `Protection from ${choice === 'Sorcery' ? 'sorceries' : `${choice.toLowerCase()}s`}`;
+    case CHOICE.CREATURE_TYPE: return choice;
+    case CHOICE.CAST_FREE_VARIANT: {
+      // How the free spell is cast: its targets.
+      const variant = decision.variants[Number(choice)];
+      const targets = (variant.targets ?? []).filter(Boolean).map((id) => nameOf(state, id, me));
+      return targets.length ? `Target ${targets.join(', ')}` : 'Cast it';
+    }
+    default: {
+      const card = decision.cards?.find((c) => c.id === choice) ?? findCard(state, choice);
+      return card?.name ?? String(choice);
+    }
+  }
+}
+
 /** The steps shown as pips in the middle of the board. */
 export const TURN_PIPS = [
   { id: 'begin', label: 'Begin', match: (s) => s.phase === PHASE.BEGINNING },
@@ -68,6 +114,22 @@ export function promptFor(state, me) {
       case DECISION.LEGEND_RULE: return `Keep one ${decision.name}`;
       case DECISION.MULLIGAN: return 'Keep this hand?';
       case DECISION.PUT_ON_BOTTOM: return `Tap ${decision.count} card${decision.count > 1 ? 's' : ''} to put on the bottom`;
+      case DECISION.CHOOSE: return choosePrompt(decision);
+      case DECISION.CHOOSE_MANY:
+        switch (decision.kind) {
+          case CHOICE.SCRY: return `Scry ${decision.options.length}: tap the cards to keep on top, in order`;
+          case CHOICE.SEARCH: return `Search your library: choose up to ${decision.max}`;
+          case CHOICE.LOOK:
+            return decision.destination === 'battlefield' ? 'Choose any artifacts and lands to put onto the battlefield'
+              : `Look at the top ${decision.looked.length}: you may take ${decision.max === 1 ? 'a card' : `up to ${decision.max}`}`;
+          case CHOICE.EXILE_FROM_HAND: return `Exile ${decision.min} card${decision.min > 1 ? 's' : ''} from your hand`;
+          case CHOICE.EXILE_COST: return `Exile ${decision.min} cards from your graveyard`;
+          case CHOICE.KEEP: return `Choose up to ${decision.max} creatures to keep: the rest are destroyed`;
+          case CHOICE.HAND_CARDS: return 'Put any creature cards onto the battlefield';
+          case CHOICE.COUNTERS: return 'Choose counters to move';
+          case CHOICE.SACRIFICE_ANY: return 'Sacrifice any number of lands';
+          default: return 'Choose any number of cards';
+        }
       default: return '';
     }
   }
@@ -84,3 +146,28 @@ export function promptFor(state, me) {
 }
 
 export const manaText = (mana) => formatMana(mana);
+
+/** The prompt for a choice made while something resolves (DECISION.CHOOSE). */
+function choosePrompt(decision) {
+  const from = decision.sourceName ? `: ${decision.sourceName}` : '';
+  switch (decision.kind) {
+    case CHOICE.RING_BEARER: return 'The Ring tempts you: choose your Ring-bearer';
+    case CHOICE.ARMY: return `Choose the Army to amass onto${from}`;
+    case CHOICE.SACRIFICE: return `Choose a permanent to sacrifice${from}`;
+    case CHOICE.DISCARD: return `Tap a card to discard${from}`;
+    case CHOICE.BOTTOM_FROM_HAND: return `Tap a card to put on the bottom${from}`;
+    case CHOICE.REVEALED_CARD: return 'Choose a card for them to discard';
+    case CHOICE.KEYWORD: return `Choose the ability it gains${from}`;
+    case CHOICE.MAY: return decision.text ?? `Do it?${from}`;
+    case CHOICE.COUNTER: return `Choose a counter${from}`;
+    case CHOICE.CARD_TYPE: return `Choose a card type to gain protection from${from}`;
+    case CHOICE.CAST_FREE: return `You may cast a spell without paying its mana cost${from}`;
+    case CHOICE.CAST_FREE_VARIANT: return `Choose its targets${from}`;
+    case CHOICE.OPTIONAL_COST: return `Pay the cost?${from}`;
+    case CHOICE.PAY: return decision.counterId ? `Pay for ward, or your spell is countered${from}` : `Pay, or else${from}`;
+    case CHOICE.CREATURE_TYPE: return `Note a creature type${from}`;
+    case CHOICE.GRAVEYARD_CARD: return `Choose a card from your graveyard${from}`;
+    case CHOICE.HAND_CARD: return `Choose a card from your hand${from}`;
+    default: return `Choose${from}`;
+  }
+}

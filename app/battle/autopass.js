@@ -3,7 +3,7 @@
  * Magic gives priority many times a turn; like MTG Arena's "smart stops", the app
  * only stops when the player could sensibly act.
  */
-import { DECISION } from '../../src/engine/Game.js';
+import { DECISION, CHOICE } from '../../src/engine/Game.js';
 import { PHASE, STEP } from '../../src/engine/turnStructure.js';
 import { ACTION } from '../../src/engine/actions.js';
 import {
@@ -90,6 +90,12 @@ export function primaryAction(state, me) {
       case DECISION.ASSIGN_COMBAT_DAMAGE:
         // The choice is a sheet; the button brings it back if it was dismissed.
         return { label: 'Assign damage', reopen: true };
+      case DECISION.CHOOSE:
+        // A card in hand is tapped there; a permanent (on the board) or anything else, the button brings back.
+        if ([CHOICE.DISCARD, CHOICE.BOTTOM_FROM_HAND].includes(decision.kind)) return { label: decision.kind === CHOICE.DISCARD ? 'Discard 1' : 'Bottom 1' };
+        return { label: 'Choose', reopen: true };
+      case DECISION.CHOOSE_MANY:
+        return { label: { [CHOICE.SCRY]: 'Scry', [CHOICE.KEEP]: 'Keep', [CHOICE.EXILE_COST]: 'Exile', [CHOICE.EXILE_FROM_HAND]: 'Exile', [CHOICE.SACRIFICE_ANY]: 'Sacrifice' }[decision.kind] ?? 'Choose', reopen: true };
       default:
         return { label: 'Choose' };
     }

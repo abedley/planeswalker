@@ -5,7 +5,9 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { cardArt, frameOf, presentationOf } from './art.js';
-import { costSymbols, abilitySymbol, setSymbol, symbolText } from './symbols.js';
+import {
+  costSymbols, abilitySymbol, setSymbol, symbolText, manaSymbol, typeSymbol,
+} from './symbols.js';
 
 /** Mana symbols for a cost: `{ generic: 2, G: 1 }` → {2}{G}. */
 export function manaPips(cost, extraClass = '') {
@@ -30,7 +32,7 @@ export function rulesText(card) {
 }
 
 const KEYWORDS = new Set(['flying', 'first strike', 'double strike', 'deathtouch', 'lifelink', 'trample', 'menace',
-  'reach', 'vigilance', 'haste', 'defender']);
+  'reach', 'vigilance', 'haste', 'defender', 'indestructible', 'hexproof', 'ward']);
 
 /** Keyword ability symbols (at most four). */
 export function keywordIcons(keywords = []) {
@@ -61,10 +63,36 @@ const RESTRICTIONS = [
   ["can't be blocked except by flyers", 'Flyers only', 'unblockable'],
   ["can't be blocked by power 2 or less", 'Power 3+ only', 'unblockable'],
   ["can't be blocked by more than one creature", 'One blocker', 'unblockable'],
+  ["can't be blocked except by three or more creatures", '3+ blockers', 'unblockable'],
+  // The Ring, level 1: the Ring-bearer.
+  ["can't be blocked by creatures with greater power", 'No bigger blockers', 'unblockable'],
+  // Bewitching Leechcraft; Bill the Pony.
+  ['untaps only by removing a +1/+1 counter', 'Stays tapped', 'no-attack'],
+  ['assigns combat damage equal to its toughness', 'Hits with toughness', 'lure'],
   // Blocking requirements (509.1c).
   ['must be blocked', 'Block me', 'lure'],
   ['all creatures able to block it do so', 'Lure', 'lure'],
+  // The Balrog; goad (701.15).
+  ["can't be blocked except by legendary creatures", 'Legends only', 'unblockable'],
+  ['attacks each combat if able', 'Goaded', 'lure'],
 ];
+
+/** Counters other than +1/+1 and lore, as small badges: "Stun 9", "Verse 3" (keyword counters show as keywords). */
+const BADGE_COUNTERS = ['stun', 'hope', 'verse', 'burden', 'influence'];
+
+function counterBadges(counters = {}) {
+  const badges = BADGE_COUNTERS.filter((kind) => counters[kind] > 0)
+    .map((kind) => h(`span.cb.cb-${kind}`, `${kind[0].toUpperCase()}${kind.slice(1)} ${counters[kind]}`));
+  return badges.length ? h('div.counter-badges', badges) : null;
+}
+
+/** 702.16: what a permanent has protection from, as badges: "Pro" and the color's or card type's symbol. */
+function protectionBadges(card) {
+  const symbols = (card.protections ?? []).flatMap((p) => [
+    ...(p.colors ?? []).map((c) => manaSymbol(c, { cost: false })), ...(p.types ?? []).map((t) => typeSymbol(t)),
+  ]);
+  return symbols.map((symbol) => h('span.rb.protect.now', { title: 'Protection' }, 'Pro ', symbol));
+}
 
 /**
  * Badges for a creature's attacking and blocking restrictions. One it has only this
@@ -76,23 +104,30 @@ export function restrictionBadges(card, attachments = []) {
     ...(card.base?.keywords ?? card.keywords ?? []),
     ...attachments.flatMap((a) => (a.staticAbilities ?? []).flatMap((e) => e.keywords ?? [])),
   ]);
-  const badges = RESTRICTIONS.filter(([keyword]) => card.keywords?.includes(keyword))
-    .map(([keyword, label, kind]) => h(`span.rb.fit.${kind}${lasting.has(keyword) ? '' : '.now'}`, label));
+  const badges = [
+    ...RESTRICTIONS.filter(([keyword]) => card.keywords?.includes(keyword))
+      .map(([keyword, label, kind]) => h(`span.rb.fit.${kind}${lasting.has(keyword) ? '' : '.now'}`, label)),
+    ...protectionBadges(card),
+  ];
   return badges.length ? h('div.restrict', badges) : null;
 }
 
 /** What changes how a permanent looks; its board element is redrawn only when this changes. */
 export function boardSignature(p, extra = '') {
-  return [p.power, p.toughness, p.damage, JSON.stringify(p.counters ?? {}), (p.keywords ?? []).join(), p.base?.power, p.base?.toughness, extra].join('|');
+  return [p.power, p.toughness, p.damage, JSON.stringify(p.counters ?? {}), (p.keywords ?? []).join(), p.base?.power, p.base?.toughness,
+    (p.types ?? []).join(), JSON.stringify(p.protections ?? []), extra].join('|');
 }
 
-/** A creature on the battlefield: art, keywords and blocking restrictions, power/toughness, damage and counters. */
-export function boardCard(permanent, definitions, { attachments = [] } = {}) {
+/**
+ * A creature on the battlefield: art, keywords and blocking restrictions, power/toughness,
+ * damage and +1/+1 counters, and the Ring if it's its player's Ring-bearer (`ringBearer`).
+ */
+export function boardCard(permanent, definitions, { attachments = [], ringBearer = false } = {}) {
   const card = presentationOf(permanent, definitions);
   const powerClass = card.base && card.power > card.base.power ? 'up' : card.base && card.power < card.base.power ? 'down' : '';
   const toughness = card.toughness - (card.damage ?? 0);
   const toughnessClass = card.damage ? 'hurt' : card.base && card.toughness > card.base.toughness ? 'up' : '';
-  const counters = Object.values(card.counters ?? {}).reduce((sum, n) => sum + n, 0);
+  const counters = card.counters?.['+1/+1'] ?? 0;
   return h(`div.board-face.f-${frameOf(card)}`,
     cardArt(card),
     // Without real art, cards would look alike: name them.
@@ -101,14 +136,21 @@ export function boardCard(permanent, definitions, { attachments = [] } = {}) {
     restrictionBadges(card, attachments),
     attachments.length ? h('div.attach', attachments.map((a) => h(`span.tab.f-${frameOf(a)}`, icon(a.types.includes('Artifact') ? 'artifact' : 'enchantment')))) : null,
     counters ? h('div.counter', `+${counters}`) : null,
+    counterBadges(card.counters),
+    ringBearer ? h('div.ring-bearer', { title: 'Ring-bearer' }, icon('ring')) : null,
     h('div.stat.power', { class: powerClass }, String(card.power)),
     h('div.stat.tough', { class: toughnessClass }, String(toughness)));
 }
 
-/** A small permanent (artifact, enchantment, token) as a round chip. */
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+/** A small permanent (artifact, enchantment, token) as a round chip; a Saga shows its chapter (714.2). */
 export function chipFace(permanent, definitions) {
   const card = presentationOf(permanent, definitions);
-  return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card));
+  const lore = permanent.counters?.lore ?? 0;
+  // Hope, verse, burden and influence counters: the number, in the corner.
+  const other = BADGE_COUNTERS.map((kind) => permanent.counters?.[kind] ?? 0).find((n) => n > 0);
+  return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card), lore ? h('div.chip-lore', ROMAN[lore] ?? String(lore)) : other ? h('div.chip-lore', String(other)) : null);
 }
 
 export const cardBack = () => h('div.card-back', h('div.back-oval', h('div.back-sigil', icon('star'))));

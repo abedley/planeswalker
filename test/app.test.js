@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  Game, ACTION, SAMPLE_SPELLS, SAMPLE_EFFECTS, passPriority, playLand, DECISION, PHASE, STEP, CARD_TYPE, TARGET, EFFECT, KEYWORD,
+  Game, ACTION, CHOICE, SAMPLE_SPELLS, SAMPLE_EFFECTS, passPriority, playLand, DECISION, PHASE, STEP, CARD_TYPE, TARGET, EFFECT, KEYWORD,
 } from '../src/index.js';
 import {
-  playOptions, variantsFor, secondTargets, perform, sameAction,
+  playOptions, variantsFor, secondTargets, perform, sameAction, nextChoice, narrow, interchangeableTargets,
 } from '../app/battle/play.js';
 import { shouldAutoPass, primaryAction, blockHint } from '../app/battle/autopass.js';
 import { promptFor } from '../app/battle/describe.js';
@@ -239,7 +239,9 @@ test('a fight\'s two targets, and cycling from the hand, are play options', () =
   const options = playOptions(game, 'p1');
   const pounce = options.find((o) => o.sourceId === handCard(game, 'pounceFree').id);
   const myBear = state(game).battlefield.find((p) => p.controllerId === 'p1' && p.cardId === 'bearFree').id;
-  assert.deepEqual(pounce.targets, [myBear]);
+  // Every target of any slot; the first slot is our Bear.
+  assert.equal(pounce.targets.length, 3);
+  assert.deepEqual([...new Set(pounce.variants.map((v) => v.targets[0]))], [myBear]);
   assert.equal(secondTargets(variantsFor(pounce, myBear)).length, 2, 'either of their Bears');
   const cycle = options.find((o) => o.sourceId === handCard(game, 'thicketFree').id && o.fromHand);
   assert.deepEqual([cycle.kind, cycle.abilityId, cycle.text], ['activate', 'cycling', 'Cycling {G}']);
@@ -283,4 +285,69 @@ test('the play history records lands, spells and their targets, by turn', () => 
     { t: turn, playerId: 'p1', kind: 'land', source: 'Forest', targets: [] },
     { t: turn, playerId: 'p1', kind: 'spell', source: 'Sample Shock', targets: [{ playerId: 'p2' }] },
   ]);
+});
+
+test('a play\'s choices, one at a time: mode, X, then targets by position or as a set', () => {
+  const variants = [
+    { mode: 0, x: 1, targets: ['a'] }, { mode: 0, x: 2, targets: ['a'] }, { mode: 1, targets: ['b', null] }, { mode: 1, targets: ['b', 'c'] },
+  ];
+  const mode = nextChoice(variants);
+  assert.deepEqual(mode, { kind: 'mode', values: [0, 1] });
+  assert.deepEqual(nextChoice(narrow(variants, mode, 0)), { kind: 'x', values: [1, 2] });
+  const second = nextChoice(narrow(variants, mode, 1));
+  assert.deepEqual(second, { kind: 'target', index: 1, values: [null, 'c'] });
+  assert.equal(narrow(narrow(variants, mode, 1), second, null).length, 1);
+  // "Up to two target creatures": in any order, and stop after any.
+  const upToTwo = [{ targets: [] }, { targets: ['a'] }, { targets: ['b'] }, { targets: ['a', 'b'] }, { targets: ['b', 'a'] }];
+  assert.deepEqual(nextChoice(upToTwo, { interchangeable: true }), { kind: 'targets', values: ['a', 'b', null] });
+  const afterB = narrow(upToTwo, { kind: 'targets' }, 'b');
+  assert.deepEqual(nextChoice(afterB, { interchangeable: true, picked: ['b'] }), { kind: 'targets', values: ['a', null] });
+  assert.deepEqual(narrow(afterB, { kind: 'targets' }, null, ['b']), [{ targets: ['b'] }]);
+  assert.equal(interchangeableTargets([TARGET.CREATURE, TARGET.CREATURE]), true);
+  assert.equal(interchangeableTargets([TARGET.CREATURE_YOU_CONTROL, TARGET.CREATURE_OPPONENT_CONTROLS]), false);
+  assert.equal(interchangeableTargets([TARGET.CREATURE]), false);
+});
+
+test('the main button and prompt for choices made while something resolves', () => {
+  const base = { players: [{ id: 'p1', hand: [] }], stack: [], battlefield: [], combat: { attackers: [] }, status: 'inProgress' };
+  const at = (decision) => ({ ...base, pendingDecision: { playerId: 'p1', ...decision }, validActions: [] });
+  assert.equal(primaryAction(at({ type: DECISION.CHOOSE, kind: CHOICE.RING_BEARER, options: ['x'] }), 'p1').reopen, true);
+  assert.equal(primaryAction(at({ type: DECISION.CHOOSE, kind: CHOICE.DISCARD, options: ['x'] }), 'p1').label, 'Discard 1');
+  assert.deepEqual(primaryAction(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.SCRY, options: ['x', 'y'] }), 'p1'), { label: 'Scry', reopen: true });
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE, kind: CHOICE.RING_BEARER, options: ['x'] }), 'p1'), 'The Ring tempts you: choose your Ring-bearer');
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.SCRY, options: ['x', 'y'] }), 'p1'), 'Scry 2: tap the cards to keep on top, in order');
+});
+
+test('two modes at once are one choice among the modes; prompts for the rares\' choices', () => {
+  const variants = [{ mode: 0, targets: ['a'] }, { mode: [0, 2], targets: ['a', 'b'] }, { mode: [0, 2], targets: ['a', 'c'] }];
+  const choice = nextChoice(variants);
+  assert.deepEqual(choice, { kind: 'mode', values: [0, [0, 2]] });
+  assert.equal(narrow(variants, choice, [0, 2]).length, 2);
+  const base = { players: [{ id: 'p1', hand: [] }], stack: [], battlefield: [], combat: { attackers: [] }, status: 'inProgress' };
+  const at = (decision) => ({ ...base, pendingDecision: { playerId: 'p1', ...decision }, validActions: [] });
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.KEEP, options: ['x', 'y', 'z'], max: 2 }), 'p1'),
+    'Choose up to 2 creatures to keep: the rest are destroyed');
+  assert.equal(promptFor(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.EXILE_COST, options: ['x', 'y', 'z'], min: 3, max: 3 }), 'p1'),
+    'Exile 3 cards from your graveyard');
+  assert.deepEqual(primaryAction(at({ type: DECISION.CHOOSE_MANY, kind: CHOICE.KEEP, options: [] }), 'p1'), { label: 'Keep', reopen: true });
+});
+
+test('cards that may be cast from exile are play options', () => {
+  const marauderCards = {
+    ...cards,
+    bearFree: { id: 'bearFree', name: 'Bear', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 2, toughness: 2 },
+    exileTop: {
+      id: 'exileTop', name: 'Exile Top', manaCost: {}, types: [CARD_TYPE.SORCERY], effects: [{ type: EFFECT.EXILE_TOP }, { type: EFFECT.MAY_PLAY_FROM_EXILE, turn: 'this' }],
+    },
+  };
+  const deck = ['exileTop', ...Array(6).fill('forest'), 'bearFree', ...Array(32).fill('forest')];
+  const game = new Game({ players, cards: marauderCards, shuffleLibraries: false, emblems: { p1: [], p2: [] }, decks: { p1: deck, p2: deck } });
+  game.start();
+  for (let i = 0; i < 2; i++) game.dispatch(passPriority(game.getState().priorityPlayerId));
+  game.dispatch({ type: ACTION.CAST_SPELL, playerId: 'p1', cardId: handCard(game, 'exileTop').id });
+  game.dispatch(passPriority('p1'));
+  game.dispatch(passPriority('p2'));
+  const option = playOptions(game, 'p1').find((o) => o.fromZone === 'exile');
+  assert.ok(option, 'the Bear in exile');
+  assert.deepEqual(perform(game, 'p1', option, option.variants[0]), { ok: true });
 });

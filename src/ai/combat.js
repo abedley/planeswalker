@@ -237,7 +237,7 @@ export function damageThrough(attackers, blockers) {
   const free = [...blockers];
   let total = 0;
   for (const attacker of sorted) {
-    const needed = has(attacker, KEYWORD.MENACE) ? 2 : 1;
+    const needed = has(attacker, KEYWORD.MIN_THREE_BLOCKERS) ? 3 : has(attacker, KEYWORD.MENACE) ? 2 : 1;
     const able = free.filter((b) => canBlock(b, attacker));
     if (able.length >= needed) {
       // The cheapest blockers that can do it are used up.

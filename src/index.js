@@ -1,10 +1,11 @@
 export { EventEmitter } from './engine/EventEmitter.js';
 export {
-  Game, GAME_STATUS, DECISION, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN, GAME_LIMITS,
+  Game, GAME_STATUS, DECISION, CHOICE, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN, GAME_LIMITS,
 } from './engine/Game.js';
 export {
   ACTION, passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
   setBlocker, confirmBlockers, assignCombatDamage, discard, chooseTargets, chooseMode, keepLegend, keepHand, mulligan, putOnBottom,
+  choose, toggleChoice, confirmChoice,
 } from './engine/actions.js';
 export {
   groupAllowed, groupsAllowed, requirementsMet, blocksLegal, legalizeBlocks,
@@ -22,6 +23,7 @@ export {
   SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK,
 } from './cards/sampleCards.js';
 export { EMBLEMS, DEFAULT_EMBLEMS } from './cards/emblems.js';
+export { LTR_DECKS, LTR_FELLOWSHIP_DECK, LTR_MORDOR_DECK } from './cards/ltrDecks.js';
 export {
   MANA_TYPES, emptyManaPool, addMana, planManaPayment, canPayMana, manaPoolTotal, formatMana,
 } from './engine/mana.js';

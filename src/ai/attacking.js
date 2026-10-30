@@ -23,7 +23,9 @@ import {
   blockingPlans, BLOCK_PLAN, fight, record, combatFlags, COMBAT_FLAG,
 } from './blocking.js';
 
-const { FIRST_STRIKE, DOUBLE_STRIKE, MENACE: MENACE_FLAG } = COMBAT_FLAG;
+const { FIRST_STRIKE, DOUBLE_STRIKE, MENACE, MIN_THREE } = COMBAT_FLAG;
+/** Attackers no single creature can block. */
+const MENACE_FLAG = MENACE | MIN_THREE;
 
 export const ATTACK_STRATEGY = Object.freeze({
   AGGRESSIVE: 'aggressive',

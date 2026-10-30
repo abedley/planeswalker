@@ -1,7 +1,8 @@
 /**
  * Rules for a whole declaration of blockers, shared by the engine and the AI:
  * - restrictions on how many creatures block an attacker (509.1b): menace (702.111b,
- *   not exactly one) and "can't be blocked by more than one creature";
+ *   not exactly one), "can't be blocked except by three or more creatures" and "can't be
+ *   blocked by more than one creature";
  * - requirements (509.1c): "must be blocked if able" (one requirement: that it's
  *   blocked) and "all creatures able to block this creature do so" (a requirement
  *   on each creature able to block it). The blocks must obey as many requirements as
@@ -19,6 +20,7 @@ const isRequired = (attacker) => isLure(attacker) || mustBeBlocked(attacker);
 /** Whether `count` blockers on `attacker` break a restriction. */
 export function groupAllowed(attacker, count) {
   if (count === 1 && hasKeyword(attacker, KEYWORD.MENACE)) return false;
+  if (count > 0 && count < 3 && hasKeyword(attacker, KEYWORD.MIN_THREE_BLOCKERS)) return false;
   if (count > 1 && hasKeyword(attacker, KEYWORD.MAX_ONE_BLOCKER)) return false;
   return true;
 }

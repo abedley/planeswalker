@@ -3,7 +3,7 @@
  * cache and refreshed in the background (so a new version shows on the next
  * visit); card images from Scryfall's CDN and fonts are cached once and kept.
  */
-const VERSION = 'planeswalker-v16';
+const VERSION = 'planeswalker-v17';
 const SHELL = [
   './', 'index.html', 'app/app.css', 'app/main.js', 'manifest.webmanifest', 'app/icons/icon.svg',
   'app/vendor/symbols.css', 'app/vendor/mana.woff2', 'app/vendor/keyrune.woff2',
@@ -37,13 +37,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.origin !== self.location.origin) return;
-  // Stale while revalidate.
+  // Network first, so a new version is used as soon as it's deployed; the cache is for offline.
   event.respondWith(caches.open(VERSION).then(async (cache) => {
-    const hit = await cache.match(request);
-    const network = fetch(request).then((response) => {
+    try {
+      const response = await fetch(request, { cache: 'no-cache' });
       if (response.ok) cache.put(request, response.clone());
       return response;
-    }).catch(() => hit);
-    return hit ?? network;
+    } catch (error) {
+      const hit = await cache.match(request);
+      if (hit) return hit;
+      throw error;
+    }
   }));
 });

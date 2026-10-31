@@ -8,6 +8,7 @@ import {
 } from '../src/index.js';
 import { CHOICE } from '../src/engine/Game.js';
 import { choose, toggleChoice, confirmChoice } from '../src/engine/actions.js';
+import { discardToHandSize } from './helpers/ltrGame.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 /** Free copies of real cards (keeping {X}). */
@@ -45,7 +46,10 @@ const decision = (game) => state(game).pendingDecision;
 const ok = (game, action) => assert.deepEqual(game.dispatch(action), { ok: true }, JSON.stringify(action));
 
 function passRound(game) {
-  for (let i = 0; i < 2 && state(game).priorityPlayerId; i++) ok(game, passPriority(state(game).priorityPlayerId));
+  for (let i = 0; i < 2 && state(game).priorityPlayerId; i++) {
+    ok(game, passPriority(state(game).priorityPlayerId));
+    discardToHandSize(game);
+  }
 }
 
 /** Passes until the stack is empty and nothing waits (choices are left to the test). */
@@ -61,6 +65,7 @@ function advanceTo(game, { turn, phase, step = null }) {
     const d = s.pendingDecision;
     if (d?.type === DECISION.DECLARE_ATTACKERS) ok(game, confirmAttackers(d.playerId));
     else if (d?.type === DECISION.DECLARE_BLOCKERS) ok(game, confirmBlockers(d.playerId));
+    else if (d?.type === DECISION.DISCARD_TO_HAND_SIZE) discardToHandSize(game);
     else if (d) ok(game, s.validActions[0]);
     else passRound(game);
   }

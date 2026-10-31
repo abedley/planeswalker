@@ -61,8 +61,19 @@ export const inHand = (game, playerId, cardId) => player(game, playerId).hand.fi
 export const decision = (game) => state(game).pendingDecision;
 export const ok = (game, action) => assert.deepEqual(game.dispatch(action), { ok: true }, JSON.stringify(action));
 
+/** Cleanup's discard to hand size: the newest cards go (drawn filler, not the cards a test set up). */
+export function discardToHandSize(game) {
+  for (let i = 0; i < 20 && decision(game)?.type === DECISION.DISCARD_TO_HAND_SIZE; i++) {
+    const discards = state(game).validActions.filter((a) => a.type === ACTION.DISCARD);
+    ok(game, discards.at(-1));
+  }
+}
+
 export function passRound(game) {
-  for (let i = 0; i < 2 && state(game).priorityPlayerId; i++) ok(game, passPriority(state(game).priorityPlayerId));
+  for (let i = 0; i < 2 && state(game).priorityPlayerId; i++) {
+    ok(game, passPriority(state(game).priorityPlayerId));
+    discardToHandSize(game);
+  }
 }
 
 /** Passes until the stack is empty and nothing waits (choices are left to the test). */
@@ -79,6 +90,7 @@ export function advanceTo(game, { turn, phase, step = null }) {
     if (d?.type === DECISION.DECLARE_ATTACKERS) ok(game, confirmAttackers(d.playerId));
     else if (d?.type === DECISION.DECLARE_BLOCKERS) ok(game, confirmBlockers(d.playerId));
     else if (d?.type === DECISION.CHOOSE_MANY) ok(game, s.validActions.find((a) => a.type === ACTION.CONFIRM_CHOICE) ?? s.validActions[0]);
+    else if (d?.type === DECISION.DISCARD_TO_HAND_SIZE) discardToHandSize(game);
     else if (d) ok(game, s.validActions[0]);
     else passRound(game);
   }

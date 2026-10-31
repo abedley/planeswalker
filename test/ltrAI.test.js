@@ -121,7 +121,12 @@ test("the basic AI taps creatures for Elven Chorus's mana", async () => {
   const g = game({ hand: ['elvenChorus', 'bear'], cards: { ...free(['elvenChorus']), bear: creature('bear', 2, 2) } });
   castAndResolve(g, 'elvenChorus');
   castAndResolve(g, 'bear');
-  while (!(g.getState().turn === 3 && g.getState().phase === PHASE.PRECOMBAT_MAIN)) g.dispatch(passPriority(g.getState().priorityPlayerId) );
+  for (let i = 0; i < 200 && !(g.getState().turn === 3 && g.getState().phase === PHASE.PRECOMBAT_MAIN); i++) {
+    const s = g.getState();
+    // p2 ends turn 2 with 8 cards and discards down to 7.
+    if (s.pendingDecision?.type === DECISION.DISCARD_TO_HAND_SIZE) g.dispatch(s.validActions[0]);
+    else g.dispatch(passPriority(s.priorityPlayerId));
+  }
   const state = g.getState();
   const bear = state.battlefield.find((p) => p.cardId === 'bear');
   assert.ok(manaSources(state, state.validActions.filter((a) => a.playerId === 'p1')).some((s) => s.cardId === bear.id));

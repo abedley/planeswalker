@@ -375,7 +375,8 @@ test("Sméagol, Helpful Guide: the Ring makes an opponent reveal until a land, w
   advanceTo(game, main(3));
   const plains = state(game).battlefield.find((p) => p.cardId === 'plains');
   assert.ok(plains && plains.controllerId === 'p1' && plains.ownerId === 'p2' && plains.tapped);
-  assert.equal(player(game, 'p2').graveyard.filter((c) => c.cardId === 'salve').length, 1, 'p2 drew the first Salve on turn 2');
+  // p2 drew the first Salve on turn 2 and discarded it down to 7; the second was revealed.
+  assert.equal(player(game, 'p2').graveyard.filter((c) => c.cardId === 'salve').length, 2);
 });
 
 test('Spiteful Banditry deals X to each creature, and makes a Treasure once a turn', () => {

@@ -11,8 +11,7 @@ import { h, setText, toggle, reconcile } from '../dom.js';
 import { icon } from '../icons.js';
 import { crest, frameOf } from '../art.js';
 import { fit } from '../fit.js';
-import { symbolText, inlineSymbols } from '../symbols.js';
-import { fullCard, boardCard, chipFace, boardSignature, manaPips, cardBack } from '../cardView.js';
+import { fullCard, boardCard, chipFace, abilityFace, boardSignature, manaPips, cardBack } from '../cardView.js';
 import { isCreature, isLand } from '../../src/cards/cards.js';
 import { DECISION } from '../../src/engine/Game.js';
 import { TURN_PIPS, findCard } from './describe.js';
@@ -200,7 +199,7 @@ export class BoardView {
     if (zone === 'hand') return fullCard(entry.card, defs);
     if (zone === 'stack') {
       if (entry.card) return fullCard(entry.card, defs);
-      return this.#abilityFace(entry.object, state);
+      return this.abilityFace(entry.object, state);
     }
     if (zone.startsWith('creatures')) {
       const attachments = state.battlefield.filter((p) => p.attachedTo === entry.card.id);
@@ -210,19 +209,15 @@ export class BoardView {
   }
 
   /**
-   * An ability on the stack: its source (the planeswalker's crest, or the
-   * permanent's art) and name, the cost it was activated for, and its effect.
+   * An ability on the stack, showing what it comes from: the source card's art
+   * (wherever the card is now, e.g. in the graveyard for a "dies" trigger), or the
+   * planeswalker's crest for an emblem's ability. `big` for inspecting it.
    */
-  #abilityFace(object, state) {
-    const defs = this.#app.definitions;
-    const [, cost, effect] = object.text?.match(/^([^:]+):\s*(.*)$/s) ?? [null, null, object.text ?? ''];
+  abilityFace(object, state, { big = false } = {}) {
     const owner = state.players.find((p) => p.emblems.some((e) => e.id === object.sourceId));
-    const permanent = state.battlefield.find((p) => p.id === object.sourceId);
-    const thumb = owner && this.#info[owner.id] ? crest(this.#info[owner.id], { size: 'sm' })
-      : permanent ? chipFace(permanent, defs) : null;
-    return h('div.card-face.ability-face',
-      h('div.af-head', thumb ? h('div.af-src', thumb) : null, h('span.af-name.fit', object.sourceName)),
-      h('div.af-text.fit', withCost(symbolText(effect), cost)));
+    const portrait = owner && this.#info[owner.id] ? crest(this.#info[owner.id], { size: big ? 'md' : 'sm' }) : null;
+    const source = portrait ? null : object.sourceSnapshot ?? findCard(state, object.sourceId);
+    return abilityFace(object, { source: source?.cardId ? source : null, portrait, definitions: this.#app.definitions, big });
   }
 
   #signature(zone, entry, state) {
@@ -291,7 +286,7 @@ export class BoardView {
       }
       const sig = this.#signature(entry.zone, entry, state);
       if (record.zone !== entry.zone || record.sig !== sig) {
-        if (record.zone !== entry.zone) record.el.className = `card z-${entry.zone.split('-')[0]}`;
+        if (record.zone !== entry.zone) record.el.className = `card z-${entry.zone.split('-')[0]}${entry.object && !entry.card ? ' ability' : ''}`;
         record.el.replaceChildren(this.#face(entry.zone, entry, state));
         record.zone = entry.zone;
         record.sig = sig;
@@ -1083,13 +1078,4 @@ function hitDelayOf(events, speed) {
   if (events.some((e) => e.name === 'combatDamageDealt' && e.payload.damage.length)) return LUNGE_MS * LUNGE_HIT * speed;
   if (events.some((e) => e.name === 'damageDealt')) return BOLT_MS * speed;
   return 0;
-}
-
-/** Rules-text paragraphs with an ability's cost as a badge at the start of the first. */
-function withCost(paragraphs, cost) {
-  if (!cost) return paragraphs;
-  const badge = h('span.af-cost', inlineSymbols(cost));
-  if (paragraphs.length) paragraphs[0].prepend(badge);
-  else paragraphs.push(h('p', badge));
-  return paragraphs;
 }

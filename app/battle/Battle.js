@@ -1179,7 +1179,8 @@ export class Battle {
       return;
     }
     if (target.zone === 'stack') {
-      this.#app.overlays.inspect(card);
+      const ability = state.stack.find((o) => o.id === target.id && o.kind !== 'spell');
+      this.#app.overlays.inspect(card, ability ? { face: this.#view.abilityFace(ability, state, { big: true }) } : {});
       return;
     }
     const options = this.#options.filter((o) => o.sourceId === target.id);

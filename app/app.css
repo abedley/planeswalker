@@ -654,9 +654,9 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 @keyframes march { to { stroke-dashoffset: -19; } }
 
 /* the preview above the hand */
-.preview { position: absolute; z-index: 20; left: 0; right: 0; margin: 0 auto; bottom: calc(var(--hand-row) + 60px + var(--safe-bottom)); width: 236px; display: none; flex-direction: column; gap: 8px; }
+.preview { position: absolute; z-index: 20; left: 0; right: 0; margin: 0 auto; bottom: calc(var(--hand-row) + 60px + var(--safe-bottom)); width: 236px; display: none; flex-direction: column; gap: 10px; }
 .preview.open { display: flex; }
-.preview-card { height: 318px; filter: drop-shadow(0 14px 26px rgba(0, 0, 0, .75)); }
+.preview-card { height: 318px; filter: drop-shadow(0 -8px 14px rgba(0, 0, 0, .75)); /* cast up and out, so it stops short of the buttons below */ }
 .preview-actions { display: flex; flex-direction: column; gap: 6px; }
 .preview-actions .btn { padding: 10px 12px; font: 700 15px var(--display); }
 .preview-actions .btn small { display: block; font: 400 11px var(--ui); opacity: .8; }

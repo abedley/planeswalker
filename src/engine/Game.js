@@ -131,7 +131,7 @@ export const LAND_PLAYS_PER_TURN = 1; // 305.2
  * - `permanents`: the same for other nonland permanents (artifacts, enchantments,
  *   Treasure and other tokens).
  */
-export const GAME_LIMITS = Object.freeze({ hand: MAX_HAND_SIZE, creatures: 10, permanents: 8 });
+export const GAME_LIMITS = Object.freeze({ hand: 10, creatures: 10, permanents: 8 });
 
 const MAIN_PHASES = new Set([PHASE.PRECOMBAT_MAIN, PHASE.POSTCOMBAT_MAIN]);
 

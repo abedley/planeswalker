@@ -12,7 +12,7 @@ const CARDS = {
   Bear: { id: 'Bear', name: 'Bear', manaCost: {}, types: [CARD_TYPE.CREATURE], power: 2, toughness: 2 },
   Relic: { id: 'Relic', name: 'Relic', manaCost: {}, types: [CARD_TYPE.ARTIFACT] },
   Draw: spell('Draw', [{ type: EFFECT.DRAW_CARDS, count: 2 }]),
-  Draw3: spell('Draw3', [{ type: EFFECT.DRAW_CARDS, count: 3 }]),
+  Draw5: spell('Draw5', [{ type: EFFECT.DRAW_CARDS, count: 5 }]),
   Saprolings: spell('Saprolings', [{ type: EFFECT.CREATE_TOKEN, count: 3, token: { colors: ['green'], subtypes: ['Saproling'], power: 1, toughness: 1 } }]),
   Hoard: spell('Hoard', [{ type: EFFECT.CREATE_TOKEN, count: 3, token: TOKEN.TREASURE }]),
   // Draws first, so the hand is full again when the creature comes back.
@@ -48,24 +48,24 @@ function cast(game, name, targets) {
 }
 
 test('a card drawn into a full hand is burned', () => {
-  // 6 left after casting Draw3, + 3 drawn = 9: the hand holds 8, so the third is burned.
-  const hand = ['Draw3', 'Bear', 'Bear', 'Bear', 'Bear', 'Bear', 'Bear'];
-  const { game, events } = setup(hand, GAME_LIMITS, ['Relic', 'Relic', 'Relic']);
-  cast(game, 'Draw3');
-  assert.equal(p1(game).hand.length, 8);
+  // 6 left after casting Draw5, + 5 drawn = 11: the hand holds 10, so the fifth is burned.
+  const hand = ['Draw5', 'Bear', 'Bear', 'Bear', 'Bear', 'Bear', 'Bear'];
+  const { game, events } = setup(hand, GAME_LIMITS, ['Relic', 'Relic', 'Relic', 'Relic', 'Relic']);
+  cast(game, 'Draw5');
+  assert.equal(p1(game).hand.length, 10);
   const burned = events.filter((e) => e.name === 'cardBurned');
   assert.equal(burned.length, 1);
   assert.equal(burned[0].payload.reason, 'draw');
   assert.equal(burned[0].payload.cardName, 'Relic');
   assert.ok(p1(game).graveyard.some((c) => c.id === burned[0].payload.cardId));
   // Without limits, nothing burns.
-  const free = setup(hand, {}, ['Relic', 'Relic', 'Relic']);
-  cast(free.game, 'Draw3');
-  assert.equal(p1(free.game).hand.length, 9);
+  const free = setup(hand, {}, ['Relic', 'Relic', 'Relic', 'Relic', 'Relic']);
+  cast(free.game, 'Draw5');
+  assert.equal(p1(free.game).hand.length, 11);
 });
 
-test('the hand holds 8: going second, the first draw is kept', () => {
-  assert.equal(GAME_LIMITS.hand, 8);
+test('going second, the first draw is kept', () => {
+  assert.equal(GAME_LIMITS.hand, 10);
   const deck = Array(40).fill('forest');
   const game = new Game({
     players, cards: CARDS, shuffleLibraries: false, emblems: { p1: [], p2: [] }, decks: { p1: deck, p2: deck }, limits: GAME_LIMITS,

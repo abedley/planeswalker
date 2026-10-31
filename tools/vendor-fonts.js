@@ -32,11 +32,11 @@ export const MANA_GLYPHS = [
   'tap', 'untap',
   'creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'land', 'planeswalker',
   ...['flying', 'first-strike', 'double-strike', 'deathtouch', 'lifelink', 'trample', 'menace', 'reach',
-    'vigilance', 'haste', 'defender'].map((k) => `ability-${k}`),
+    'vigilance', 'haste', 'defender', 'indestructible', 'hexproof', 'ward'].map((k) => `ability-${k}`),
 ];
 
 /** Keyrune set symbols: the sets the real cards are printed in. */
-export const SETS = ['m19', 'm20', 'm21', 'fdn'];
+export const SETS = ['m19', 'm20', 'm21', 'fdn', 'ltr'];
 
 /** The codepoint a stylesheet gives `.prefix-name::before` (or `:before`). */
 export function codepoint(css, prefix, name) {
@@ -118,7 +118,8 @@ async function main() {
     await vendorTextFonts();
     return;
   }
-  await vendorTextFonts();
+  // `--symbols`: only the symbol fonts.
+  if (!process.argv.includes('--symbols')) await vendorTextFonts();
   const temp = await mkdtemp(join(tmpdir(), 'planeswalker-fonts-'));
   try {
     execFileSync('npm', ['pack', MANA, KEYRUNE, '--pack-destination', temp, '--silent'], { stdio: 'inherit' });

@@ -17,6 +17,12 @@ export function manaSymbol(symbol, { cost = true } = {}) {
   return h(`i.ms.ms-${name}${cost ? '.ms-cost' : ''}`, { 'aria-label': `{${String(symbol).toUpperCase()}}` });
 }
 
+/** A hybrid mana symbol, {W/B}: each color's symbol in its half of a split circle (107.4e). */
+function hybridSymbol(colors) {
+  const [a, b] = colors.map((c) => c.toLowerCase());
+  return h(`i.ms.ms-cost.ms-hybrid.ha-${a}.hb-${b}`, { 'aria-label': `{${colors.join('/')}}` }, h(`i.ms.ms-${a}`), h(`i.ms.ms-${b}`));
+}
+
 /** The symbols of a mana cost, `{ generic: 2, G: 1 }` → {2}{G}. */
 export function costSymbols(cost) {
   const symbols = [];
@@ -26,6 +32,9 @@ export function costSymbols(cost) {
     if (type === 'generic') symbols.push(manaSymbol(n));
     else for (let i = 0; i < n; i++) symbols.push(manaSymbol(type));
   }
+  // Hybrid symbols ({W/B}), after the generic part as printed.
+  const hybrid = (cost?.hybrid ?? []).map(hybridSymbol);
+  if (hybrid.length) symbols.splice(cost?.generic ? 1 : 0, 0, ...hybrid);
   return symbols;
 }
 
@@ -35,7 +44,7 @@ export const typeSymbol = (type) => h(`i.ms.ms-${type.toLowerCase()}`, { 'aria-h
 /** A keyword ability's symbol, e.g. 'flying' or 'first strike'. */
 export const abilitySymbol = (keyword) => h(`i.ms.ms-ability-${keyword.replace(/\s+/g, '-')}`, { 'aria-label': keyword });
 
-const SETS = new Set(['m19', 'm20', 'm21', 'fdn']);
+const SETS = new Set(['m19', 'm20', 'm21', 'fdn', 'ltr']);
 
 /** A set symbol in its rarity's color, or null for sets without a glyph. */
 export function setSymbol(set, rarity = 'common') {
@@ -49,6 +58,8 @@ function symbolFor(token) {
   if (inner === 'T') return h('i.ms.ms-tap.ms-cost', { 'aria-label': '{T}' });
   if (inner === 'Q') return h('i.ms.ms-untap.ms-cost', { 'aria-label': '{Q}' });
   if (MANA_LETTERS.has(inner) || /^\d+$/.test(inner)) return manaSymbol(inner);
+  // Hybrid mana: {W/B}.
+  if (/^[WUBRG]\/[WUBRG]$/.test(inner)) return hybridSymbol(inner.split('/'));
   return null;
 }
 

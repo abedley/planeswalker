@@ -3,6 +3,7 @@ import {
   LAND_PLAYS_PER_TURN, formatMana, manaPoolTotal, AI_STRATEGY, DECISION, isCreature, hasKeyword, KEYWORD,
   DEFAULT_DECK, SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS,
   SAMPLE_SPELLS_DECK, SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, REAL_DECKS, isAura,
+  LTR_DECKS, CHOICE,
 } from '../src/index.js';
 import { SearchAIController } from '../src/ai/SearchAIController.js';
 
@@ -48,6 +49,10 @@ const DECKS = {
   black: REAL_DECKS.blackRemoval,
   red: REAL_DECKS.redBurn,
   green: REAL_DECKS.greenStompy,
+  fellowship: LTR_DECKS.fellowship,
+  mordor: LTR_DECKS.mordor,
+  // A deck per player.
+  fellowshipVsMordor: { p1: LTR_DECKS.fellowship, p2: LTR_DECKS.mordor },
 };
 
 const CONTROLLER_KINDS = {
@@ -84,7 +89,7 @@ function newGame() {
     startingPlayerId: ui.startingPlayer.value,
     seed,
     cards: { ...SAMPLE_CARDS, ...SAMPLE_PERMANENTS, ...SAMPLE_SPELLS, ...SAMPLE_EFFECTS, ...SAMPLE_TRIGGERS },
-    decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, deck])),
+    decks: Object.fromEntries(PLAYERS.map(({ id }) => [id, Array.isArray(deck) ? deck : deck[id]])),
   });
   window.game = game;
 
@@ -256,12 +261,19 @@ function renderPlayers(state) {
         zoneCount('Graveyard', player.graveyard.length),
         zoneCount('Exile', player.exile.length),
         zoneCount('Lands played', `${player.landsPlayedThisTurn}/${LAND_PLAYS_PER_TURN}`),
-        zoneCount('Mana pool', manaPoolTotal(player.manaPool) ? formatMana(player.manaPool) : 'empty'),
+        zoneCount('Mana pool', manaPoolTotal(player.manaPool) || player.specialMana?.length ? manaText(player) : 'empty'),
+        ...(player.ring?.level ? [zoneCount('The Ring', `level ${player.ring.level}${player.ring.bearerId ? `, bearer ${describeId(player.ring.bearerId, state)}` : ''}`)] : []),
       ]),
       el('div', { className: 'actions' }, [
-        ...general,
         ...(prompt ? [el('p', { className: 'muted', textContent: prompt })] : []),
+        ...general,
       ]),
+      // The cards a choice is about (a scry, a search, a revealed hand), to the chooser.
+      ...(state.pendingDecision?.playerId === player.id && state.pendingDecision.cards ? [
+        el('h3', { textContent: 'Looking at' }),
+        cardRow(state.pendingDecision.cards, () => [], 'Nothing', (card) => (state.pendingDecision.selected?.includes(card.id)
+          ? [`chosen #${state.pendingDecision.selected.indexOf(card.id) + 1}`] : [])),
+      ] : []),
       ...searchSummary(player.id, state),
       el('h3', { textContent: `Emblems (${player.emblems.length})` }),
       emblemRow(player.emblems, cardActions),
@@ -270,11 +282,17 @@ function renderPlayers(state) {
       el('h3', { textContent: `Battlefield (${permanents.length})` }),
       cardRow(permanents, cardActions, 'No permanents', (card) => combatTags(card, state)),
       el('h3', { textContent: `Graveyard (${player.graveyard.length})` }),
-      cardRow(player.graveyard, () => [], 'Empty'),
+      cardRow(player.graveyard, cardActions, 'Empty'),
       ...(player.exile.length ? [
         el('h3', { textContent: `Exile (${player.exile.length})` }),
-        cardRow(player.exile, () => [], 'Empty'),
+        cardRow(player.exile, cardActions, 'Empty', (card) => (card.mayPlay ? [`playable by ${card.mayPlay.playerId}`] : [])),
       ] : []),
+      // Cards this player may play from elsewhere: an opponent's exile (Shadow of the Enemy), the top of their library (Elven Chorus).
+      ...((() => {
+        const ids = new Set(actions.filter((a) => a.zone).map((a) => a.cardId));
+        const cards = [...state.players.filter((p) => p.id !== player.id).flatMap((p) => p.exile), ...player.library.slice(0, 1)].filter((c) => ids.has(c.id));
+        return cards.length ? [el('h3', { textContent: 'Playable from elsewhere' }), cardRow(cards, cardActions, 'None')] : [];
+      })()),
     ]);
   }));
 }
@@ -324,9 +342,51 @@ function decisionPrompt(decision) {
       return `${decision.sourceName}: choose a target for "${decision.text}"`;
     case DECISION.ASSIGN_COMBAT_DAMAGE:
       return `Divide ${decision.attackerId}'s ${decision.power} damage among its blockers.`;
+    case DECISION.CHOOSE_MODE:
+      return `${decision.sourceName}: choose one.`;
+    case DECISION.CHOOSE:
+      return `${decision.sourceName ?? 'Choose'}: ${CHOICE_PROMPTS[decision.kind] ?? decision.kind}`;
+    case DECISION.CHOOSE_MANY:
+      return `${decision.sourceName ?? 'Choose'}: ${CHOICE_PROMPTS[decision.kind] ?? decision.kind} (${decision.min}–${decision.max}), then confirm.`;
     default:
       return decision.type;
   }
+}
+
+const CHOICE_PROMPTS = {
+  [CHOICE.RING_BEARER]: 'the Ring tempts you: choose your Ring-bearer.',
+  [CHOICE.ARMY]: 'choose the Army to amass onto.',
+  [CHOICE.SACRIFICE]: 'choose a permanent to sacrifice.',
+  [CHOICE.DISCARD]: 'choose a card to discard.',
+  [CHOICE.REVEALED_CARD]: 'choose a card from the revealed hand for its owner to discard.',
+  [CHOICE.SEARCH]: 'choose the cards to take from your library',
+  [CHOICE.BOTTOM_FROM_HAND]: 'choose a card to put on the bottom of your library.',
+  [CHOICE.KEYWORD]: 'choose the ability to grant.',
+  [CHOICE.MAY]: 'do it?',
+  [CHOICE.OPTIONAL_COST]: 'pay the optional cost?',
+  [CHOICE.PAY]: 'pay, or else?',
+  [CHOICE.CREATURE_TYPE]: 'note a creature type.',
+  [CHOICE.GRAVEYARD_CARD]: 'choose a card from your graveyard.',
+  [CHOICE.HAND_CARD]: 'choose a card from your hand.',
+  [CHOICE.SCRY]: 'choose the cards to keep on top, in order (the rest go to the bottom)',
+  [CHOICE.GRAVEYARD_CARDS]: 'choose cards from your graveyard',
+  [CHOICE.LOOK]: 'choose cards to take (the rest go to the bottom in a random order)',
+  [CHOICE.EXILE_FROM_HAND]: 'choose cards to exile from your hand',
+  [CHOICE.KEEP]: 'choose creatures to keep (the rest are destroyed)',
+  [CHOICE.HAND_CARDS]: 'choose creature cards to put onto the battlefield',
+  [CHOICE.EXILE_COST]: 'choose cards to exile from your graveyard (a cost)',
+  [CHOICE.COUNTER]: 'choose a kind of counter.',
+  [CHOICE.COUNTERS]: 'choose counters to move',
+  [CHOICE.SACRIFICE_ANY]: 'choose permanents to sacrifice',
+  [CHOICE.CARD_TYPE]: 'choose a card type to gain protection from.',
+  [CHOICE.CAST_FREE]: 'cast a spell without paying its mana cost?',
+  [CHOICE.CAST_FREE_VARIANT]: 'choose how to cast it.',
+};
+
+/** A pool, with mana that can be any color (or only some spells') after it. */
+function manaText(player) {
+  const any = (player.specialMana ?? []).map((m) => `${m.amount} any${m.restriction ? ` (${m.restriction} only)` : ''}`);
+  return [manaPoolTotal(player.manaPool) ? formatMana(player.manaPool) : '', ...any].filter(Boolean).join(' + ');
 }
 
 /** Combat labels for a permanent, including choices still being made. */
@@ -449,7 +509,8 @@ function renderStack(state) {
 /** A permanent, card in hand, player or spell on the stack, by id. */
 function describeId(id, state) {
   const card = state.battlefield.find((p) => p.id === id)
-    ?? state.players.flatMap((p) => p.hand).find((c) => c.id === id);
+    ?? state.players.flatMap((p) => [...p.hand, ...p.graveyard]).find((c) => c.id === id)
+    ?? state.pendingDecision?.cards?.find((c) => c.id === id);
   if (card) return `${card.name} (${id})`;
   const spell = state.stack.find((s) => s.id === id);
   if (spell) return `${spell.sourceName} (${id}, on the stack)`;
@@ -458,19 +519,54 @@ function describeId(id, state) {
 
 function targetLabel(action, state) {
   const parts = [];
-  if (action.targets?.length) parts.push(` → ${action.targets.map((id) => describeId(id, state)).join(', ')}`);
-  const { sacrifice, discard } = action.costChoices ?? {};
+  if (action.targets?.length) parts.push(` → ${action.targets.map((id) => (id ? describeId(id, state) : 'none')).join(', ')}`);
+  const { sacrifice, discard, tap, alternative } = action.costChoices ?? {};
+  if (alternative !== undefined) parts.push(` (paying the ${alternative === 0 ? 'first' : 'second'} additional cost)`);
+  if (tap) parts.push(`, tapping ${tap.map((id) => describeId(id, state)).join(', ')}`);
   if (sacrifice) parts.push(`, sacrificing ${sacrifice.map((id) => describeId(id, state)).join(', ')}`);
   if (discard) parts.push(`, discarding ${discard.map((id) => describeId(id, state)).join(', ')}`);
   if (action.manaColor) parts.push(` → {${action.manaColor}}`);
   return parts.join('');
 }
 
+const capitalizeWord = (text) => text[0].toUpperCase() + text.slice(1);
+
+/** A cost as text, for "you may pay" choices. */
+function describeCost(cost) {
+  const parts = [];
+  if (cost.mana) parts.push(formatMana(cost.mana));
+  if (cost.life) parts.push(`${cost.life} life`);
+  if (cost.sacrifice) parts.push('sacrifice');
+  return parts.join(', ');
+}
+
 function actionLabel(action, card, state) {
   switch (action.type) {
     case ACTION.PASS_PRIORITY: return 'Pass priority';
-    case ACTION.PLAY_LAND: return 'Play';
-    case ACTION.CAST_SPELL: return `Cast ${formatMana(card?.manaCost)}${targetLabel(action, state)}`;
+    case ACTION.PLAY_LAND: return action.zone ? `Play from ${action.zone}` : 'Play';
+    case ACTION.CAST_SPELL: {
+      const modes = [action.mode].flat().filter((m) => m !== undefined);
+      const mode = modes.length ? ` (mode ${modes.map((m) => `${m + 1}: ${card?.spell?.modes?.[m]?.text ?? ''}`).join(' and ')})` : '';
+      const x = action.x !== undefined ? ` with X=${action.x}` : '';
+      const from = action.zone ? ` from ${action.zone}` : '';
+      return `Cast${from} ${formatMana(card?.manaCost)}${x}${mode}${targetLabel(action, state)}`;
+    }
+    case ACTION.CHOOSE:
+      if (state.pendingDecision.kind === CHOICE.CAST_FREE_VARIANT) {
+        const variant = state.pendingDecision.variants[Number(action.choice)];
+        return `Cast it${targetLabel(variant, state)}`;
+      }
+      if (state.pendingDecision.kind === CHOICE.PAY && String(action.choice).includes(':')) {
+        return `Sacrifice ${String(action.choice).split(':')[1].split(',').map((id) => describeId(id, state)).join(', ')}`;
+      }
+      return typeof action.choice === 'string' && /^\d+(:|$)/.test(action.choice)
+        ? `Pay: ${state.pendingDecision.costs?.[Number(action.choice.split(':')[0])] ? describeCost(state.pendingDecision.costs[Number(action.choice.split(':')[0])]) : action.choice}${action.choice.includes(':') ? ` (${action.choice.split(':')[1].split(',').map((id) => describeId(id, state)).join(', ')})` : ''}`
+        : capitalizeWord(describeId(action.choice, state));
+    case ACTION.TOGGLE_CHOICE:
+      return `${state.pendingDecision.selected.includes(action.choice) ? 'Unchoose' : 'Choose'} ${describeId(action.choice, state)}`;
+    case ACTION.CONFIRM_CHOICE: return `Confirm (${state.pendingDecision.selected.length} chosen)`;
+    case ACTION.CHOOSE_MODE: return `Mode ${action.mode + 1}: ${state.pendingDecision.modes[action.mode].text}${targetLabel(action, state)}`;
+    case ACTION.KEEP_LEGEND: return 'Keep this one';
     case ACTION.TOGGLE_ATTACKER:
       return state.pendingDecision.attackers.includes(action.cardId) ? 'Cancel attack' : 'Attack';
     case ACTION.CONFIRM_ATTACKERS: return `Confirm attackers (${state.pendingDecision.attackers.length})`;
@@ -479,8 +575,11 @@ function actionLabel(action, card, state) {
     case ACTION.ASSIGN_COMBAT_DAMAGE:
       return Object.entries(action.assignment)
         .map(([id, n]) => `${n} to ${PLAYERS.some((p) => p.id === id) ? playerName(id) : id}`).join(', ');
-    case ACTION.ACTIVATE_ABILITY:
-      return `${card?.abilities.find((a) => a.id === action.abilityId)?.text ?? action.abilityId}${targetLabel(action, state)}`;
+    case ACTION.ACTIVATE_ABILITY: {
+      const ability = [...(card?.abilities ?? []), ...(card?.handAbilities ?? []), ...(card?.graveyardAbilities ?? [])].find((a) => a.id === action.abilityId);
+      const x = action.x !== undefined ? ` with X=${action.x}` : '';
+      return `${ability?.text ?? action.abilityId}${x}${targetLabel(action, state)}`;
+    }
     case ACTION.DISCARD: return 'Discard';
     case ACTION.CHOOSE_TARGETS: return `Target${targetLabel(action, state)}`;
     default: return action.type;

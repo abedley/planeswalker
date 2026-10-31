@@ -30,7 +30,7 @@
  * "Sacrifice a creature" (artifact, enchantment, land, permanent), "Discard a card".
  */
 import {
-  EFFECT, TARGET, AFFECTED, KEYWORD, COUNTER, TOKEN, effectAffects,
+  EFFECT, TARGET, AFFECTED, KEYWORD, COUNTER, TOKEN, CARD_TYPE, INTERNAL_KEYWORDS, effectAffects,
 } from '../../src/cards/cards.js';
 
 const NUMBER_WORDS = {
@@ -62,6 +62,9 @@ export function parseManaSymbols(text, problems, what) {
   for (const [, symbol] of text.matchAll(MANA_SYMBOL)) {
     if (/^\d+$/.test(symbol)) {
       if (Number(symbol) > 0) mana.generic = (mana.generic ?? 0) + Number(symbol);
+    } else if (symbol === 'X') {
+      // 107.3: X is chosen as the spell is cast or the ability activated.
+      mana.X = (mana.X ?? 0) + 1;
     } else if (MANA_TYPES.has(symbol)) {
       mana[symbol] = (mana[symbol] ?? 0) + 1;
     } else {
@@ -71,7 +74,7 @@ export function parseManaSymbols(text, problems, what) {
   return mana;
 }
 
-export const SUPPORTED_KEYWORDS = new Set(Object.values(KEYWORD));
+export const SUPPORTED_KEYWORDS = new Set(Object.values(KEYWORD).filter((k) => !INTERNAL_KEYWORDS.has(k)));
 
 /** "flying, vigilance, and trample" -> ['flying', 'vigilance', 'trample'], reporting unsupported ones. */
 export function parseKeywordList(text, problems) {
@@ -99,6 +102,17 @@ const PERMANENT_SUBJECTS = {
   'target land': [AFFECTED.TARGET, TARGET.LAND],
   'target nonland permanent': [AFFECTED.TARGET, TARGET.NONLAND_PERMANENT],
   'target permanent': [AFFECTED.TARGET, TARGET.PERMANENT],
+  'target nontoken creature': [AFFECTED.TARGET, { kind: TARGET.CREATURE, filter: { token: false } }],
+  'target nonland historic permanent': [AFFECTED.TARGET, { kind: TARGET.NONLAND_PERMANENT, filter: { historic: true } }],
+  // "Untap it.", after a sentence with a target: the same target.
+  it: [AFFECTED.TARGET, null, true],
+  'that creature': [AFFECTED.TARGET, null, true],
+  'target legendary creature you control': [AFFECTED.TARGET, { kind: TARGET.CREATURE_YOU_CONTROL, filter: { supertypes: ['Legendary'] } }],
+  'target artifact or land': [AFFECTED.TARGET, { kind: TARGET.PERMANENT, filter: { types: [CARD_TYPE.ARTIFACT, CARD_TYPE.LAND] } }],
+  'target artifact, enchantment, or creature with flying': [AFFECTED.TARGET, {
+    kind: TARGET.PERMANENT,
+    filter: { anyOf: [{ types: [CARD_TYPE.ARTIFACT, CARD_TYPE.ENCHANTMENT] }, { types: [CARD_TYPE.CREATURE], keywords: [KEYWORD.FLYING] }] },
+  }],
   'all creatures': [AFFECTED.EACH_CREATURE],
   'each creature': [AFFECTED.EACH_CREATURE],
   'creatures you control': [AFFECTED.EACH_CREATURE_YOU_CONTROL],
@@ -109,7 +123,7 @@ const PERMANENT_SUBJECTS = {
   '~': [AFFECTED.SOURCE],
 };
 const CREATURE_SUBJECTS = Object.fromEntries(Object.entries(PERMANENT_SUBJECTS).filter(([phrase]) => (
-  phrase === '~' || phrase.includes('creature') || phrase.includes('elf')
+  phrase === '~' || phrase === 'it' || (phrase.includes('creature') && !phrase.includes('artifact')) || phrase.includes('elf')
 )));
 /** 509.1b: "can't block" / "can't be blocked", as the keywords this game writes them as. */
 const RESTRICTIONS = { "can't block": KEYWORD.CANT_BLOCK, "can't be blocked": KEYWORD.CANT_BE_BLOCKED };
@@ -130,7 +144,9 @@ const DAMAGE_RECIPIENTS = {
 const lookup = (table, phrase) => table[phrase.trim().toLowerCase()] ?? null;
 
 /** Plural creature types, for "Elves you control". */
-const PLURAL_SUBTYPES = { Elves: 'Elf', Dwarves: 'Dwarf', Wolves: 'Wolf' };
+const PLURAL_SUBTYPES = {
+  Elves: 'Elf', Dwarves: 'Dwarf', Wolves: 'Wolf', Halflings: 'Halfling', Orcs: 'Orc', Goblins: 'Goblin',
+};
 /** "Elves" -> "Elf", "Soldiers" -> "Soldier". */
 export const singularSubtype = (word) => PLURAL_SUBTYPES[word] ?? word.replace(/s$/, '');
 
@@ -290,8 +306,9 @@ const SENTENCES = [
     },
   },
   {
-    pattern: /^Create (\w+) (\d+)\/(\d+) ([a-z ]+?) ((?:[A-Z][a-z]+ )+)creature tokens?(?: with (.+))?\.$/,
-    parse: ([, count, power, toughness, colorText, subtypeText, keywordText], problems) => {
+    // "Create two tapped 1/1 white Spirit creature tokens with flying."
+    pattern: /^Create (\w+) (tapped )?(\d+)\/(\d+) ([a-z ]+?) ((?:[A-Z][a-z]+ )+)creature tokens?(?: with (.+))?\.$/,
+    parse: ([, count, tapped, power, toughness, colorText, subtypeText, keywordText], problems) => {
       const colors = colorText.split(/ and | /).filter(Boolean);
       const keywords = keywordText ? parseKeywordList(keywordText, problems) : [];
       if (!toNumber(count) || !keywords || colors.some((c) => !COLORS.includes(c))) return null;
@@ -302,7 +319,8 @@ const SENTENCES = [
         toughness: Number(toughness),
         ...(keywords.length ? { keywords } : {}),
       };
-      return createTokens(toNumber(count), token);
+      const [[subject, created]] = createTokens(toNumber(count), token);
+      return [[subject, tapped ? { ...created, tapped: true } : created]];
     },
   },
   {
@@ -369,6 +387,102 @@ const SENTENCES = [
     pattern: /^(?:It|They) can't be regenerated\.$/,
     parse: () => [],
   },
+  {
+    // 701.54: "The Ring tempts you."
+    pattern: /^The Ring tempts you\.$/,
+    parse: () => {
+      const you = PLAYER_SUBJECTS.you;
+      return [[you, effect(EFFECT.RING_TEMPTS, {}, you)]];
+    },
+  },
+  {
+    // 701.22: "Scry 2."
+    pattern: /^Scry (\d+)\.$/,
+    parse: ([, count]) => {
+      const you = PLAYER_SUBJECTS.you;
+      return [[you, effect(EFFECT.SCRY, { count: Number(count) }, you)]];
+    },
+  },
+  {
+    // "Scry 1, then draw a card.": two effects in order.
+    pattern: /^(Scry \d+), then (.+)\.$/,
+    parse: ([, first, second], problems) => {
+      const a = parseSentence(`${first}.`, problems);
+      const b = parseSentence(`${second[0].toUpperCase()}${second.slice(1)}.`, problems);
+      return a && b ? [...a, ...b] : null;
+    },
+  },
+  {
+    // 701.47: "Amass Orcs 2."
+    pattern: /^Amass ([A-Z][a-z]+) (\d+)\.$/,
+    parse: ([, kind, count]) => {
+      const you = PLAYER_SUBJECTS.you;
+      return [[you, effect(EFFECT.AMASS, { count: Number(count), subtype: singularSubtype(kind) }, you)]];
+    },
+  },
+  {
+    // A loot: "Draw a card, then discard a card."
+    pattern: /^Draw (a card|(\w+) cards), then discard (a card|(\w+) cards)\.$/,
+    parse: ([, , draw = 'a', , discard = 'a']) => {
+      const you = PLAYER_SUBJECTS.you;
+      return [[you, effect(EFFECT.DRAW_CARDS, { count: toNumber(draw) }, you)], [you, effect(EFFECT.DISCARD, { count: toNumber(discard) }, you)]];
+    },
+  },
+  {
+    // 701.19: "Search your library for a basic land card, reveal it, put it into your hand, then shuffle."
+    pattern: /^Search your library for (a|up to (\w+)) basic land cards?, (?:reveal it, )?put (?:it|them) (into your hand|onto the battlefield tapped), then shuffle\.$/,
+    parse: ([, , upTo, where]) => {
+      const you = PLAYER_SUBJECTS.you;
+      const fields = {
+        filter: { types: [CARD_TYPE.LAND], supertypes: ['Basic'] },
+        count: upTo ? toNumber(upTo) : 1,
+        destination: where === 'into your hand' ? 'hand' : 'battlefield',
+        ...(where === 'into your hand' ? {} : { tapped: true }),
+      };
+      return [[you, effect(EFFECT.SEARCH_LIBRARY, fields, you)]];
+    },
+  },
+  {
+    // "Put target creature into its owner's library second from the top."
+    pattern: /^Put (.+) into its owner's library (second|third|fourth) from the top\.$/,
+    parse: ([, phrase, place]) => {
+      const subject = lookup(PERMANENT_SUBJECTS, phrase);
+      const position = { second: 2, third: 3, fourth: 4 }[place];
+      return subject && [[subject, effect(EFFECT.PUT_INTO_LIBRARY, { position }, subject)]];
+    },
+  },
+  {
+    pattern: /^Return target spell to its owner's hand\.$/,
+    parse: () => {
+      const subject = [AFFECTED.TARGET, TARGET.SPELL];
+      return [[subject, effect(EFFECT.RETURN_SPELL_TO_HAND, {}, subject)]];
+    },
+  },
+  {
+    // Stern Scolding.
+    pattern: /^Counter target creature spell with power or toughness (\d+) or less\.$/,
+    parse: ([, n]) => {
+      const subject = [AFFECTED.TARGET, { kind: TARGET.CREATURE_SPELL, filter: { powerOrToughnessAtMost: Number(n) } }];
+      return [[subject, effect(EFFECT.COUNTER_SPELL, {}, subject)]];
+    },
+  },
+  {
+    // "Target creature you control deals damage equal to its power to target creature you don't control." (a bite)
+    pattern: /^Target creature you control deals damage equal to its power to target creature (?:you don't control|an opponent controls)\.$/,
+    parse: () => [
+      [[AFFECTED.TARGET, TARGET.CREATURE_YOU_CONTROL], null],
+      [[AFFECTED.TARGET, TARGET.CREATURE_OPPONENT_CONTROLS], {
+        type: EFFECT.DEAL_DAMAGE, amount: 1, from: { target: 0 }, per: { of: 'powerOf', index: 0 },
+      }],
+    ],
+  },
+  {
+    pattern: /^Return target creature card from your graveyard to your hand\.$/,
+    parse: () => {
+      const subject = [AFFECTED.TARGET, { kind: TARGET.CARD_IN_YOUR_GRAVEYARD, filter: { types: [CARD_TYPE.CREATURE] } }];
+      return [[subject, effect(EFFECT.RETURN_FROM_GRAVEYARD, {}, subject)]];
+    },
+  },
 ];
 
 /**
@@ -425,8 +539,8 @@ function parseTwoPartSentence(sentence, problems) {
 /**
  * Parses effect sentences (already normalized with "~") into `{ effects, target }`
  * (plus `targetOther` for "another target ..."), or `{ failed: sentence }` for the
- * first sentence that isn't supported. At most one target is allowed across all of
- * them, except a fight's two (`targets`).
+ * first sentence that isn't supported. With several targets, they're `targets`, and
+ * each effect says which it applies to (`targetIndex`); a fight uses the first two.
  */
 export function parseEffects(text, problems) {
   const effects = [];
@@ -438,16 +552,20 @@ export function parseEffects(text, problems) {
     for (const [[affected, targetKind, sameTarget, other], parsedEffect] of parsed) {
       if (affected === AFFECTED.TARGET && !sameTarget) targets.push(targetKind);
       if (other) targetOther = true;
-      if (parsedEffect) effects.push(parsedEffect);
+      if (!parsedEffect) continue;
+      const aimed = affected === AFFECTED.TARGET && parsedEffect.type !== EFFECT.FIGHT;
+      effects.push(aimed ? { ...parsedEffect, targetIndex: targets.length - 1 } : parsedEffect);
     }
   }
-  const fight = effects.length === 1 && effects[0].type === EFFECT.FIGHT;
-  if (fight) return { effects, target: null, targets };
   if (targets.length > 1) {
-    problems.push(`More than one target isn't supported: "${text}"`);
-    return { effects: [], target: null };
+    if (targetOther) {
+      problems.push(`"another target" among several targets isn't supported: "${text}"`);
+      return { effects: [], target: null };
+    }
+    return { effects, target: null, targets };
   }
-  return { effects, target: targets[0] ?? null, ...(targetOther ? { targetOther } : {}) };
+  const single = effects.map(({ targetIndex: _, ...e }) => e);
+  return { effects: single, target: targets[0] ?? null, ...(targetOther ? { targetOther } : {}) };
 }
 
 const SACRIFICE_KINDS = {

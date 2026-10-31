@@ -301,8 +301,11 @@ export function defaultMacros(state, me, macros, fallback = new BasicAIControlle
  */
 export function worthSearching(state, me) {
   if (actingPlayerId(state) !== me || state.status !== GAME_STATUS.IN_PROGRESS) return false;
-  // Mulligans follow the rules of thumb in mulligan.js: a few turns' play can't judge them.
-  if (state.pendingDecision) return state.pendingDecision.type !== DECISION.MULLIGAN && state.pendingDecision.type !== DECISION.PUT_ON_BOTTOM;
+  // Mulligans follow the rules of thumb in mulligan.js: a few turns' play can't judge them. Choosing
+  // several things one toggle at a time (scrying, searching) is left to the basic AI too.
+  if (state.pendingDecision) {
+    return ![DECISION.MULLIGAN, DECISION.PUT_ON_BOTTOM, DECISION.CHOOSE_MANY].includes(state.pendingDecision.type);
+  }
   return windowOf(state, me) !== null;
 }
 

@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import {
   Game, GAME_STATUS, BasicAIController, AI_STRATEGY, DEFAULT_DECK,
   SAMPLE_CARDS, SAMPLE_DECK, SAMPLE_PERMANENTS, SAMPLE_PERMANENTS_DECK, SAMPLE_SPELLS, SAMPLE_SPELLS_DECK,
-  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, REAL_DECKS,
+  SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK, REAL_DECKS, LTR_DECKS,
 } from '../src/index.js';
 import { playout } from '../src/ai/simulate.js';
 import { LegacyAIController } from '../src/ai/LegacyAIController.js';
@@ -36,6 +36,9 @@ export const DECKS = {
   black: { deck: REAL_DECKS.blackRemoval, cards: {} },
   red: { deck: REAL_DECKS.redBurn, cards: {} },
   green: { deck: REAL_DECKS.greenStompy, cards: {} },
+  // The Lord of the Rings: Tales of Middle-earth.
+  fellowship: { deck: LTR_DECKS.fellowship, cards: {} },
+  mordor: { deck: LTR_DECKS.mordor, cards: {} },
 };
 
 /**

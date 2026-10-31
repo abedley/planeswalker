@@ -1,17 +1,18 @@
 export { EventEmitter } from './engine/EventEmitter.js';
 export {
-  Game, GAME_STATUS, DECISION, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN, GAME_LIMITS,
+  Game, GAME_STATUS, DECISION, CHOICE, STARTING_LIFE, OPENING_HAND_SIZE, MAX_HAND_SIZE, LAND_PLAYS_PER_TURN, GAME_LIMITS,
 } from './engine/Game.js';
 export {
   ACTION, passPriority, playLand, castSpell, activateAbility, toggleAttacker, confirmAttackers,
   setBlocker, confirmBlockers, assignCombatDamage, discard, chooseTargets, chooseMode, keepLegend, keepHand, mulligan, putOnBottom,
+  choose, toggleChoice, confirmChoice,
 } from './engine/actions.js';
 export {
   groupAllowed, groupsAllowed, requirementsMet, blocksLegal, legalizeBlocks,
 } from './engine/blockRules.js';
 export { PHASE, STEP, PHASE_NAMES, STEP_NAMES, TURN_STRUCTURE } from './engine/turnStructure.js';
 export {
-  CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, CONDITION, COUNTER, EFFECT, KEYWORD, ACTIVATION_TIMING, TRIGGER,
+  CARDS, CARD_TYPE, SUBTYPE, TARGET, AFFECTED, COUNTER, EFFECT, KEYWORD, ACTIVATION_TIMING, TRIGGER,
   isArtifact, isEnchantment, isAura, isCurse, isEquipment, colorsOf, anthemApplies, isInstant, isSorcery, isPermanentCard,
   TARGETED_EFFECTS, HARMFUL_EFFECTS, SPELL_TARGETS, PLAYER_TARGETS, effectAffects, isHarmfulEffect, abilityEffects,
   matchesPermanentKind, TOKEN, TOKENS, tokenCardId, COLORS_OF_MANA, needsManaColor, manaValue, equipAbility, DEFAULT_DECK, isLand, isCreature, isManaAbility, hasKeyword, cantAttack,
@@ -22,6 +23,7 @@ export {
   SAMPLE_EFFECTS, SAMPLE_EFFECTS_DECK, SAMPLE_TRIGGERS, SAMPLE_TRIGGERS_DECK,
 } from './cards/sampleCards.js';
 export { EMBLEMS, DEFAULT_EMBLEMS } from './cards/emblems.js';
+export { LTR_DECKS, LTR_FELLOWSHIP_DECK, LTR_MORDOR_DECK } from './cards/ltrDecks.js';
 export {
   MANA_TYPES, emptyManaPool, addMana, planManaPayment, canPayMana, manaPoolTotal, formatMana,
 } from './engine/mana.js';

@@ -88,7 +88,8 @@ test('reports variable power/toughness, unsupported keywords and mana symbols', 
     'Unsupported power/toughness */1+* (only fixed numbers are supported).',
     `Unsupported rules text: "${FIXTURES.tarmogoyf.oracle_text}"`,
   ]);
-  assert.deepEqual(problems('gladecoverScout'), ['Unsupported keyword: hexproof.']);
+  // Hexproof is supported now (702.11), so Gladecover Scout imports.
+  assert.equal(convert('gladecoverScout').ok, true);
   assert.deepEqual(problems('kitchenFinks'), [
     'Unsupported mana symbol {G/W} in the mana cost.',
     'Unsupported mana symbol {G/W} in the mana cost.',
@@ -306,13 +307,13 @@ test('converts activated abilities with common costs and effects', () => {
 
 test('reports costs and effects the engine can\'t do', () => {
   assert.deepEqual(problems('royalAssassin'), ['Unsupported rules text: "{T}: Destroy target tapped creature."']);
-  // Made up, for the two-target check.
+  // Made up: two targets in two sentences, each effect with its own.
   const twoTargets = {
     ...FIXTURES.naturalize, name: 'Double Shatter', oracle_text: 'Destroy target artifact. Destroy target enchantment.',
   };
-  assert.deepEqual(convertScryfallCard(twoTargets).problems, [
-    'More than one target isn\'t supported: "Destroy target artifact. Destroy target enchantment."',
-  ]);
+  const shatter = convertScryfallCard(twoTargets).definition;
+  assert.deepEqual(shatter.targets, [TARGET.ARTIFACT, TARGET.ENCHANTMENT]);
+  assert.deepEqual(shatter.effects.map((e) => e.targetIndex), [0, 1]);
   const exileCost = { ...FIXTURES.greed, name: 'Grim Ledger', oracle_text: 'Exile a card from your graveyard: Draw a card.' };
   assert.deepEqual(convertScryfallCard(exileCost).problems, [
     'Unsupported cost: "Exile a card from your graveyard".',
@@ -345,10 +346,10 @@ test('reads sentences of two effects joined by "and"', () => {
   assert.equal(drain.triggeredAbilities[0].target, TARGET.OPPONENT);
   const ledger = card('naturalize', 'Dark Ledger', 'You draw two cards and lose 2 life.').definition;
   assert.deepEqual(ledger.effects.map((e) => [e.type, e.affected ?? null]), [['drawCards', null], ['loseLife', null]]);
-  // Two different targets are still one too many.
-  assert.deepEqual(card('naturalize', 'Wreck', 'Destroy target artifact and target player loses 2 life.').problems, [
-    'More than one target isn\'t supported: "Destroy target artifact and target player loses 2 life."',
-  ]);
+  // Two different targets: each effect says which one it's about.
+  const wreck = card('naturalize', 'Wreck', 'Destroy target artifact and target player loses 2 life.').definition;
+  assert.deepEqual(wreck.targets, [TARGET.ARTIFACT, TARGET.PLAYER]);
+  assert.deepEqual(wreck.effects.map((e) => [e.type, e.targetIndex]), [['destroy', 0], ['loseLife', 1]]);
 });
 
 test('imported abilities and spells work in a game', () => {

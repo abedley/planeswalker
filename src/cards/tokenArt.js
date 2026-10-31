@@ -3,6 +3,18 @@
 
 /** Art and other presentation fields for tokens, keyed by the card id the game gives them (tokenCardId). */
 export const TOKEN_PRESENTATION = {
+  "token:Ballistic Boulder:2/1::flying": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/8/389a6f88-0c90-4b67-a72c-7e9674f00898.jpg?1783916045",
+      "card": "https://cards.scryfall.io/normal/front/3/8/389a6f88-0c90-4b67-a72c-7e9674f00898.jpg?1783916045"
+    },
+    "artist": "Alexander Forssberg",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "21",
+    "typeLine": "Token Artifact Creature — Construct",
+    "scryfallId": "389a6f88-0c90-4b67-a72c-7e9674f00898"
+  },
   "token:Beast Token:3/3:green:": {
     "image": {
       "art": "https://cards.scryfall.io/art_crop/front/c/1/c198b9b4-bde6-45ec-9bc7-ae61adad22b3.jpg?1789754634",
@@ -51,6 +63,18 @@ export const TOKEN_PRESENTATION = {
     "typeLine": "Token Artifact — Food",
     "scryfallId": "39389acc-cfa7-4a44-9d46-45be7dd72564"
   },
+  "token:Human Soldier Token:1/1:white:": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/a/6/a6181330-7521-4ec6-be6c-b35487c2d2d4.jpg?1783916047",
+      "card": "https://cards.scryfall.io/normal/front/a/6/a6181330-7521-4ec6-be6c-b35487c2d2d4.jpg?1783916047"
+    },
+    "artist": "Axel Sauerwald",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "15",
+    "typeLine": "Token Creature — Human Soldier",
+    "scryfallId": "a6181330-7521-4ec6-be6c-b35487c2d2d4"
+  },
   "token:Knight Token:2/2:white:vigilance": {
     "image": {
       "art": "https://cards.scryfall.io/art_crop/front/f/d/fd8ca5ee-7b93-4248-8f4a-b88261ee1eed.jpg?1783934470",
@@ -62,6 +86,18 @@ export const TOKEN_PRESENTATION = {
     "collectorNumber": "4",
     "typeLine": "Token Creature — Knight",
     "scryfallId": "fd8ca5ee-7b93-4248-8f4a-b88261ee1eed"
+  },
+  "token:Orc Army:0/0:black:": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/6/9/6943f966-fd21-427c-a13f-44727edcaa4b.jpg?1783916045",
+      "card": "https://cards.scryfall.io/normal/front/6/9/6943f966-fd21-427c-a13f-44727edcaa4b.jpg?1783916045"
+    },
+    "artist": "Veli Nyström",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "19",
+    "typeLine": "Token Creature — Orc Army",
+    "scryfallId": "6943f966-fd21-427c-a13f-44727edcaa4b"
   },
   "token:Saproling Token:1/1:green:": {
     "image": {
@@ -75,6 +111,18 @@ export const TOKEN_PRESENTATION = {
     "typeLine": "Token Creature — Saproling",
     "scryfallId": "0bf3d41e-cd0a-46bd-8b89-8855906ea6b5"
   },
+  "token:Smaug:6/6:red:flying,haste": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/b/bb4ac08f-f6a5-49d6-91e9-38c4f217932b.jpg?1783916045",
+      "card": "https://cards.scryfall.io/normal/front/b/b/bb4ac08f-f6a5-49d6-91e9-38c4f217932b.jpg?1783916045"
+    },
+    "artist": "Jarel Threat",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "20",
+    "typeLine": "Token Legendary Creature — Dragon",
+    "scryfallId": "bb4ac08f-f6a5-49d6-91e9-38c4f217932b"
+  },
   "token:Soldier Token:1/1:white:": {
     "image": {
       "art": "https://cards.scryfall.io/art_crop/front/a/4/a491d9da-a58d-4423-b565-c5a99ef63132.jpg?1783932857",
@@ -86,6 +134,30 @@ export const TOKEN_PRESENTATION = {
     "collectorNumber": "2",
     "typeLine": "Token Creature — Soldier",
     "scryfallId": "a491d9da-a58d-4423-b565-c5a99ef63132"
+  },
+  "token:Spirit Token:1/1:white:flying": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/b/5/b53ee2f0-afbd-491f-b3b8-c9997f175199.jpg?1783916045",
+      "card": "https://cards.scryfall.io/normal/front/b/5/b53ee2f0-afbd-491f-b3b8-c9997f175199.jpg?1783916045"
+    },
+    "artist": "Nino Is",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "16",
+    "typeLine": "Token Creature — Spirit",
+    "scryfallId": "b53ee2f0-afbd-491f-b3b8-c9997f175199"
+  },
+  "token:Tentacle Token:1/1:blue:": {
+    "image": {
+      "art": "https://cards.scryfall.io/art_crop/front/3/d/3d9415be-356d-45a5-a62b-a75368629481.jpg?1783916046",
+      "card": "https://cards.scryfall.io/normal/front/3/d/3d9415be-356d-45a5-a62b-a75368629481.jpg?1783916046"
+    },
+    "artist": "Chris Cold",
+    "rarity": "common",
+    "set": "tltr",
+    "collectorNumber": "17",
+    "typeLine": "Token Creature — Tentacle",
+    "scryfallId": "3d9415be-356d-45a5-a62b-a75368629481"
   },
   "token:treasure": {
     "image": {

@@ -26,6 +26,10 @@ const BOLT_MS = 300;
 
 const DEATH_EVENTS = new Set(['creatureDied', 'permanentDestroyed', 'permanentSacrificed', 'cardBurned', 'spellCountered']);
 
+/** Whether a permanent is its controller's Ring-bearer (701.54a). */
+const isRingBearer = (state, id) => state.players.some((p) => p.ring?.bearerId === id
+  && state.battlefield.some((b) => b.id === id && b.controllerId === p.id));
+
 export class BoardView {
   #app;
   #me;
@@ -79,7 +83,11 @@ export class BoardView {
     const counts = h('div.counts',
       h('span.count.hand-count', icon('hand'), h('b', '0')),
       h('span.count.lib-count', icon('library'), h('b', '0')),
-      h('span.count.grave-count', icon('grave'), h('b', '0')));
+      h('span.count.grave-count', icon('grave'), h('b', '0')),
+      // Exile: shown once something is there (cards may be played from it: Moria Marauder).
+      h('span.count.exile-count', { title: 'Exile' }, icon('exile'), h('b', '0')),
+      // The Ring (701.54): how many of its abilities this player's Ring-bearer has; hidden until it tempts them.
+      h('span.count.ring-count', { title: 'The Ring' }, icon('ring'), h('b', '0')));
     const abilities = h('div.abilities');
     const parts = { life, avatar, counts, abilities };
     const who = h('div.who', h('div.name.fit', { dataset: { min: 9 } }, info.name), counts);
@@ -196,7 +204,7 @@ export class BoardView {
     }
     if (zone.startsWith('creatures')) {
       const attachments = state.battlefield.filter((p) => p.attachedTo === entry.card.id);
-      return boardCard(entry.card, defs, { attachments });
+      return boardCard(entry.card, defs, { attachments, ringBearer: isRingBearer(state, entry.card.id) });
     }
     return chipFace(entry.card, defs);
   }
@@ -220,9 +228,10 @@ export class BoardView {
   #signature(zone, entry, state) {
     if (zone.startsWith('creatures')) {
       const attachments = state.battlefield.filter((p) => p.attachedTo === entry.card.id).map((p) => p.id).join();
-      return `${zone}|${boardSignature(entry.card, attachments)}`;
+      return `${zone}|${boardSignature(entry.card, `${attachments}|${isRingBearer(state, entry.card.id)}`)}`;
     }
-    return zone;
+    // A Saga's chip shows its chapter.
+    return `${zone}|${entry.card?.counters?.lore ?? 0}`;
   }
 
   /**
@@ -552,12 +561,17 @@ export class BoardView {
         if (key.startsWith(`${pid}:`) && !groups.has(key)) this.#landGroups.delete(key);
       }
       reconcile(strip.lands, els);
-      const pool = state.players.find((p) => p.id === pid).manaPool;
-      const floating = Object.fromEntries(Object.entries(pool).filter(([, n]) => n > 0));
-      const poolKey = JSON.stringify(floating);
+      const player = state.players.find((p) => p.id === pid);
+      const floating = Object.fromEntries(Object.entries(player.manaPool).filter(([, n]) => n > 0));
+      // Mana that can be any color (some of it only for some spells), as a rainbow pip.
+      const any = (player.specialMana ?? []).reduce((sum, m) => sum + m.amount, 0);
+      const poolKey = `${JSON.stringify(floating)}|${any}`;
       if (strip.pool.dataset.key !== poolKey) {
         strip.pool.dataset.key = poolKey;
-        strip.pool.replaceChildren(Object.keys(floating).length ? manaPips(floating) : '');
+        strip.pool.replaceChildren(
+          Object.keys(floating).length ? manaPips(floating) : '',
+          any ? h('span.pip-any', { title: 'Mana of any color' }, String(any)) : '',
+        );
       }
     }
     return pops;
@@ -580,11 +594,17 @@ export class BoardView {
       if (changed && delay) setTimeout(() => { if (this.#state === state) show(); }, delay);
       else show();
       this.#lastLife[player.id] = player.life;
-      const [hand, lib, grave] = parts.counts.querySelectorAll('b');
+      const [hand, lib, grave, exile, ring] = parts.counts.querySelectorAll('b');
       setText(hand, player.hand.length);
       setText(lib, player.library.length);
       setText(grave, player.graveyard.length);
+      setText(exile, player.exile.length);
+      toggle(exile.parentElement, 'on', player.exile.length > 0);
+      const level = player.ring?.level ?? 0;
+      setText(ring, level);
+      toggle(ring.parentElement, 'on', level > 0);
       toggle(parts.avatar.parentElement, 'active', state.activePlayerId === player.id);
+      toggle(parts.avatar, 'protected', (state.temporaryEffects ?? []).some((e) => e.playerProtection && e.targetId === player.id));
       this.#renderAbilities(player, side);
     }
   }

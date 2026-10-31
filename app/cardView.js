@@ -6,7 +6,7 @@ import { h } from './dom.js';
 import { icon } from './icons.js';
 import { cardArt, frameOf, presentationOf } from './art.js';
 import {
-  costSymbols, abilitySymbol, setSymbol, symbolText, manaSymbol, typeSymbol,
+  costSymbols, abilitySymbol, setSymbol, symbolText, inlineSymbols, manaSymbol, typeSymbol,
 } from './symbols.js';
 
 /** Mana symbols for a cost: `{ generic: 2, G: 1 }` → {2}{G}. */
@@ -151,6 +151,33 @@ export function chipFace(permanent, definitions) {
   // Hope, verse, burden and influence counters: the number, in the corner.
   const other = BADGE_COUNTERS.map((kind) => permanent.counters?.[kind] ?? 0).find((n) => n > 0);
   return h(`div.chip-face.f-${frameOf(card)}`, cardArt(card), lore ? h('div.chip-lore', ROMAN[lore] ?? String(lore)) : other ? h('div.chip-lore', String(other)) : null);
+}
+
+/**
+ * An ability on the stack: not a card being cast, so not framed like one. A slim dark
+ * plate with its source's art (`source`, a card, or `portrait`, a planeswalker's crest)
+ * under a "Trigger" or "Ability" tag, the source's name, then the cost paid and the
+ * effect. `big` for inspecting it.
+ */
+export function abilityFace(object, { source = null, portrait = null, definitions, big = false } = {}) {
+  const card = source ? presentationOf(source, definitions) : null;
+  const [, cost, effect] = object.text?.match(/^([^:]+):\s*(.*)$/s) ?? [null, null, object.text ?? ''];
+  const triggered = object.kind === 'triggeredAbility';
+  const frame = card ? frameOf(card) : 'colorless';
+  return h(`div.ability-face.f-${frame}${big ? '.big' : ''}`,
+    h('div.sa-art', portrait ? h('div.sa-crest', portrait) : cardArt(card ?? { name: object.sourceName })),
+    h('div.sa-kind', icon(triggered ? 'bolt' : 'gear'), triggered ? 'Trigger' : 'Ability'),
+    h('div.sa-name.fit', object.sourceName),
+    h('div.sa-text.fit', withCost(symbolText(effect), cost)));
+}
+
+/** Rules-text paragraphs with an ability's cost as a badge at the start of the first. */
+function withCost(paragraphs, cost) {
+  if (!cost) return paragraphs;
+  const badge = h('span.sa-cost', inlineSymbols(cost));
+  if (paragraphs.length) paragraphs[0].prepend(badge);
+  else paragraphs.push(h('p', badge));
+  return paragraphs;
 }
 
 export const cardBack = () => h('div.card-back', h('div.back-oval', h('div.back-sigil', icon('star'))));

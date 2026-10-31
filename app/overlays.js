@@ -52,12 +52,12 @@ export function createOverlays(app) {
 
   /**
    * A big view of a card (real cards show their full image, artist included). Tap anywhere to close it.
-   * `onClose` runs when it closes, whether by a tap or an action.
+   * `onClose` runs when it closes, whether by a tap or an action. `face` shows instead of the card (an ability).
    */
-  function inspect(card, { actions = [], onClose } = {}) {
+  function inspect(card, { actions = [], onClose, face = null } = {}) {
     app.sound('select');
     const view = h('div.inspect',
-      fullCard(card, app.definitions, { big: true }),
+      face ?? fullCard(card, app.definitions, { big: true }),
       actions.length ? h('div.inspect-actions', actions.map((a) => h('button.btn', {
         class: a.primary ? 'primary' : '',
         disabled: a.disabled,

@@ -298,7 +298,7 @@ test('campaign-sim plays whole runs and summarises them', async () => {
 
 test('fights use the game limits, and planeswalkers have at most 4 abilities', () => {
   const run = start();
-  assert.deepEqual(matchSetup(run, content).game.limits, { hand: 7, creatures: 10, permanents: 8 });
+  assert.deepEqual(matchSetup(run, content).game.limits, { hand: 8, creatures: 10, permanents: 8 });
   const many = {
     ...content,
     emblems: {

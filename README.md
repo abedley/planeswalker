@@ -637,7 +637,7 @@ Emblems are defined in `src/cards/emblems.js` and given to players with the `emb
 ### Limits (this game's screen-size rules)
 
 So that a whole board fits on a phone screen, a game can impose limits (the `limits` option;
-`GAME_LIMITS` is `{ hand: 7, creatures: 10, permanents: 8 }`, and the campaign uses it). A game
+`GAME_LIMITS` is `{ hand: 8, creatures: 10, permanents: 8 }`, and the campaign uses it). A game
 has none unless asked:
 - **Hand:** a card drawn into a full hand, or returned to one, is **burned**: it goes to the
   graveyard, with a `cardBurned { playerId, cardId, cardName, reason: 'draw' | 'returnToHand' }`

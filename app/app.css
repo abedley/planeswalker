@@ -928,6 +928,7 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 /* The opening hand in the mulligan sheet. */
 .mull-hand { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 4px 0 12px; }
 .mull-card { width: 74px; height: 104px; flex: none; }
+button.mull-card { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; }
 .turn-badge.pending { visibility: hidden; }
 
 /* Choosing several cards (scrying, searching): tap them in and out, in order. */

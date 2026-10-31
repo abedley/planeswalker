@@ -790,7 +790,7 @@ export class Battle {
     });
   }
 
-  /** Keep or mulligan (103.5): a sheet, which can be closed to look at the hand. */
+  /** Keep or mulligan (103.5): a sheet, which can be closed to look at the hand; tap a card in it to see it big. */
   #offerMulligan(state) {
     const { mulligans } = state.pendingDecision;
     const mine = state.validActions.filter((a) => a.playerId === this.#me);
@@ -802,7 +802,15 @@ export class Battle {
     this.#app.overlays.sheet({
       title: mulligans ? `Mulligan to ${size}` : 'Opening hand',
       text: `${lands} land${lands === 1 ? '' : 's'}.${mulligans ? ` If you keep, you put ${mulligans} card${mulligans > 1 ? 's' : ''} on the bottom.` : ''}`,
-      body: h('div.mull-hand', hand.map((card) => h('div.mull-card', fullCard(card, this.#app.definitions)))),
+      // Tapping a card shows it big; closing it comes back to this sheet, unless the decision moved on.
+      body: h('div.mull-hand', hand.map((card) => h('button.mull-card', {
+        'aria-label': card.name,
+        onclick: () => this.#app.overlays.inspect(card, {
+          onClose: () => queueMicrotask(() => {
+            if (!this.#finished && this.#state?.pendingDecision?.type === DECISION.MULLIGAN && this.#state.pendingDecision.playerId === this.#me) this.#offerMulligan(this.#state);
+          }),
+        }),
+      }, fullCard(card, this.#app.definitions)))),
       options: [
         { label: `Keep ${size}`, primary: true, onPick: () => this.#dispatch(keep) },
         ...(again ? [{ label: `Mulligan to ${size - 1}`, sub: 'Shuffle, draw seven, then put one more on the bottom', onPick: () => this.#dispatch(again) }] : []),

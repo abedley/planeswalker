@@ -1,6 +1,6 @@
 /** Words for things on the battlefield: names, choices, phases and prompts. */
 import { DECISION, CHOICE, OPENING_HAND_SIZE } from '../../src/engine/Game.js';
-import { PHASE } from '../../src/engine/turnStructure.js';
+import { PHASE, STEP } from '../../src/engine/turnStructure.js';
 import { formatMana } from '../../src/engine/mana.js';
 
 
@@ -99,6 +99,17 @@ export const TURN_PIPS = [
   { id: 'end', label: 'End', match: (s) => s.phase === PHASE.ENDING },
 ];
 
+/** The steps of combat, shown on the combat pip while it's the current phase. */
+export const COMBAT_STEPS = [
+  { label: 'Begin combat', steps: [STEP.BEGINNING_OF_COMBAT] },
+  { label: 'Attackers', steps: [STEP.DECLARE_ATTACKERS] },
+  { label: 'Blockers', steps: [STEP.DECLARE_BLOCKERS] },
+  { label: 'Damage', steps: [STEP.FIRST_STRIKE_DAMAGE, STEP.COMBAT_DAMAGE, STEP.END_OF_COMBAT] },
+];
+
+/** The index into COMBAT_STEPS of the current step (-1 outside combat). */
+export const combatStepIndex = (state) => (state.phase === PHASE.COMBAT ? COMBAT_STEPS.findIndex((c) => c.steps.includes(state.step)) : -1);
+
 /** A short line saying what the game is waiting for. */
 export function promptFor(state, me) {
   const decision = state.pendingDecision;
@@ -136,7 +147,7 @@ export function promptFor(state, me) {
   if (decision?.type === DECISION.MULLIGAN || decision?.type === DECISION.PUT_ON_BOTTOM) {
     return decision.mulligans ? `Opponent mulligans to ${OPENING_HAND_SIZE - decision.mulligans}…` : 'Opponent is looking at their hand…';
   }
-  if (decision) return decision.type === DECISION.DECLARE_BLOCKERS ? 'Opponent is blocking…' : 'Opponent is deciding…';
+  if (decision) return decision.type === DECISION.DECLARE_BLOCKERS ? 'Opponent is blocking…' : 'Thinking…';
   // Only once the opponent has actually declared attackers (combat.attackers).
   const attackers = state.combat?.attackers ?? [];
   if (state.activePlayerId !== me && state.phase === PHASE.COMBAT && attackers.length) {

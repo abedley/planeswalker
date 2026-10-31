@@ -14,7 +14,7 @@ import { fit } from '../fit.js';
 import { fullCard, boardCard, chipFace, abilityFace, boardSignature, manaPips, cardBack } from '../cardView.js';
 import { isCreature, isLand } from '../../src/cards/cards.js';
 import { DECISION } from '../../src/engine/Game.js';
-import { TURN_PIPS, findCard } from './describe.js';
+import { TURN_PIPS, COMBAT_STEPS, combatStepIndex, findCard } from './describe.js';
 import {
   relRect, flip, floatText, shake, pop, flyAway, crumble, banner, enter,
   impact, shakeScreen, lunge, LUNGE_MS, LUNGE_HIT, projectile, sparkle, slam, showcase, FX_COLORS,
@@ -110,7 +110,10 @@ export class BoardView {
     const meStrip = strip('me');
     const oppCreatures = h('div.zone.creatures.zone-opp');
     const meCreatures = h('div.zone.creatures.zone-me');
-    const pips = h('div.pips-turn', TURN_PIPS.map((p) => h('span.tp', { dataset: { pip: p.id } }, p.label)));
+    const pips = h('div.pips-turn', TURN_PIPS.map((p) => (p.id === 'combat'
+      // The combat pip names the step, with a segment for each of the four.
+      ? h('span.tp.tp-combat', { dataset: { pip: p.id } }, h('span.tp-label', p.label), h('span.tp-steps', COMBAT_STEPS.map(() => h('i'))))
+      : h('span.tp', { dataset: { pip: p.id } }, p.label))));
     const prompt = h('div.prompt');
     // Whose turn it is: a badge in the middle of the board (and the active side lights up).
     const turnBadge = h('div.turn-badge', h('span.tb-who'), h('span.tb-n'));
@@ -542,7 +545,7 @@ export class BoardView {
       for (const [key, { land, total, untapped }] of groups) {
         let el = this.#landGroups.get(key);
         if (!el) {
-          el = h('div.land-group', { dataset: { land: land.id } }, chipFace(land, this.#app.definitions), h('span.land-n'), h('span.land-u'));
+          el = h('div.land-group', { dataset: { land: land.id } }, chipFace(land, this.#app.definitions), h('span.land-count', h('span.land-n'), h('span.land-u')));
           this.#landGroups.set(key, el);
         }
         const before = previous ? previous.battlefield.filter((p) => p.controllerId === pid && p.cardId === land.cardId).length : total;
@@ -651,6 +654,13 @@ export class BoardView {
       const pip = TURN_PIPS.find((p) => p.id === el.dataset.pip);
       toggle(el, 'now', pip.match(state));
     }
+    const combat = this.#parts.pips.querySelector('.tp-combat');
+    const step = combatStepIndex(state);
+    setText(combat.querySelector('.tp-label'), step >= 0 ? COMBAT_STEPS[step].label : 'Combat');
+    [...combat.querySelector('.tp-steps').children].forEach((seg, i) => {
+      toggle(seg, 'done', i < step);
+      toggle(seg, 'on', i === step);
+    });
   }
 
   /** Lines for blocks and for the targets of the top of the stack. */

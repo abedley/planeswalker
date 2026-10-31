@@ -106,6 +106,6 @@ export function primaryAction(state, me) {
   if (state.stack.length) return { label: 'Resolve', action: pass };
   if (state.activePlayerId !== me) return { label: 'Pass', action: pass };
   if (state.phase === PHASE.COMBAT && state.combat?.attackers?.length) return { label: 'Deal damage', action: pass };
-  if (state.phase === PHASE.PRECOMBAT_MAIN && readyAttackers(state, me).length) return { label: 'Attack', action: pass };
+  if (state.phase === PHASE.PRECOMBAT_MAIN && readyAttackers(state, me).length) return { label: 'Combat', action: pass };
   return { label: 'End turn', action: pass, endTurn: true };
 }

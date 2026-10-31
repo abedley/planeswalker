@@ -128,7 +128,7 @@ test('the main button follows the game', () => {
   assert.equal(label({}), 'End turn');
   assert.equal(primaryAction(fake({ validActions: [passAction] }), 'p1').endTurn, true);
   const bear = { controllerId: 'p1', types: ['Creature'], keywords: [], tapped: false, summoningSick: false };
-  assert.equal(label({ battlefield: [bear] }), 'Attack');
+  assert.equal(label({ battlefield: [bear] }), 'Combat');
   assert.equal(label({ battlefield: [{ ...bear, summoningSick: true }] }), 'End turn');
   assert.equal(label({ stack: [{ controllerId: 'p2' }] }), 'Resolve');
   assert.equal(label({ activePlayerId: 'p2' }), 'Pass');

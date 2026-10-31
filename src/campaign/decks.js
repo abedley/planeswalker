@@ -89,6 +89,8 @@ export const REWARD_ONLY_CARDS = Object.freeze([
   // Out of the decks, but still worth offering.
   'bloodDivination', 'giantSpider', 'tolarianScholar', 'revitalize', 'inspiredCharge', 'boltwave', 'thrillOfPossibility',
   'giantGrowth', 'divineVerdict', 'cavalryDrillmaster', 'honorOfThePure',
+  // Hand-written, with generated art: Auriok Glaivemaster as a hobbit.
+  'shireBounder',
 ]);
 
 /**

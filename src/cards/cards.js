@@ -593,6 +593,23 @@ export const HAND_WRITTEN_CARDS = deepFreeze({
     toughness: 1,
     abilities: [TAP_FOR_G],
   },
+  // Auriok Glaivemaster, made a hobbit. The art (app/art/) was generated with Gemini.
+  shireBounder: {
+    id: 'shireBounder',
+    name: 'Shire Bounder',
+    manaCost: { W: 1 },
+    types: [CARD_TYPE.CREATURE],
+    subtypes: ['Halfling', 'Soldier'],
+    power: 1,
+    toughness: 1,
+    staticAbilities: [{
+      affected: AFFECTED.SOURCE, condition: { sourceEquipped: true }, power: 1, toughness: 1, keywords: [KEYWORD.FIRST_STRIKE],
+    }],
+    text: 'As long as Shire Bounder is equipped, it gets +1/+1 and has first strike.',
+    image: { art: 'app/art/shire-bounder.jpg' },
+    colors: ['W'],
+    rarity: 'common',
+  },
 });
 
 /** Predefined tokens (111.10), for `{ type: 'createToken', token: TOKEN.TREASURE }`. */

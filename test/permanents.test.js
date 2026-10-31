@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   Game, ACTION, PHASE, STEP, CARD_TYPE, SUBTYPE, KEYWORD, TARGET, AFFECTED, EFFECT, equipAbility,
   passPriority, castSpell, activateAbility, playLand, toggleAttacker, confirmAttackers, setBlocker,
-  confirmBlockers,
+  confirmBlockers, CARDS as ALL_CARDS,
 } from '../src/index.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
@@ -63,6 +63,12 @@ const CARDS = {
     staticAbilities: [{ affected: AFFECTED.ATTACHED_PERMANENT, power: 2, keywords: [KEYWORD.FIRST_STRIKE] }],
     abilities: [equipAbility({ generic: 1 })],
   },
+  Strap: {
+    id: 'Strap', name: 'Strap', manaCost: {}, types: [CARD_TYPE.ARTIFACT], subtypes: [SUBTYPE.EQUIPMENT],
+    abilities: [equipAbility({ generic: 1 })],
+  },
+  // "As long as Shire Bounder is equipped, it gets +1/+1 and has first strike.", for free.
+  Bounder: { ...ALL_CARDS.shireBounder, id: 'Bounder', name: 'Bounder', manaCost: {} },
 };
 
 /** Starts with the decks in order (no shuffle, no emblems) and moves to p1's turn 1 main phase. */
@@ -372,6 +378,26 @@ test('equipping uses the stack, attaches, and grants the bonus; re-equipping mov
   assert.deepEqual([permanent(game, bear).power, permanent(game, bear).keywords], [2, []]);
   assert.deepEqual([permanent(game, mouse).power, permanent(game, mouse).keywords], [3, ['first strike']]);
   assert.equal(events.findLast((e) => e.name === 'attached').payload.from, bear);
+});
+
+test('"as long as this creature is equipped" applies only while an Equipment is attached to it', () => {
+  const { game } = setup({ p1: ['Bounder', 'Bear', 'Strap'] });
+  const bounder = cast(game, 'p1', 'Bounder');
+  const bear = cast(game, 'p1', 'Bear');
+  const strap = cast(game, 'p1', 'Strap');
+  const look = () => [permanent(game, bounder).power, permanent(game, bounder).toughness, permanent(game, bounder).keywords];
+  assert.deepEqual(look(), [1, 1, []]);
+  playForestAndTap(game, 'p1');
+  game.dispatch(activateAbility('p1', strap, 'equip', [bounder]));
+  passRound(game);
+  assert.deepEqual(look(), [2, 2, ['first strike']]);
+
+  advanceTo(game, { turn: 3, phase: PHASE.PRECOMBAT_MAIN });
+  playForestAndTap(game, 'p1');
+  game.dispatch(activateAbility('p1', strap, 'equip', [bear]));
+  passRound(game);
+  assert.deepEqual(look(), [1, 1, []]);
+  assert.deepEqual([permanent(game, bear).power, permanent(game, bear).keywords], [2, []]);
 });
 
 test('you can\'t equip the opponent\'s creatures', () => {

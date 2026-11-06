@@ -328,3 +328,34 @@ test('Pai Gow has its own opponents, each with a portrait, banter and the search
   const setup = roundSetup(ready(), CAMPAIGN);
   assert.equal(setup.cpu.name, PAIGOW_OPPONENTS[ready().opponentId].name);
 });
+
+test('a warning when this turn could end in a draw: after a turn with no change, and on the last turn', () => {
+  // Nothing at all: turn 2 changes nothing after turn 1, so turn 3 is warned, and ends in a draw.
+  const game = newGame({ p1: [], p2: [] }, { stallDraw: true });
+  const warnings = {};
+  passUntil(game, (s) => {
+    warnings[s.turn] ??= s.drawWarning;
+    return false;
+  });
+  assert.deepEqual(warnings, { 1: null, 2: null, 3: 'stall' });
+  assert.equal(game.getState().endReason, 'stall');
+  assert.equal(game.getState().drawWarning, null);
+
+  // p2 casts a Bear on turn 2: turn 3 isn't warned (and doesn't end the game); turn 4 is.
+  const busy = newGame({ p1: [], p2: ['bear'] }, { stallDraw: true, startingPlayerId: 'p1' });
+  const seen = {};
+  passUntil(busy, (s) => {
+    seen[s.turn] ??= s.drawWarning;
+    if (s.turn === 2 && s.phase === 'precombatMain' && s.priorityPlayerId === 'p2' && s.players[1].hand.length) {
+      busy.dispatch({ type: ACTION.CAST_SPELL, playerId: 'p2', cardId: s.players[1].hand[0].id });
+    }
+    return false;
+  });
+  assert.equal(seen[3], null);
+  assert.equal(seen[4], 'stall');
+
+  // The turn limit's last turn.
+  const limited = newGame({ p1: ['bear'], p2: ['bear'] }, { turnLimit: 2 });
+  assert.equal(limited.getState().drawWarning, null);
+  assert.equal(passUntil(limited, (s) => s.turn === 2).drawWarning, 'turnLimit');
+});

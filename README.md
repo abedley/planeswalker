@@ -673,6 +673,9 @@ Options that change the rules, all off unless asked (Pai Gow uses them all):
   counters and attachments (not whether it's tapped, nor damage, mana, or "this turn" effects),
   and if it matches the one from two turns before, the game ends.
 - `turnLimit`: the game is a draw when that turn ends.
+- The state's `drawWarning` says when the current turn could end in a draw: `'stall'` when the
+  last turn changed nothing lasting (so this one ending without a change too is a stall), and
+  `'turnLimit'` on the last turn; otherwise null. The board shows it as a warning above the lane.
 
 A drawn game has `winnerId: null` and `gameEnded { winnerId: null, reason: 'stall' | 'turnLimit' }`;
 the state's `endReason` says why a game ended (`'playerLost'` otherwise). The AI scores a draw

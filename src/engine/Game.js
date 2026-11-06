@@ -461,6 +461,7 @@ export class Game extends EventEmitter {
       status: this.#status,
       winnerId: this.#winnerId,
       endReason: this.#endReason,
+      drawWarning: this.#drawWarning(),
       infiniteMana: this.#variant.infiniteMana,
       turn: this.#turn,
       players: this.#players.map((player) => {
@@ -4928,6 +4929,17 @@ export class Game extends EventEmitter {
       JSON.stringify(p.counters ?? {}), p.attachedTo ?? '', p.faceDown ? 1 : 0,
     ].join('|')).sort();
     return JSON.stringify([players, permanents, this.#temporaryEffects.length, this.#delayedTriggers.length, this.#extraTurns.length]);
+  }
+
+  /**
+   * Whether this turn could end the game in a draw: 'turnLimit' on the last turn, 'stall' when the last turn
+   * changed nothing lasting (so this one ending without a change too would be a stall, see #checkForDraw), else null.
+   */
+  #drawWarning() {
+    if (this.#status !== GAME_STATUS.IN_PROGRESS || !this.#turn) return null;
+    if (this.#turn >= this.#variant.turnLimit) return 'turnLimit';
+    const prints = this.#stallPrints;
+    return this.#variant.stallDraw && prints.length >= 2 && prints.at(-1) === prints.at(-2) ? 'stall' : null;
   }
 
   /** At the end of a turn: ends the game in a draw if it has stalled or reached the turn limit. */

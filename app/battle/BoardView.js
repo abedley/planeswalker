@@ -29,6 +29,12 @@ const DEATH_EVENTS = new Set(['creatureDied', 'permanentDestroyed', 'permanentSa
 const isRingBearer = (state, id) => state.players.some((p) => p.ring?.bearerId === id
   && state.battlefield.some((b) => b.id === id && b.controllerId === p.id));
 
+/** What the board says when this turn could end the game in a draw (the state's `drawWarning`). */
+const DRAW_WARNINGS = {
+  stall: 'Nothing changed last turn. If nothing changes this turn, it\'s a draw.',
+  turnLimit: 'Last turn: if nobody wins, it\'s a draw.',
+};
+
 export class BoardView {
   #app;
   #me;
@@ -117,7 +123,9 @@ export class BoardView {
     const prompt = h('div.prompt');
     // Whose turn it is: a badge in the middle of the board (and the active side lights up).
     const turnBadge = h('div.turn-badge', h('span.tb-who'), h('span.tb-n'));
-    const lane = h('div.lane', turnBadge, prompt, pips);
+    // Pai Gow's stall rule: a warning when this turn could end the game in a draw.
+    const drawWarning = h('div.draw-warn', { hidden: true, role: 'status' });
+    const lane = h('div.lane', turnBadge, prompt, pips, drawWarning);
     const hand = h('div.hand');
     const stack = h('div.stack-zone');
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -125,7 +133,7 @@ export class BoardView {
     const fx = h('div.fx');
     const preview = h('div.preview');
     this.#parts = {
-      opp: opp.parts, me: me.parts, oppStrip, meStrip, oppCreatures, meCreatures, pips, prompt, lane, hand, stack, lines, fx, preview, turnBadge,
+      opp: opp.parts, me: me.parts, oppStrip, meStrip, oppCreatures, meCreatures, pips, prompt, lane, hand, stack, lines, fx, preview, turnBadge, drawWarning,
     };
     return h('div.battle',
       opp.bar, oppStrip.el, oppCreatures, lane, meCreatures, meStrip.el, me.bar, hand,
@@ -635,6 +643,14 @@ export class BoardView {
 
   #renderPips(state) {
     const mine = state.activePlayerId === this.#me;
+    const warning = DRAW_WARNINGS[state.drawWarning] ?? null;
+    const warn = this.#parts.drawWarning;
+    if (warn.dataset.text !== (warning ?? '')) {
+      warn.dataset.text = warning ?? '';
+      warn.hidden = !warning;
+      setText(warn, warning ?? '');
+      if (warning) warn.animate([{ opacity: 0, transform: 'translate(-50%, 6px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 260, easing: 'ease-out' });
+    }
     toggle(this.#parts.pips, 'theirs', !mine);
     // Whose turn: the badge, and the active side's panel and portrait.
     const badge = this.#parts.turnBadge;

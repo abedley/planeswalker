@@ -403,6 +403,8 @@ header.top h2 { flex: 1; margin: 0; text-align: center; font: 700 21px var(--dis
 .main-btn.full .full-badge { display: block; }
 @keyframes glow { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
+.ff-btn { position: absolute; z-index: 6; right: 50px; top: calc(var(--safe-top) + 14px); height: 34px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border-radius: 17px; border: 1px solid var(--gold2); background: linear-gradient(180deg, #f3d488, var(--gold2)); color: #2a1a02; font: 700 13px var(--display); box-shadow: 0 2px 10px rgba(233, 196, 106, .35); cursor: pointer; }
+.ff-btn[hidden] { display: none; }
 .menu-btn { position: absolute; z-index: 6; right: 8px; top: calc(var(--safe-top) + 14px); width: 34px; height: 34px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .06); color: var(--muted); display: grid; place-items: center; font-size: 17px; }
 
 /* strips: lands, floating mana, small permanents */

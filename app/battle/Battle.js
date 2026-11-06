@@ -34,6 +34,7 @@ import { relRect } from './fx.js';
 import { inlineSymbols } from '../symbols.js';
 import { isLand, castsAtInstantSpeed, TARGET } from '../../src/cards/cards.js';
 import { formatMana } from '../../src/engine/mana.js';
+import { canFastForward, planFastForward } from '../../src/paigow/fastForward.js';
 
 const LONG_PRESS_MS = 430;
 
@@ -80,14 +81,18 @@ export class Battle {
   #history = new PlayHistory();
   #oppName;
   #greeted = false;
+  /** Pai Gow's fast forward: its button (when offered at all), and whether it's playing out. */
+  #fastForwardBtn = null;
+  #fastForwarding = false;
 
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
    * same shape for a quick match. `meInfo`/`oppInfo`: `{ name, color?, art? }`.
    * `onEnd({ won, drawn, turns })` is called after the final banner (`drawn`: nobody won, as when a
-   * Pai Gow round stalls).
+   * Pai Gow round stalls). With `fastForward`, a button plays the game out at once when a player is out
+   * of actions (src/paigow/fastForward.js).
    */
-  constructor(app, { setup, meInfo, oppInfo, onEnd, subtitle = '' }) {
+  constructor(app, { setup, meInfo, oppInfo, onEnd, subtitle = '', fastForward = false }) {
     this.#app = app;
     this.#onEnd = onEnd;
     this.#me = setup.game.players[0].id;
@@ -102,6 +107,10 @@ export class Battle {
     this.#unsubscribe.push(this.#game.onAny((name, payload) => this.#onEvent(name, payload)));
     this.#bindInput();
     this.el.append(h('button.menu-btn', { 'aria-label': 'Menu', onclick: () => this.#menu() }, icon('gear')));
+    if (fastForward) {
+      this.#fastForwardBtn = h('button.ff-btn', { hidden: true, onclick: () => this.#fastForward() }, icon('bolt'), h('span', 'Fast forward'));
+      this.el.append(this.#fastForwardBtn);
+    }
     this.#intro = { meInfo, oppInfo, subtitle, setup };
     // Re-measure whenever the board changes size. iOS fires `resize` on rotation before
     // the new layout settles, so the board's own size (ResizeObserver) is what counts;
@@ -204,6 +213,8 @@ export class Battle {
       this.#finish(state);
       return;
     }
+    if (this.#fastForwardBtn) this.#fastForwardBtn.hidden = this.#fastForwarding || !canFastForward(state);
+    if (this.#fastForwarding) return;
     const me = this.#me;
     const acting = actingPlayerId(state) === me;
     this.#options = acting && !state.pendingDecision ? timed('playOptions', () => playOptions(this.#game, me)) : [];
@@ -837,6 +848,33 @@ export class Battle {
     // Newest at the bottom: start there.
     const sheet = body.closest('.sheet');
     if (sheet) sheet.scrollTop = sheet.scrollHeight;
+  }
+
+  /**
+   * Plays the rest of the game at once: the best line for the side that still has actions (the AI
+   * plays for both sides), replayed on the real game so the board shows how it ends.
+   */
+  async #fastForward() {
+    if (this.#fastForwarding || this.#finished || !canFastForward(this.#game.getState())) return;
+    this.#fastForwarding = true;
+    this.#fastForwardBtn.hidden = true;
+    clearTimeout(this.#autoTimer);
+    this.#app.overlays.close();
+    this.#setInteractive(false);
+    this.#view.toast('Fast forward');
+    // Let the toast show before the (synchronous) playouts.
+    await wait(60);
+    const plan = planFastForward(this.#game);
+    if (!plan || this.#finished) {
+      this.#fastForwarding = false;
+      if (!this.#finished) this.#settle();
+      return;
+    }
+    this.#cpu.detach();
+    for (const action of plan.actions) {
+      if (this.#game.getState().status !== GAME_STATUS.IN_PROGRESS) break;
+      if (!this.#game.dispatch(action).ok) break;
+    }
   }
 
   async #concede() {

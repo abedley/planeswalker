@@ -14,6 +14,7 @@ import {
   arrangeCpuDecks, playerStartsRound, ROUND_RESULT, MATCH_OUTCOME, PLAYER_ID, CPU_ID,
 } from '../src/paigow/paigow.js';
 import { seededRandom } from '../src/engine/random.js';
+import { outOfActions, canFastForward, planFastForward } from '../src/paigow/fastForward.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const VARIANT = { openingHandSize: 3, deckingLoss: false, infiniteMana: true, emblems: { p1: [], p2: [] } };
@@ -217,4 +218,54 @@ test('the match ends at three wins, or after five rounds on the most wins', () =
   assert.equal(outcome(play(ready(), [WON, DRAWN, LOST, DRAWN])), null);
   assert.deepEqual(score(play(ready(), [WON, DRAWN, LOST])), { won: 1, lost: 1, drawn: 1 });
   assert.throws(() => recordRound(play(ready(), [WON, WON, WON]), WON));
+});
+
+// Fast forward.
+
+const RELIC = { id: 'relic', name: 'Relic', manaCost: {}, types: ['Artifact'], abilities: [{ id: 'life', text: '{1}: You gain 1 life.', cost: { mana: { generic: 1 } }, effect: { type: 'gainLife', amount: 1 } }] };
+const ROCK = { id: 'rock', name: 'Rock', manaCost: {}, types: ['Artifact'], abilities: [{ id: 'mana', text: '{T}: Add {C}.', cost: { tap: true }, effect: { type: 'addMana', mana: { C: 1 } } }] };
+
+/** A game where p1 has cast `p1Plays` (and kept the rest of `p1`) and p2 has nothing, in p1's main phase. */
+function ffGame(p1, p1Plays = p1, p2 = []) {
+  const game = new Game({
+    players, decks: { p1, p2 }, shuffleLibraries: false, cards: { bear: BEAR, relic: RELIC, rock: ROCK }, ...VARIANT, stallDraw: true, turnLimit: 40,
+  });
+  game.start();
+  passUntil(game, mainPhase('p1'));
+  for (const cardId of p1Plays) {
+    const card = game.getState().players[0].hand.find((c) => c.cardId === cardId);
+    assert.equal(game.dispatch({ type: ACTION.CAST_SPELL, playerId: 'p1', cardId: card.id }).ok, true);
+    passUntil(game, (s) => s.stack.length === 0 && s.priorityPlayerId === 'p1');
+  }
+  return game;
+}
+
+test('a player is out of actions with no hand, no creatures and no abilities but mana abilities', () => {
+  assert.equal(outOfActions(ffGame(['bear'], []).getState(), 'p1'), false, 'a card in hand');
+  assert.equal(outOfActions(ffGame(['bear']).getState(), 'p1'), false, 'a creature');
+  assert.equal(outOfActions(ffGame(['relic']).getState(), 'p1'), false, 'an ability');
+  assert.equal(outOfActions(ffGame(['rock']).getState(), 'p1'), true, 'only a mana ability');
+  const game = ffGame(['bear']);
+  assert.equal(outOfActions(game.getState(), 'p2'), true);
+  assert.equal(canFastForward(game.getState()), true);
+  assert.equal(canFastForward(ffGame(['bear'], [], ['bear']).getState()), false);
+});
+
+test('fast forward plays out the best line for the side with actions', () => {
+  const game = ffGame(['bear']);
+  const plan = planFastForward(game);
+  assert.equal(plan.winnerId, 'p1');
+  assert.equal(plan.endReason, 'playerLost');
+  // Replaying it on the real game ends the same way.
+  for (const action of plan.actions) assert.equal(game.dispatch(action).ok, true);
+  const end = game.getState();
+  assert.equal(end.status, GAME_STATUS.GAME_OVER);
+  assert.equal(end.winnerId, 'p1');
+  assert.equal(end.turn, plan.turns);
+});
+
+test('fast forward with nothing on either side is a draw', () => {
+  const plan = planFastForward(ffGame(['rock']));
+  assert.equal(plan.winnerId, null);
+  assert.equal(plan.endReason, 'stall');
 });

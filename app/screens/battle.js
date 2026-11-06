@@ -74,6 +74,7 @@ function paigowBattle(app, match) {
     oppInfo: personInfo(opponent),
     subtitle: `Round ${setup.encounter.round + 1} · ${won}–${lost}`,
     onEnd,
+    fastForward: true,
   });
   window.planeswalker.battle = battle;
   return {

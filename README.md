@@ -972,7 +972,14 @@ its screen in `app/screens/paigow.js`, at `/paigow/` or from the title screen:
    hand, 5 life, infinite mana and no emblems, and can't lose by drawing from an empty library.
    A round is won, lost, or drawn when the board stalls (see *Variant rules*); 40 turns is a
    backstop. Who goes first is a coin flip in round 1, then alternates.
-4. The first to win three rounds takes the match. If five rounds pass without that, more round
+4. **Fast forward:** once a player is out of actions (no cards in hand, no creatures, and no
+   abilities but mana abilities, `outOfActions` in `src/paigow/fastForward.js`), a *Fast forward*
+   button plays the round out at once. `planFastForward` tries a few basic-AI lines for both sides
+   on copies of the game (lookahead or basic attacks, swarming or not), keeps the one best for the
+   side that still has actions (a win, then a draw, then a loss; sooner is better), and replays
+   it on the real game, so the board shows how it ends. If you're the one with actions, the AI
+   plays them for you.
+5. The first to win three rounds takes the match. If five rounds pass without that, more round
    wins takes it, and otherwise it's a tie.
 
 The CPU is one of the campaign's non-boss opponents with the search AI (its portrait, banter

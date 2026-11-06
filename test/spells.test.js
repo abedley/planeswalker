@@ -277,10 +277,12 @@ test('the AIs only cast a Shock that kills: a creature or the player', async () 
   let { game } = withCreatures({ p2: ['Ox'], p1Hand: ['Shock'] });
   assert.deepEqual(shocks(game), []);
   assert.equal(basicCast(game), null);
-  // A 2/2 does.
+  // A 2/2 does: not in the main phase, but at the start of combat, when it clears the way.
   const bear = withCreatures({ p2: ['Bear'], p1Hand: ['Shock'] });
+  assert.deepEqual(shocks(bear.game), []);
+  advanceTo(bear.game, { turn: 3, phase: PHASE.COMBAT });
   assert.deepEqual(shocks(bear.game), [bear.theirs[0]]);
-  // And so does an opponent at 2 life.
+  // And so does an opponent at 2 life, at any time: it wins the game.
   ({ game } = withCreatures({ p2: ['Ox'], p1Hand: ['Blaze', 'Shock'] }));
   cast(game, 'p1', 'Blaze', ['p2']);
   assert.equal(player(game, 'p2').life, 2);

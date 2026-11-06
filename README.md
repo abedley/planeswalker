@@ -1138,11 +1138,17 @@ A fast heuristic player, also used to play out the search AI's simulations (5–
   afford (a small knapsack over its hand). It keeps mana up for instants it would rather cast
   later, and taps lands and Elves before sacrificing Treasures. It counts what each source makes
   (Elvish Archdruid, Gaea's Cradle), and what a spell costs now (Ghalta).
-- **Instants:**
+- **Instants and flash** (`timing.js`, shared with the search AI): never in its own main phase,
+  but at the last moment they're needed:
+  - removal on the opponent's creatures and "can't block" effects at the start of its combat,
+    clearing the way for its attack
+  - removal on attackers, and creatures with flash as surprise blockers, once the opponent attacks
   - combat tricks once blockers are declared, when they win the fight
-  - removal on attackers
   - counterspells on spells worth countering
-  - everything else at the end of the opponent's turn
+  - everything else (card draw, life gain, flash creatures nobody needed to block with) at the
+    end of the opponent's turn
+  - burn that wins the game, at once
+  The search AI only considers instant-speed casts at those moments (`macroActions.js`).
 - **Scoring** (`scoring.js`): spells and abilities are scored effect by effect, in the same points
   as creature values. Removal goes at the biggest threat, and burn goes to the face when it's
   lethal. A burn spell (one that only deals damage to its target, like Shock) is cast only

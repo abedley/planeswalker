@@ -334,11 +334,15 @@ test('the basic AI aims removal at a lord worth more than the biggest body', asy
   cast(game, 'p1', 'Mouse');
   advanceTo(game, { turn: 2, phase: PHASE.PRECOMBAT_MAIN });
   const ai = new BasicAIController({ playerId: 'p2' });
-  let action = ai.chooseAction(state(game));
-  for (let i = 0; i < 5 && action.type !== ACTION.CAST_SPELL; i++) {
-    game.dispatch(action); // a land first
-    action = ai.chooseAction(state(game));
+  // The instant waits for the start of its combat (a land first); p1 just passes.
+  let action = null;
+  for (let i = 0; i < 10; i++) {
+    const s = state(game);
+    action = s.priorityPlayerId === 'p2' ? ai.chooseAction(s) : passPriority(s.priorityPlayerId);
+    if (action.type === ACTION.CAST_SPELL) break;
+    game.dispatch(action);
   }
+  assert.equal(state(game).step, STEP.BEGINNING_OF_COMBAT);
   assert.deepEqual([action.type, action.targets], [ACTION.CAST_SPELL, [lord]]);
 });
 

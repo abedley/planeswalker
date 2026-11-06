@@ -114,7 +114,8 @@ test('greedy and ismcts policies play complete games', () => {
 test('noisy rollouts: the same noise for every candidate on a guess, and different noise on another', () => {
   const game = new Game({ players, seed: 6, cards, decks: { p1: SAMPLE_EFFECTS_DECK, p2: SAMPLE_TRIGGERS_DECK }, silent: true });
   game.start();
-  decisionAfter(game, 'p1', 120);
+  // A position where the game is still open, so noisy play can change how it goes.
+  decisionAfter(game, 'p1', 100);
   const state = game.peekState();
   const view = game.getPlayerView('p1');
   const [macro] = listMacros(state, 'p1');

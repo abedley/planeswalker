@@ -1,7 +1,7 @@
 import { EventEmitter } from '../engine/EventEmitter.js';
 import { ACTION } from '../engine/actions.js';
 import { DECISION, CHOICE } from '../engine/Game.js';
-import { STEP, PHASE } from '../engine/turnStructure.js';
+import { PHASE } from '../engine/turnStructure.js';
 import {
   isCreature, isLand, isAura, isCurse, hasKeyword, cantAttack, manaValue, KEYWORD, EFFECT, AFFECTED, isHarmfulEffect,
   castsAtInstantSpeed, targetList, withX, colorsOf, COLORS_OF_MANA, flattenEffects,
@@ -21,26 +21,17 @@ import { BLOCK_PLAN } from './blocking.js';
 import { keepsHand, bottomCard, landShare } from './mulligan.js';
 import { playAroundTricks, baitWithTricks } from './tricks.js';
 import { doomedCreatures, savedByRemoving, kills } from './doomed.js';
+import {
+  WINDOW, windowOf, windowAllows, permanentWindowAllows, isTheirs,
+} from './timing.js';
+
+export { windowOf };
 
 export const AI_STRATEGY = Object.freeze({
   /** Plays its cards and fights sensibly; see BasicAIController. */
   BASIC: 'basic',
   /** Never acts on its own: passes priority and makes empty declarations. */
   PASSIVE: 'passive',
-});
-
-/** Moments when the AI considers acting (anything else it passes). */
-const WINDOW = Object.freeze({
-  /** Its own main phase with an empty stack: lands, creatures, sorceries, abilities. */
-  MAIN: 'main',
-  /** After blockers are declared, in anyone's combat: tricks and removal on combatants. */
-  COMBAT: 'combat',
-  /** The opponent has attacked: removal on attackers. */
-  ATTACKED: 'attacked',
-  /** The opponent's spell is on top of the stack: counterspells. */
-  RESPONSE: 'response',
-  /** The opponent's end step: instants held up for this. */
-  END: 'end',
 });
 
 /**
@@ -54,9 +45,11 @@ const WINDOW = Object.freeze({
  *   with everything when that's lethal through the best blocks, and keeps enough
  *   blockers home to survive the crack-back. It blocks to kill attackers or trade
  *   up, double-blocks big threats, and chump-blocks only to survive.
- * - **Instants:** combat tricks when they win a fight, removal on attackers,
- *   counterspells on spells worth countering, and everything else at the end of
- *   the opponent's turn.
+ * - **Instants and flash:** never in its own main phase, but at the last moment
+ *   they're needed (timing.js): removal and "can't block" at the start of its
+ *   combat or on attackers, combat tricks when they win a fight, flash creatures
+ *   as surprise blockers, counterspells on spells worth countering, and
+ *   everything else at the end of the opponent's turn.
  * - **Targets:** removal at the biggest threat; burn at the face when it's lethal.
  *
  * It listens to the game's `state` events and, when it has something to do,
@@ -308,7 +301,7 @@ export class BasicAIController extends EventEmitter {
    */
   #candidates(state, window, player, sources) {
     const me = this.#playerId;
-    const preCombat = window === WINDOW.MAIN && state.phase === PHASE.PRECOMBAT_MAIN;
+    const preCombat = (window === WINDOW.MAIN && state.phase === PHASE.PRECOMBAT_MAIN) || window === WINDOW.BEGIN_COMBAT;
     const available = manaAvailable(player.manaPool, sources);
     const result = [];
     const noise = this.#noise;
@@ -341,11 +334,12 @@ export class BasicAIController extends EventEmitter {
       const castMatches = (targetId) => (a) => a.type === ACTION.CAST_SPELL && a.cardId === card.id
         && (targetId === null || a.targets?.[0] === targetId);
       if (!card.spell) {
-        // A permanent spell; with flash, also as a surprise blocker or at the end of the opponent's turn.
-        if (window !== WINDOW.MAIN && window !== WINDOW.END && window !== WINDOW.ATTACKED) continue;
-        if (window === WINDOW.ATTACKED && !isCreature(card)) continue;
-        for (const { targetId, score } of permanentSpellOptions(state, me, card, preCombat, this.#heuristics)) {
-          add({ score, manaCost, cost, sourceId: card.id, now: true, matches: castMatches(targetId) });
+        // A permanent spell; with flash, as a surprise blocker or at the end of the opponent's turn (timing.js),
+        // and in the main phase only kept in mind, with mana kept up for it.
+        const held = instant && window === WINDOW.MAIN;
+        if (!held && !permanentWindowAllows(window, card)) continue;
+        for (const { targetId, score } of permanentSpellOptions(state, me, card, held ? false : preCombat, this.#heuristics)) {
+          add({ score: held ? 0.6 * score : score, manaCost, cost, sourceId: card.id, now: !held, matches: held ? () => false : castMatches(targetId) });
         }
         continue;
       }
@@ -432,13 +426,13 @@ export class BasicAIController extends EventEmitter {
   }
 
   /**
-   * H7 ("save removal for a real threat"): in the main phase, removal isn't spent
+   * H7 ("save removal for a real threat"): before our attack, removal isn't spent
    * on a creature worth less than `saveRemoval` (creatureValue; true means 6, about
    * a 2/2) unless we're under pressure.
    */
   #savesRemoval(state, effects, targetId, window) {
     const threshold = this.#heuristics.saveRemoval === true ? 6 : this.#heuristics.saveRemoval;
-    if (!threshold || window !== WINDOW.MAIN || !effects.some(isHarmfulEffect)) return false;
+    if (!threshold || (window !== WINDOW.MAIN && window !== WINDOW.BEGIN_COMBAT) || !effects.some(isHarmfulEffect)) return false;
     const target = state.battlefield.find((p) => p.id === targetId);
     if (!target || !isCreature(target) || target.controllerId === this.#playerId) return false;
     const me = state.players.find((p) => p.id === this.#playerId);
@@ -465,45 +459,6 @@ export class BasicAIController extends EventEmitter {
 // Helpers
 
 /** Which acting window this is for `me`, or null when it's a moment to pass. */
-export function windowOf(state, me) {
-  const myTurn = state.activePlayerId === me;
-  const top = state.stack[state.stack.length - 1];
-  if (top) return top.kind === 'spell' && top.controllerId !== me ? WINDOW.RESPONSE : null;
-  if (myTurn && (state.phase === PHASE.PRECOMBAT_MAIN || state.phase === PHASE.POSTCOMBAT_MAIN)) return WINDOW.MAIN;
-  if (state.step === STEP.DECLARE_BLOCKERS) return WINDOW.COMBAT;
-  if (!myTurn && state.step === STEP.DECLARE_ATTACKERS) return WINDOW.ATTACKED;
-  if (!myTurn && state.step === STEP.END) return WINDOW.END;
-  return null;
-}
-
-/** Whether these effects are worth using in this window (rather than waiting for a better one). */
-function windowAllows(window, given, instantSpeed, targetId, state, me) {
-  const effects = flattenEffects(given);
-  const counters = effects.some((e) => e.type === EFFECT.COUNTER_SPELL);
-  if (window === WINDOW.RESPONSE) return counters;
-  if (counters) return false;
-  const harmful = effects.some(isHarmfulEffect);
-  const trick = effects.some((e) => e.type === EFFECT.PUMP && (e.power ?? 0) + (e.toughness ?? 0) > 0);
-  const onCreature = targetId && state.battlefield.some((p) => p.id === targetId && isCreature(p));
-  // Blocking restrictions only matter if they're in place before blockers are declared.
-  const restricts = effects.some((e) => e.type === EFFECT.PUMP
-    && (e.keywords ?? []).some((k) => k === KEYWORD.CANT_BLOCK || k === KEYWORD.CANT_BE_BLOCKED));
-  switch (window) {
-    case WINDOW.MAIN:
-      // Sorcery-speed things now. Instants: removal (clearing the way) and blocking
-      // restrictions now, the rest later.
-      return !instantSpeed || restricts || (harmful && onCreature && targetId && isTheirs(state, me, targetId));
-    case WINDOW.COMBAT:
-      return trick || (harmful && onCreature);
-    case WINDOW.ATTACKED:
-      return harmful && onCreature && state.combat.attackers.some((a) => a.cardId === targetId);
-    case WINDOW.END:
-      return !trick;
-    default:
-      return false;
-  }
-}
-
 const landsInPlay = (state, me) => state.battlefield.filter((p) => p.controllerId === me && isLand(p)).length;
 
 /**
@@ -540,9 +495,6 @@ function bestTargets(state, me, effects, kinds, sourceId, preCombat, x) {
   }
   return best;
 }
-
-const isTheirs = (state, me, id) => state.battlefield.some((p) => p.id === id && p.controllerId !== me)
-  || (state.players.some((p) => p.id === id) && id !== me);
 
 /**
  * The best target for these effects in this window, `{ targetId, score }` (targetId

@@ -27,6 +27,7 @@ import {
   candidateTargets, scoreEffects, costScore, wastedDamage, targetCombos, sacrificeCandidates,
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
+import { windowOf, windowAllows, permanentWindowAllows } from './timing.js';
 import {
   bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost, manaAvailable, capX, guardActivations,
 } from './manaPlanning.js';
@@ -139,7 +140,12 @@ function priorityMacros(state, me, mine) {
   const canSacrifice = (cost, sourceId) => !cost?.sacrifice || sacrificeCandidates(state, me, cost.sacrifice, sourceId)
     .some((p) => p.id !== sourceId);
   const available = manaAvailable(player.manaPool, sources);
+  // Instants and flash wait for the moment they're needed (timing.js), never our main phase.
+  const window = windowOf(state, me);
   for (const card of player.hand) {
+    const instant = castsAtInstantSpeed(card);
+    const timely = (effects, targetId) => !instant
+      || (card.spell ? windowAllows(window, effects, true, targetId, state, me) : permanentWindowAllows(window, card));
     // Cycling and other abilities that work from the hand.
     for (const ability of card.handAbilities ?? []) {
       if (affordable(ability.cost.mana) && (sorceryTiming || state.activePlayerId !== me)) {
@@ -156,6 +162,7 @@ function priorityMacros(state, me, mine) {
       for (const [mode, holder] of modes) {
         targetCombos(state, me, targetList(holder), card.id, 200, x)
           .map((targets) => ({ targets, score: scoreEffects(state, me, holder.effects ?? [], targets, card.id, { x }) }))
+          .filter(({ targets }) => timely(holder.effects ?? [], targets.filter(Boolean).at(-1) ?? null))
           .sort((a, b) => b.score - a.score).slice(0, TARGETS_PER_SPELL)
           .forEach(({ targets }) => macros.push(keyed({
             kind: 'cast', cardId: card.id, targetId: null, targets, ...(mode !== undefined ? { mode } : {}), ...(x !== undefined ? { x } : {}),
@@ -174,7 +181,9 @@ function priorityMacros(state, me, mine) {
       // Burn spells are kept for kills.
       targets = topTargets(card.spell.target, card.spell.effects, card.id, true);
     }
-    for (const targetId of targets) macros.push(keyed({ kind: 'cast', cardId: card.id, targetId }));
+    for (const targetId of targets) {
+      if (timely(card.spell?.effects ?? [], targetId)) macros.push(keyed({ kind: 'cast', cardId: card.id, targetId }));
+    }
   }
 
   const permanents = state.battlefield.filter((p) => p.controllerId === me);

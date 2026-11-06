@@ -21,7 +21,8 @@ import { listMacros, nextAction, applyMacro } from './macroActions.js';
 import { evaluate, evaluateTiered, DEFAULT_WEIGHTS, TIERS, weightsFor } from './evaluate.js';
 import { playout, actingPlayerId } from './simulate.js';
 import { simulateLookahead, quickScores } from './lookahead.js';
-import { BasicAIController, windowOf } from './BasicAIController.js';
+import { BasicAIController } from './BasicAIController.js';
+import { windowOf } from './timing.js';
 
 /** The tier weights for evaluateTiered: TIERS, with any overrides in `weights.tiers`. */
 const tiersOf = (weights) => (weights?.tiers ? { ...TIERS, ...weights.tiers } : TIERS);

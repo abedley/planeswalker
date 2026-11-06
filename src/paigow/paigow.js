@@ -13,7 +13,7 @@
 import { CARDS, isCreature, manaValue } from '../cards/cards.js';
 import { GAME_LIMITS } from '../engine/Game.js';
 import { seededRandom, shuffle } from '../engine/random.js';
-import { AI_KIND } from '../campaign/campaign.js';
+import { PAIGOW_OPPONENTS, paigowOpponent } from './personas.js';
 import { weightsFor } from '../ai/evaluate.js';
 
 export const PAIGOW_RULES = Object.freeze({
@@ -86,21 +86,15 @@ export function arrangeCpuDecks(cards, random, { decks = PAIGOW_RULES.decks } = 
   return shuffle(result, random);
 }
 
-/** The opponents that can play the CPU: the campaign's non-boss opponents with the search AI. */
-export function cpuCandidates(content) {
-  const bosses = new Set(content.ladder.filter((t) => t.boss).flatMap((t) => t.opponents));
-  return Object.keys(content.opponents).filter((id) => !bosses.has(id) && content.opponents[id].ai.kind === AI_KIND.SEARCH);
-}
-
 /**
- * A new match: a booster opened for each side, the CPU's decks arranged, its persona picked from `content`'s
- * opponents, and who goes first in round 1 decided (then it alternates).
+ * A new match: a booster opened for each side, the CPU's decks arranged, its opponent picked from
+ * PAIGOW_OPPONENTS (src/paigow/personas.js), and who goes first in round 1 decided (then it alternates).
  */
-export function createMatch(content, { seed = Math.floor(Math.random() * 2 ** 32) } = {}) {
+export function createMatch({ seed = Math.floor(Math.random() * 2 ** 32) } = {}) {
   const random = seededRandom(seed);
   const cards = openBooster(random);
   const cpuCards = openBooster(random);
-  const candidates = cpuCandidates(content);
+  const candidates = Object.keys(PAIGOW_OPPONENTS);
   const opponentId = candidates[Math.floor(random() * candidates.length)];
   return {
     seed,
@@ -165,7 +159,7 @@ export function recordRound(match, result) {
 export function roundSetup(match, content, { playerName = 'You' } = {}) {
   const round = nextRound(match);
   if (round === null) throw new Error('No round to play.');
-  const opponent = content.opponents[match.opponentId];
+  const opponent = paigowOpponent(match.opponentId);
   const players = [{ id: PLAYER_ID, name: playerName }, { id: CPU_ID, name: opponent.name }];
   const life = PAIGOW_RULES.startingLife;
   return {
@@ -193,7 +187,7 @@ export function roundSetup(match, content, { playerName = 'You' } = {}) {
         ...opponent.ai,
         budgetMs: Math.max(opponent.ai.budgetMs ?? 0, 1000),
         // Libraries are always empty here, and that's no danger.
-        weights: { ...weightsFor(opponent.ai.weights ?? match.opponentId), library: 0 },
+        weights: { ...weightsFor(opponent.ai.weights), library: 0 },
       },
       banter: opponent.banter ?? null,
     },

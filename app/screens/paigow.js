@@ -6,6 +6,7 @@ import {
   createMatch, setDecks, score, outcome, nextRound, playerStartsRound,
   PAIGOW_RULES, ROUND_RESULT, MATCH_OUTCOME,
 } from '../../src/paigow/paigow.js';
+import { paigowOpponent } from '../../src/paigow/personas.js';
 
 const RESULT_LABEL = { [ROUND_RESULT.WON]: 'Won', [ROUND_RESULT.LOST]: 'Lost', [ROUND_RESULT.DRAWN]: 'Draw' };
 
@@ -15,7 +16,7 @@ const RESULT_LABEL = { [ROUND_RESULT.WON]: 'Won', [ROUND_RESULT.LOST]: 'Lost', [
  * new one is dealt.
  */
 export function paigowScreen(app, { match: given = null, view = null } = {}) {
-  const match = given ?? createMatch(app.content);
+  const match = given ?? createMatch();
   const shown = view ?? (match.decks ? (outcome(match) ? 'final' : 'scoreboard') : 'build');
   return shown === 'build' ? buildView(app, match) : scoreView(app, match, shown === 'final');
 }
@@ -35,7 +36,7 @@ function miniCard(app, cardId, { onTap = null, full = false } = {}) {
 }
 
 const opponentLine = (app, match) => {
-  const opponent = app.content.opponents[match.opponentId];
+  const opponent = paigowOpponent(match.opponentId);
   return h('div.pg-opp', crest(personInfo(opponent), { size: 'sm' }), h('span', 'vs ', h('b', opponent.name)));
 };
 
@@ -120,7 +121,7 @@ function scoreView(app, match, final) {
   const { won, lost, drawn } = score(match);
   const round = nextRound(match);
   const result = outcome(match);
-  const opponent = app.content.opponents[match.opponentId];
+  const opponent = paigowOpponent(match.opponentId);
 
   const roundRows = h('div.pg-rounds', match.decks.map((deck, i) => {
     const played = match.rounds[i];

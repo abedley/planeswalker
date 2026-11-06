@@ -987,8 +987,11 @@ its screen in `app/screens/paigow.js`, at `/paigow/` or from the title screen:
 5. The first to win three rounds takes the match. If five rounds pass without that, more round
    wins takes it, and otherwise it's a tie.
 
-The CPU is one of the campaign's non-boss opponents with the search AI (its portrait, banter
-and AI, thinking for at least a second). The match lives in memory: reloading the page starts a
+The CPU is one of Pai Gow's own opponents (`PAIGOW_OPPONENTS` in `src/paigow/personas.js`),
+picked at random: Gandalf, Tom Bombadil, Sauron, Saruman, Théoden, Denethor, Elrond and
+Galadriel. Each has a portrait from their LTR card's art, their own lines, and the search AI with
+their own thinking time (1 to 2.5 seconds) and style (Sauron and Théoden race, Saruman, Denethor
+and Elrond grind). The match lives in memory: reloading the page starts a
 new one. As everywhere, the search AI assumes it knows its opponent's deck list, and with
 three-card decks that means it knows your hand.
 

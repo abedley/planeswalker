@@ -6,6 +6,7 @@ import { personInfo } from './common.js';
 import {
   roundSetup, recordRound, outcome, score, ROUND_RESULT, MATCH_OUTCOME,
 } from '../../src/paigow/paigow.js';
+import { paigowOpponent } from '../../src/paigow/personas.js';
 
 /**
  * A fight. `mode: 'run'` plays the run's current encounter and records the
@@ -61,7 +62,7 @@ function paigowBattle(app, match) {
     return { el: h('div') };
   }
   const setup = roundSetup(match, content);
-  const opponent = content.opponents[match.opponentId];
+  const opponent = paigowOpponent(match.opponentId);
   const { won, lost } = score(match);
   const resultOf = ({ won: roundWon, drawn }) => (drawn ? ROUND_RESULT.DRAWN : roundWon ? ROUND_RESULT.WON : ROUND_RESULT.LOST);
   // "Victory" and "Defeat" are for the match; a round that doesn't decide it is only "Round won" and the like.

@@ -15,6 +15,8 @@ import {
 } from '../src/paigow/paigow.js';
 import { seededRandom } from '../src/engine/random.js';
 import { outOfActions, canFastForward, planFastForward } from '../src/paigow/fastForward.js';
+import { PAIGOW_OPPONENTS } from '../src/paigow/personas.js';
+import { banterProblems } from '../src/campaign/banter.js';
 
 const players = [{ id: 'p1' }, { id: 'p2' }];
 const VARIANT = { openingHandSize: 3, deckingLoss: false, infiniteMana: true, emblems: { p1: [], p2: [] } };
@@ -183,18 +185,18 @@ test('a booster: 10 different commons, 3 different uncommons, a rare or mythic, 
 });
 
 test('a match opens a booster for each side and makes five CPU decks of three', () => {
-  const match = createMatch(CAMPAIGN, { seed: 42 });
+  const match = createMatch({ seed: 42 });
   assert.equal(match.cards.length, PAIGOW_RULES.cardsDealt);
   assert.ok(match.cards.every((id) => PAIGOW_POOL.includes(id)));
   assert.equal(match.cpuDecks.length, 5);
   assert.ok(match.cpuDecks.every((deck) => deck.length === 3));
   assert.equal(match.cpuDecks.flat().length, 15);
-  assert.equal(CAMPAIGN.opponents[match.opponentId].ai.kind, 'search');
-  assert.deepEqual(createMatch(CAMPAIGN, { seed: 42 }), match);
+  assert.ok(PAIGOW_OPPONENTS[match.opponentId]);
+  assert.deepEqual(createMatch({ seed: 42 }), match);
 });
 
 test('a booster with two of a card can still be split into decks', () => {
-  const base = createMatch(CAMPAIGN, { seed: 1 });
+  const base = createMatch({ seed: 1 });
   const match = { ...base, cards: [...base.cards.slice(0, 14), base.cards[0]] };
   const decks = [0, 1, 2, 3, 4].map((i) => match.cards.slice(i * 3, i * 3 + 3));
   assert.equal(validDecks(match, decks), true);
@@ -211,7 +213,7 @@ test('the CPU spreads its strongest cards across its decks', () => {
 });
 
 test('the player must use each card once, in five decks of three', () => {
-  const match = createMatch(CAMPAIGN, { seed: 7 });
+  const match = createMatch({ seed: 7 });
   const decks = [0, 1, 2, 3, 4].map((i) => match.cards.slice(i * 3, i * 3 + 3));
   assert.equal(validDecks(match, decks), true);
   assert.equal(validDecks(match, [...decks.slice(0, 4), [decks[4][0], decks[4][1], decks[0][0]]]), false);
@@ -222,7 +224,7 @@ test('the player must use each card once, in five decks of three', () => {
 });
 
 const ready = (seed = 3) => {
-  const match = createMatch(CAMPAIGN, { seed });
+  const match = createMatch({ seed });
   return setDecks(match, [0, 1, 2, 3, 4].map((i) => match.cards.slice(i * 3, i * 3 + 3)));
 };
 const play = (match, results) => results.reduce((m, r) => recordRound(m, r), match);
@@ -308,4 +310,21 @@ test('fast forward with nothing on either side is a draw', () => {
   const plan = planFastForward(ffGame(['rock']));
   assert.equal(plan.winnerId, null);
   assert.equal(plan.endReason, 'stall');
+});
+
+test('Pai Gow has its own opponents, each with a portrait, banter and the search AI', () => {
+  const names = Object.values(PAIGOW_OPPONENTS).map((o) => o.name);
+  assert.deepEqual(names, ['Gandalf', 'Tom Bombadil', 'Sauron', 'Saruman', 'Théoden', 'Denethor', 'Elrond', 'Galadriel']);
+  for (const [id, opponent] of Object.entries(PAIGOW_OPPONENTS)) {
+    assert.match(opponent.portrait.art, /^https:\/\/cards\.scryfall\.io\/art_crop\//);
+    assert.ok(Object.values(CARDS).some((c) => c.name === opponent.portrait.card), `${id}'s portrait card`);
+    assert.deepEqual(banterProblems(id, opponent.banter), []);
+    assert.deepEqual(Object.keys(opponent.banter).sort(), ['collapse', 'comeback', 'lose', 'start', 'win']);
+    assert.equal(opponent.ai.kind, 'search');
+  }
+  // Every one of them turns up.
+  const met = new Set(Array.from({ length: 200 }, (_, seed) => createMatch({ seed }).opponentId));
+  assert.equal(met.size, names.length);
+  const setup = roundSetup(ready(), CAMPAIGN);
+  assert.equal(setup.cpu.name, PAIGOW_OPPONENTS[ready().opponentId].name);
 });

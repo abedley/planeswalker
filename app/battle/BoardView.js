@@ -1054,10 +1054,12 @@ export class BoardView {
   }
 
   /** Victory or defeat. */
-  finale(won, speed = 1, { drawn = false } = {}) {
+  /** The result banner: Victory, Defeat or Draw, unless `text` says otherwise (Pai Gow's "Round won"). */
+  finale(won, speed = 1, { drawn = false, text = null } = {}) {
     this.#app.sound(won ? 'victory' : 'defeat');
-    if (drawn) return banner(this.#parts.fx, 'Draw', 'defeat', { speed, hold: 1400 });
-    return banner(this.#parts.fx, won ? 'Victory' : 'Defeat', won ? 'victory' : 'defeat', { speed, hold: 1400 });
+    const label = text ?? (drawn ? 'Draw' : won ? 'Victory' : 'Defeat');
+    // Longer labels ("Round drawn") in a smaller size, to fit a phone's width.
+    return banner(this.#parts.fx, label, `${won ? 'victory' : 'defeat'}${label.length > 8 ? '.long' : ''}`, { speed, hold: 1400 });
   }
 
   /** Re-measures after a resize or rotation. */

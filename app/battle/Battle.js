@@ -84,17 +84,22 @@ export class Battle {
   /** Pai Gow's fast forward: its button (when offered at all), and whether it's playing out. */
   #fastForwardBtn = null;
   #fastForwarding = false;
+  #resultText;
 
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
    * same shape for a quick match. `meInfo`/`oppInfo`: `{ name, color?, art? }`.
    * `onEnd({ won, drawn, turns })` is called after the final banner (`drawn`: nobody won, as when a
    * Pai Gow round stalls). With `fastForward`, a button plays the game out at once when a player is out
-   * of actions (src/paigow/fastForward.js).
+   * of actions (src/paigow/fastForward.js). `resultText({ won, drawn })`: the result banner's text, when
+   * not Victory, Defeat or Draw (null keeps those).
    */
-  constructor(app, { setup, meInfo, oppInfo, onEnd, subtitle = '', fastForward = false }) {
+  constructor(app, {
+    setup, meInfo, oppInfo, onEnd, subtitle = '', fastForward = false, resultText = () => null,
+  }) {
     this.#app = app;
     this.#onEnd = onEnd;
+    this.#resultText = resultText;
     this.#me = setup.game.players[0].id;
     this.#opp = setup.cpu.playerId;
     this.#oppName = oppInfo.name;
@@ -450,7 +455,7 @@ export class Battle {
     const won = state.winnerId === this.#me;
     const drawn = state.winnerId === null;
     if (!drawn) await this.#lastWord(won);
-    await this.#view.finale(won, this.#app.settings.speed, { drawn });
+    await this.#view.finale(won, this.#app.settings.speed, { drawn, text: this.#resultText({ won, drawn }) });
     this.#cpu.detach();
     this.#onEnd?.({ won, drawn, turns: state.turn });
   }
@@ -883,7 +888,7 @@ export class Battle {
     this.#finished = true;
     clearTimeout(this.#autoTimer);
     await this.#lastWord(false);
-    await this.#view.finale(false, this.#app.settings.speed);
+    await this.#view.finale(false, this.#app.settings.speed, { text: this.#resultText({ won: false, drawn: false }) });
     this.#cpu.detach();
     this.#onEnd?.({ won: false, turns: this.#state?.turn ?? 0, conceded: true });
   }

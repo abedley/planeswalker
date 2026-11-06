@@ -4,7 +4,7 @@ import { loadRun, saveRun } from '../../src/campaign/save.js';
 import { matchSetup, recordResult, RUN_PHASE, currentTier } from '../../src/campaign/campaign.js';
 import { personInfo } from './common.js';
 import {
-  roundSetup, recordRound, outcome, score, ROUND_RESULT,
+  roundSetup, recordRound, outcome, score, ROUND_RESULT, MATCH_OUTCOME,
 } from '../../src/paigow/paigow.js';
 
 /**
@@ -63,9 +63,16 @@ function paigowBattle(app, match) {
   const setup = roundSetup(match, content);
   const opponent = content.opponents[match.opponentId];
   const { won, lost } = score(match);
-  const onEnd = ({ won: roundWon, drawn }) => {
-    const result = drawn ? ROUND_RESULT.DRAWN : roundWon ? ROUND_RESULT.WON : ROUND_RESULT.LOST;
-    const next = recordRound(match, result);
+  const resultOf = ({ won: roundWon, drawn }) => (drawn ? ROUND_RESULT.DRAWN : roundWon ? ROUND_RESULT.WON : ROUND_RESULT.LOST);
+  // "Victory" and "Defeat" are for the match; a round that doesn't decide it is only "Round won" and the like.
+  const resultText = (end) => {
+    const result = resultOf(end);
+    const decided = outcome(recordRound(match, result));
+    if (decided) return { [MATCH_OUTCOME.WON]: 'Victory', [MATCH_OUTCOME.LOST]: 'Defeat', [MATCH_OUTCOME.TIE]: 'Match tied' }[decided];
+    return { [ROUND_RESULT.WON]: 'Round won', [ROUND_RESULT.LOST]: 'Round lost', [ROUND_RESULT.DRAWN]: 'Round drawn' }[result];
+  };
+  const onEnd = (end) => {
+    const next = recordRound(match, resultOf(end));
     app.go('paigow', { match: next, view: outcome(next) ? 'final' : 'scoreboard' });
   };
   const battle = new Battle(app, {
@@ -75,6 +82,7 @@ function paigowBattle(app, match) {
     subtitle: `Round ${setup.encounter.round + 1} · ${won}–${lost}`,
     onEnd,
     fastForward: true,
+    resultText,
   });
   window.planeswalker.battle = battle;
   return {

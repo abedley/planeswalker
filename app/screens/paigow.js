@@ -20,10 +20,13 @@ export function paigowScreen(app, { match: given = null, view = null } = {}) {
   return shown === 'build' ? buildView(app, match) : scoreView(app, match, shown === 'final');
 }
 
-/** A card the size of a slot: tap for `onTap`, long-press (or tap, without `onTap`) to read it. */
-function miniCard(app, cardId, { onTap = null, extraClass = '' } = {}) {
+/**
+ * A card the size of a slot: tap for `onTap`, long-press (or tap, without `onTap`) to read it.
+ * `full`: the printed card's whole image (when it has one), for the deck builder.
+ */
+function miniCard(app, cardId, { onTap = null, full = false } = {}) {
   const card = { ...app.definitions[cardId], cardId, id: cardId };
-  const el = h(`button.pg-card${extraClass}`, { type: 'button', 'aria-label': card.name, dataset: { card: cardId } }, fullCard(card, app.definitions));
+  const el = h(`button.pg-card${full ? '.full' : ''}`, { type: 'button', 'aria-label': card.name, dataset: { card: cardId } }, fullCard(card, app.definitions, { big: full }));
   const inspect = () => app.overlays.inspect(card);
   onPress(el, { onTap: onTap ?? inspect, onLong: onTap ? inspect : null });
   // A long press on a phone would otherwise open the browser's own menu.
@@ -89,12 +92,12 @@ function buildView(app, match) {
       } },
       h('div.pg-row-label', h('span', 'Round'), h('b', String(i + 1))),
       h('div.pg-slots',
-        ...cards.map((id) => miniCard(app, id, { onTap: () => unplace(id) })),
+        ...cards.map((id) => miniCard(app, id, { onTap: () => unplace(id), full: true })),
         ...Array.from({ length: deckSize - cards.length }, () => h('div.pg-slot'))));
     }));
     const left = match.cards.filter((id) => !placed.has(id));
     trayTitle.textContent = left.length ? `Your cards · ${left.length} left` : 'All cards placed';
-    tray.replaceChildren(...left.map((id) => miniCard(app, id, { onTap: () => place(id) })));
+    tray.replaceChildren(...left.map((id) => miniCard(app, id, { onTap: () => place(id), full: true })));
     start.disabled = left.length > 0;
     autoFill.disabled = left.length === 0;
     clear.disabled = placed.size === 0;

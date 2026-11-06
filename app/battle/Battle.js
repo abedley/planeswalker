@@ -49,6 +49,16 @@ function timed(label, fn) {
   return result;
 }
 
+/** Where an off-board card is, for a target list: "Your graveyard", "Opponent's exile", ... */
+function zoneLabel(state, id, me) {
+  for (const player of state.players) {
+    for (const [zone, name] of [['graveyard', 'graveyard'], ['exile', 'exile'], ['hand', 'hand']]) {
+      if (player[zone]?.some((c) => c.id === id)) return `${player.id === me ? 'Your' : 'Opponent\'s'} ${name}`;
+    }
+  }
+  return null;
+}
+
 export class Battle {
   #app;
   #game;
@@ -711,6 +721,26 @@ export class Battle {
     const optional = choice.values.includes(null);
     const first = choice.kind === 'targets' ? picked.length === 0 : choice.index === 0;
     const nth = first ? 'a target' : 'another target';
+    // Cards that aren't on the board (in a graveyard or exile, as for Treason of Isengard) can't be
+    // tapped there: they're picked from a list.
+    if (targets.length && targets.every((id) => !this.#view.elementFor(id))) {
+      const state = this.#state;
+      this.#app.overlays.sheet({
+        title: card?.name ?? 'Choose a target',
+        text: optional ? `Choose ${nth}, or none.` : `Choose ${nth}.`,
+        options: [
+          ...targets.map((id) => {
+            const target = findCard(state, id);
+            return { label: target?.name ?? id, sub: [target ? typeLine(target) : null, zoneLabel(state, id, this.#me)].filter(Boolean).join(' · '), onPick: () => next(id) };
+          }),
+          ...(optional ? [{ label: first ? 'No target' : 'Done', onPick: () => next(null) }] : []),
+          ...(decline && !optional ? [{ label: 'Don\'t', onPick: decline }] : []),
+        ],
+        cancel: cancel ? 'Cancel' : null,
+        onCancel: () => this.#cancel(),
+      });
+      return;
+    }
     this.#mode = {
       kind: 'targeting',
       targets: new Set(targets),

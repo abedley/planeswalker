@@ -8,7 +8,7 @@ import {
 } from '../cards/cards.js';
 import { manaPoolTotal, canPayMana } from '../engine/mana.js';
 import {
-  bestBy, manaSources, neededColors, canReach, chooseManaAction, manaAvailable, castCost,
+  bestBy, manaSources, neededColors, canReach, chooseManaAction, manaAvailable, castCost, capX, guardActivations,
 } from './manaPlanning.js';
 import {
   creatureValue, curseValue, anthemValue, planAttack, chooseBlocks, combatValue, damageWeight, BLOCKING, legalBlocks,
@@ -151,7 +151,7 @@ export class BasicAIController extends EventEmitter {
 
   chooseAction(state) {
     const me = this.#playerId;
-    const mine = state.validActions.filter((a) => a.playerId === me);
+    const mine = guardActivations(state, state.validActions.filter((a) => a.playerId === me));
     if (mine.length === 0) return null;
     const find = (type, predicate = () => true) => mine.find((a) => a.type === type && predicate(a));
     const passive = this.#strategy === AI_STRATEGY.PASSIVE;
@@ -350,7 +350,7 @@ export class BasicAIController extends EventEmitter {
         continue;
       }
       // {X}: as big as the mana available allows (107.3).
-      const x = card.manaCost?.X ? Math.max(0, available - manaValue(manaCost)) : undefined;
+      const x = card.manaCost?.X ? capX(state, Math.max(0, available - manaValue(manaCost))) : undefined;
       const xCost = x !== undefined ? withX(card.manaCost, x) : manaCost;
       const sameX = (a) => x === undefined || a.x === x;
       // A modal spell (700.2): each mode is an idea of its own; several targets: the best combination.
@@ -409,7 +409,7 @@ export class BasicAIController extends EventEmitter {
         if (ability.cost.tap && preCombat && isCreature(source) && !cantAttack(source)) continue;
         if (ability.targets || manaCost.X) {
           // Several targets (Ioreth), or {X} (Ent-Draught Basin): the best combination, for each X we could pay.
-          const xs = manaCost.X ? Array.from({ length: Math.max(0, available - manaValue(manaCost)) + 1 }, (_, i) => i) : [undefined];
+          const xs = manaCost.X ? Array.from({ length: capX(state, Math.max(0, available - manaValue(manaCost))) + 1 }, (_, i) => i) : [undefined];
           for (const x of xs) {
             const best = bestTargets(state, me, ability.effects, targetList(ability), source.id, preCombat, x);
             if (!best || best.score <= 0 || !windowAllows(window, ability.effects, ability.timing !== 'sorcery', best.targets.filter(Boolean).at(-1), state, me)) continue;

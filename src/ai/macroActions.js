@@ -28,7 +28,7 @@ import {
 } from './scoring.js';
 import { planLookaheadAttack } from './attacking.js';
 import {
-  bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost, manaAvailable,
+  bestBy, manaSources, neededColors, canReach, chooseManaAction, castCost, manaAvailable, capX, guardActivations,
 } from './manaPlanning.js';
 
 /** How many targets per spell or ability are worth considering (the best-scoring ones). */
@@ -64,7 +64,7 @@ export const HEURISTIC_PLANS = Object.freeze({
  * `attacking: 'lookahead'`: also offer planLookaheadAttack's attacks (each strategy's).
  */
 export function listMacros(state, me, { heuristicPlans = false, attacking = 'basic' } = {}) {
-  const mine = state.validActions.filter((a) => a.playerId === me);
+  const mine = guardActivations(state, state.validActions.filter((a) => a.playerId === me));
   if (mine.length === 0) return [];
   const decision = state.pendingDecision;
   if (decision?.type === DECISION.DECLARE_ATTACKERS) return attackMacros(state, me, mine, heuristicPlans, attacking);
@@ -150,7 +150,7 @@ function priorityMacros(state, me, mine) {
     if (!canSacrifice(card.additionalCost, card.id)) continue;
     if (card.spell?.targets || card.spell?.modes || card.manaCost?.X) {
       // Several targets (a fight, "up to two"), modes, or {X} (as big as we can pay): the best few combinations.
-      const x = card.manaCost?.X ? Math.max(0, available - manaValue(castCost(state, me, card) ?? {})) : undefined;
+      const x = card.manaCost?.X ? capX(state, Math.max(0, available - manaValue(castCost(state, me, card) ?? {}))) : undefined;
       // A permanent spell with {X} (Spiteful Banditry) has no spell effects of its own here.
       const modes = card.spell?.modes ? card.spell.modes.map((m, i) => [i, m]) : [[undefined, card.spell ?? { effects: [] }]];
       for (const [mode, holder] of modes) {
@@ -187,7 +187,7 @@ function priorityMacros(state, me, mine) {
       if (!affordable(ability.cost.mana) || !canSacrifice(ability.cost, source.id)) continue;
       if (ability.targets || ability.cost.mana?.X) {
         // Several targets, or {X}: the best few combinations, for each X we could pay.
-        const max = ability.cost.mana?.X ? Math.max(0, available - manaValue(ability.cost.mana)) : 0;
+        const max = ability.cost.mana?.X ? capX(state, Math.max(0, available - manaValue(ability.cost.mana))) : 0;
         for (let x = 0; x <= max; x++) {
           targetCombos(state, me, targetList(ability), source.id, 200, x)
             .map((targets) => ({ targets, score: scoreEffects(state, me, ability.effects, targets, source.id, { x }) }))
@@ -224,7 +224,7 @@ function dedupe(macros) {
  * the macro can't be carried out (e.g. its target is gone or the mana isn't there).
  */
 export function nextAction(state, me, macro) {
-  const mine = state.validActions.filter((a) => a.playerId === me);
+  const mine = guardActivations(state, state.validActions.filter((a) => a.playerId === me));
   const find = (predicate) => mine.find(predicate);
   switch (macro.kind) {
     case 'pass': {

@@ -84,7 +84,8 @@ export class Battle {
   /**
    * `setup`: matchSetup()'s result (`game` options, `cpu`, `encounter`), or the
    * same shape for a quick match. `meInfo`/`oppInfo`: `{ name, color?, art? }`.
-   * `onEnd({ won, turns })` is called after the final banner.
+   * `onEnd({ won, drawn, turns })` is called after the final banner (`drawn`: nobody won, as when a
+   * Pai Gow round stalls).
    */
   constructor(app, { setup, meInfo, oppInfo, onEnd, subtitle = '' }) {
     this.#app = app;
@@ -436,10 +437,11 @@ export class Battle {
     this.#setInteractive(false);
     this.#view.showPreview(null);
     const won = state.winnerId === this.#me;
-    await this.#lastWord(won);
-    await this.#view.finale(won, this.#app.settings.speed);
+    const drawn = state.winnerId === null;
+    if (!drawn) await this.#lastWord(won);
+    await this.#view.finale(won, this.#app.settings.speed, { drawn });
     this.#cpu.detach();
-    this.#onEnd?.({ won, turns: state.turn });
+    this.#onEnd?.({ won, drawn, turns: state.turn });
   }
 
   /** The opponent says a line of `kind`, if it has one. Returns whether it spoke. */

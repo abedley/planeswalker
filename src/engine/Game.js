@@ -119,6 +119,10 @@ export const STARTING_LIFE = 20; // 103.4
 export const OPENING_HAND_SIZE = 7; // 103.5
 export const MAX_HAND_SIZE = 7; // 402.2
 export const LAND_PLAYS_PER_TURN = 1; // 305.2
+/** With the `infiniteMana` option: how much mana of any color a player always has. */
+export const INFINITE_MANA = 999;
+/** With the `infiniteMana` option: the largest {X} offered (any X can be paid, but the choices must end). */
+export const INFINITE_MANA_MAX_X = 20;
 
 /**
  * Limits this game imposes on top of Magic's rules, so a whole board fits on a
@@ -161,6 +165,8 @@ const emptyTally = () => ({
   triggered: {},
   /** "the second time this ability has resolved this turn": counts by `sourceId:abilityId`. */
   resolved: {},
+  /** How many times each activated ability was activated this turn, by `sourceId:abilityId` (for the AI). */
+  activations: {},
   /** Long List of the Ents: creature types whose next creature spell this turn gets a counter. */
   notedTypes: [],
 });
@@ -241,8 +247,14 @@ export class Game extends EventEmitter {
   #random;
   #shuffleLibraries;
   #mulligans = false;
+  /** Variant rules (Pai Gow): see the constructor. */
+  #variant = { openingHandSize: OPENING_HAND_SIZE, deckingLoss: true, infiniteMana: false, stallDraw: false, turnLimit: Infinity };
+  /** With `stallDraw`: a fingerprint of the lasting state at the end of each turn, the last few. */
+  #stallPrints = [];
   #status = GAME_STATUS.NOT_STARTED;
   #winnerId = null;
+  /** Why the game ended: 'playerLost', or (a draw) 'stall' or 'turnLimit'. */
+  #endReason = null;
   #turn = 0;
   #activePlayerId = null;
   #priorityPlayerId = null;
@@ -297,10 +309,19 @@ export class Game extends EventEmitter {
    * @param {boolean} [options.silent] Emit no events at all, for fast simulations (AI search).
    * @param {boolean} [options.mulligans] Let players mulligan their opening hands (103.5, the
    *   London mulligan): otherwise everyone keeps the seven cards they draw.
+   * Variant rules (Pai Gow mode), all off by default:
+   * @param {number} [options.openingHandSize] Cards in an opening hand (default OPENING_HAND_SIZE).
+   * @param {boolean} [options.deckingLoss] Set false so drawing from an empty library doesn't lose the game.
+   * @param {boolean} [options.infiniteMana] Every player can pay any mana cost, any number of times
+   *   (as if they had INFINITE_MANA of any color); {X} goes up to INFINITE_MANA_MAX_X.
+   * @param {boolean} [options.stallDraw] The game is a draw when a full turn cycle (each player's turn)
+   *   ends with nothing lasting changed: see #stallFingerprint.
+   * @param {number} [options.turnLimit] The game is a draw when this turn ends without a winner.
    */
   constructor({
     players, startingPlayerId, decks = {}, seed, cards = {}, shuffleLibraries = true,
     emblems = {}, emblemDefinitions = {}, startingLife = {}, limits = {}, silent = false, mulligans = false,
+    openingHandSize, deckingLoss, infiniteMana, stallDraw, turnLimit,
   } = {}) {
     super();
     if (!Array.isArray(players) || players.length < 2) {
@@ -320,6 +341,7 @@ export class Game extends EventEmitter {
     this.#mulligans = mulligans;
     this.#silent = silent;
     this.#limits = { ...limits };
+    this.#setVariant({ openingHandSize, deckingLoss, infiniteMana, stallDraw, turnLimit });
 
     for (const { id } of this.#players) {
       const deck = decks[id] ?? DEFAULT_DECK;
@@ -346,6 +368,11 @@ export class Game extends EventEmitter {
         turnTally: emptyTally(),
       });
     }
+  }
+
+  #setVariant(variant = {}) {
+    const defined = Object.fromEntries(Object.entries(variant).filter(([, value]) => value !== undefined && value !== null));
+    this.#variant = { ...this.#variant, ...defined };
   }
 
   // Read-only views used by turn-structure skip rules.
@@ -380,7 +407,7 @@ export class Game extends EventEmitter {
           shuffle(this.#zones.get(id).library, this.#random);
           this.#emitEvent('libraryShuffled', { playerId: id });
         }
-        this.#drawCards(id, OPENING_HAND_SIZE);
+        this.#drawCards(id, this.#variant.openingHandSize);
       }
       if (this.#mulligans) {
         // 103.5: starting with the starting player, each player in turn order decides.
@@ -433,6 +460,8 @@ export class Game extends EventEmitter {
       version: this.#version,
       status: this.#status,
       winnerId: this.#winnerId,
+      endReason: this.#endReason,
+      infiniteMana: this.#variant.infiniteMana,
       turn: this.#turn,
       players: this.#players.map((player) => {
         const zone = this.#zones.get(player.id);
@@ -443,7 +472,8 @@ export class Game extends EventEmitter {
           hand: zone.hand,
           graveyard: zone.graveyard,
           exile: zone.exile,
-          manaPool: zone.manaPool,
+          // With infinite mana, the pool shows it as mana of any color (see mana.js), so canPayMana says yes.
+          manaPool: this.#variant.infiniteMana ? { ...zone.manaPool, any: INFINITE_MANA } : zone.manaPool,
           emblems: zone.emblems,
           landsPlayedThisTurn: zone.landsPlayedThisTurn,
           hasLost: zone.hasLost,
@@ -486,6 +516,9 @@ export class Game extends EventEmitter {
       shuffleLibraries: this.#shuffleLibraries,
       mulligans: this.#mulligans,
       limits: this.#limits,
+      variant: this.#variant,
+      stallPrints: this.#stallPrints,
+      endReason: this.#endReason,
       status: this.#status,
       winnerId: this.#winnerId,
       turn: this.#turn,
@@ -575,6 +608,9 @@ export class Game extends EventEmitter {
     this.#random.setState(snapshot.randomState);
     this.#shuffleLibraries = snapshot.shuffleLibraries;
     this.#mulligans = snapshot.mulligans ?? false;
+    this.#setVariant(snapshot.variant);
+    this.#stallPrints = snapshot.stallPrints ?? [];
+    this.#endReason = snapshot.endReason ?? null;
     this.#status = snapshot.status;
     this.#winnerId = snapshot.winnerId;
     this.#turn = snapshot.turn;
@@ -760,7 +796,8 @@ export class Game extends EventEmitter {
     if (!manaCost?.X) return [undefined];
     const pool = this.#poolFor(playerId, card);
     const total = manaPoolTotal(pool) + (pool.any ?? 0);
-    const max = Math.max(0, Math.floor((total - manaValue(manaCost)) / manaCost.X));
+    let max = Math.max(0, Math.floor((total - manaValue(manaCost)) / manaCost.X));
+    if (this.#variant.infiniteMana) max = Math.min(max, INFINITE_MANA_MAX_X);
     return Array.from({ length: max + 1 }, (_, x) => x);
   }
 
@@ -1456,8 +1493,8 @@ export class Game extends EventEmitter {
     for (let i = 0; i < count; i++) {
       if (phials && zone.hand.length === 0) count += phials;
       if (zone.library.length === 0) {
-        // 121.4: the player loses the next time state-based actions are checked.
-        zone.attemptedDrawFromEmptyLibrary = true;
+        // 121.4: the player loses the next time state-based actions are checked (unless the variant says otherwise).
+        if (this.#variant.deckingLoss) zone.attemptedDrawFromEmptyLibrary = true;
         this.#emitEvent('drawFromEmptyLibrary', { playerId });
         break;
       }
@@ -1622,7 +1659,7 @@ export class Game extends EventEmitter {
     if (this.#shuffleLibraries) shuffle(zone.library, this.#random);
     decision.mulligans += 1;
     this.#emitEvent('mulliganTaken', { playerId, mulligans: decision.mulligans });
-    this.#drawCards(playerId, OPENING_HAND_SIZE);
+    this.#drawCards(playerId, this.#variant.openingHandSize);
     this.#requireDecision(decision);
   }
 
@@ -1657,7 +1694,8 @@ export class Game extends EventEmitter {
    */
   #poolFor(playerId, card) {
     const zone = this.#zones.get(playerId);
-    const any = zone.specialMana.filter((m) => this.#manaUsableFor(m, card)).reduce((sum, m) => sum + m.amount, 0);
+    const any = zone.specialMana.filter((m) => this.#manaUsableFor(m, card)).reduce((sum, m) => sum + m.amount, 0)
+      + (this.#variant.infiniteMana ? INFINITE_MANA : 0);
     return any ? { ...zone.manaPool, any } : zone.manaPool;
   }
 
@@ -1688,6 +1726,7 @@ export class Game extends EventEmitter {
       if (mana.uncounterable && used > 0) payment.uncounterable = true;
     }
     zone.specialMana = zone.specialMana.filter((m) => m.amount > 0);
+    // With infinite mana, whatever the special mana didn't cover is free.
     return payment;
   }
 
@@ -1927,10 +1966,10 @@ export class Game extends EventEmitter {
     const costPaid = this.#payCost(playerId, permanent, ability.cost, costChoices, mana);
     if (permanent.emblemId) permanent.activationsThisTurn += 1;
     if (abilityId.startsWith('equip')) this.#zones.get(playerId).turnTally.equipped = true;
-    if (ability.oncePerTurn) {
-      const tally = this.#zones.get(playerId).turnTally;
-      tally.activated = { ...tally.activated, [`${cardId}:${abilityId}`]: true };
-    }
+    const tally = this.#zones.get(playerId).turnTally;
+    if (ability.oncePerTurn) tally.activated = { ...tally.activated, [`${cardId}:${abilityId}`]: true };
+    const key = `${cardId}:${abilityId}`;
+    tally.activations = { ...tally.activations, [key]: (tally.activations?.[key] ?? 0) + 1 };
     if (ability.cost.discardSelf) this.#emitEvent('cardCycled', { playerId, cardId, cardName: permanent.name });
     const activation = {
       playerId, cardId, cardName: permanent.name, abilityId, text: ability.text, costPaid: publicPaid(costPaid),
@@ -4856,20 +4895,58 @@ export class Game extends EventEmitter {
         this.#emitEvent('playerLost', { playerId: id, reason });
       }
       if (losers.length > 0) {
-        this.#endGame();
+        this.#endGame('playerLost');
         return true;
       }
     }
   }
 
-  #endGame() {
+  #endGame(reason) {
     // Multiplayer elimination isn't modelled: the game ends as soon as anyone loses.
     const remaining = this.#players.filter((p) => !this.#zones.get(p.id).hasLost);
     this.#status = GAME_STATUS.GAME_OVER;
-    this.#winnerId = remaining.length === 1 ? remaining[0].id : null;
+    this.#winnerId = reason === 'playerLost' && remaining.length === 1 ? remaining[0].id : null;
+    this.#endReason = reason;
     this.#priorityPlayerId = null;
     this.#pendingDecision = null;
-    this.#emitEvent('gameEnded', { winnerId: this.#winnerId });
+    this.#emitEvent('gameEnded', { winnerId: this.#winnerId, reason });
+  }
+
+  /**
+   * The lasting state, as a string, for `stallDraw`: life totals, the cards in each zone (library sizes
+   * only), the Ring, and each permanent's controller, characteristics, counters and attachments. Whether
+   * permanents are tapped, damage, mana and "this turn" bookkeeping are left out: they come and go each turn.
+   */
+  #stallFingerprint() {
+    const ids = (cards) => cards.map((c) => c.cardId).sort().join(',');
+    const players = this.#players.map(({ id }) => {
+      const zone = this.#zones.get(id);
+      return [id, zone.life, zone.library.length, ids(zone.hand), ids(zone.graveyard), ids(zone.exile), zone.ring.level, zone.ring.bearerId ?? ''].join('|');
+    });
+    const permanents = this.#battlefield.map((p) => [
+      p.id, p.controllerId, p.power ?? '', p.toughness ?? '', (p.types ?? []).join('+'),
+      JSON.stringify(p.counters ?? {}), p.attachedTo ?? '', p.faceDown ? 1 : 0,
+    ].join('|')).sort();
+    return JSON.stringify([players, permanents, this.#temporaryEffects.length, this.#delayedTriggers.length, this.#extraTurns.length]);
+  }
+
+  /** At the end of a turn: ends the game in a draw if it has stalled or reached the turn limit. */
+  #checkForDraw() {
+    if (this.#variant.stallDraw) {
+      const print = this.#stallFingerprint();
+      // Two turns ago: since then each player has had a turn, and nothing lasting changed.
+      const stalled = this.#stallPrints.length >= 2 && this.#stallPrints.at(-2) === print;
+      this.#stallPrints = [...this.#stallPrints.slice(-2), print];
+      if (stalled) {
+        this.#endGame('stall');
+        return true;
+      }
+    }
+    if (this.#turn >= this.#variant.turnLimit) {
+      this.#endGame('turnLimit');
+      return true;
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -4905,6 +4982,7 @@ export class Game extends EventEmitter {
 
       if (!next) {
         this.#emitEvent('turnEnded', { turn: this.#turn, activePlayerId: this.#activePlayerId });
+        if (this.#checkForDraw()) return;
         // 500.7: an extra turn comes before the next player's.
         this.#beginTurn(this.#extraTurns.shift() ?? this.#nextPlayerId(this.#activePlayerId));
         continue;

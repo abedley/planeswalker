@@ -3,14 +3,18 @@ import { Battle } from '../battle/Battle.js';
 import { loadRun, saveRun } from '../../src/campaign/save.js';
 import { matchSetup, recordResult, RUN_PHASE, currentTier } from '../../src/campaign/campaign.js';
 import { personInfo } from './common.js';
+import {
+  roundSetup, recordRound, outcome, score, ROUND_RESULT,
+} from '../../src/paigow/paigow.js';
 
 /**
  * A fight. `mode: 'run'` plays the run's current encounter and records the
  * result; `mode: 'quick'` plays `quick: { run, game? }` without saving anything,
  * where `game` overrides the game's options (decks, cards, shuffling), for testing.
  */
-export function battleScreen(app, { mode = 'run', quick = null }) {
+export function battleScreen(app, { mode = 'run', quick = null, match = null }) {
   const { content } = app;
+  if (mode === 'paigow') return paigowBattle(app, match);
   let run = mode === 'run' ? loadRun(app.storage, content) : quick.run;
   if (!run) {
     queueMicrotask(() => app.go('title'));
@@ -39,6 +43,36 @@ export function battleScreen(app, { mode = 'run', quick = null }) {
     meInfo: personInfo(content.planeswalkers[run.planeswalkerId]),
     oppInfo: personInfo(opponent),
     subtitle: mode === 'quick' ? 'Quick match' : tier.boss ? 'Boss' : tier.name,
+    onEnd,
+  });
+  window.planeswalker.battle = battle;
+  return {
+    el: battle.el,
+    enter: () => battle.start(),
+    destroy: () => battle.destroy(),
+  };
+}
+
+/** A round of a Pai Gow match (src/paigow/paigow.js): `match` is the match so far, with the decks set. */
+function paigowBattle(app, match) {
+  const { content } = app;
+  if (!match?.decks) {
+    queueMicrotask(() => app.go('paigow'));
+    return { el: h('div') };
+  }
+  const setup = roundSetup(match, content);
+  const opponent = content.opponents[match.opponentId];
+  const { won, lost } = score(match);
+  const onEnd = ({ won: roundWon, drawn }) => {
+    const result = drawn ? ROUND_RESULT.DRAWN : roundWon ? ROUND_RESULT.WON : ROUND_RESULT.LOST;
+    const next = recordRound(match, result);
+    app.go('paigow', { match: next, view: outcome(next) ? 'final' : 'scoreboard' });
+  };
+  const battle = new Battle(app, {
+    setup,
+    meInfo: personInfo(null, 'You'),
+    oppInfo: personInfo(opponent),
+    subtitle: `Round ${setup.encounter.round + 1} · ${won}–${lost}`,
     onEnd,
   });
   window.planeswalker.battle = battle;

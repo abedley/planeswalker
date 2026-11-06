@@ -108,7 +108,11 @@ eleven {G} creatures, one per keyword) can be picked in the debugger.
 ladder of ever harder CPU opponents up to a boss, earning cards and planeswalker powers with each
 win. The framework is in `src/campaign/`, with example content; see *Campaign* below.
 
+**Pai Gow** (at `/paigow/`, or from the title screen): you're dealt 15 random LTR cards and split
+them into five decks of three, then play a best of five against the CPU; see *Pai Gow* below.
+
 - `index.html` + `app/`: **the game**, a single-page app for phones held upright (see *The app*)
+- `paigow/index.html`: the same app, opening on Pai Gow
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
 
 ## Running locally
@@ -650,6 +654,31 @@ has none unless asked:
 
 Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simulations obey them.
 
+### Variant rules (Pai Gow)
+
+Options that change the rules, all off unless asked (Pai Gow uses them all):
+- `openingHandSize`: cards in an opening hand (default 7).
+- `deckingLoss: false`: drawing from an empty library doesn't lose the game (the
+  `drawFromEmptyLibrary` event still happens).
+- `infiniteMana: true`: every player can pay any mana cost, any number of times. The state's
+  `infiniteMana` is true, and each player's `manaPool` shows it as `any: INFINITE_MANA` (mana of
+  any color, see `mana.js`), so `canPayMana` agrees. {X} is offered up to `INFINITE_MANA_MAX_X` (20).
+  Nothing limits activated abilities, but the AIs leave an ability alone once they've activated
+  it `AI_ACTIVATIONS_PER_TURN` (5) times in a turn (`guardActivations` in
+  `src/ai/manaPlanning.js`), so a free pump or equip can't keep them busy forever. The count is
+  the turn tally's `activations`.
+- `stallDraw: true`: the game is a **draw** when a full turn cycle passes with nothing lasting
+  changed: at the end of each turn the engine takes a fingerprint of life totals, hands,
+  graveyards, exile, library sizes, the Ring, and each permanent's controller, characteristics,
+  counters and attachments (not whether it's tapped, nor damage, mana, or "this turn" effects),
+  and if it matches the one from two turns before, the game ends.
+- `turnLimit`: the game is a draw when that turn ends.
+
+A drawn game has `winnerId: null` and `gameEnded { winnerId: null, reason: 'stall' | 'turnLimit' }`;
+the state's `endReason` says why a game ended (`'playerLost'` otherwise). The AI scores a draw
+as 0, between a win and a loss, and since its simulations play by the same rules, it sees a
+stall coming. The variant survives `serialize()` and `clone()`.
+
 ### Rules implemented
 
 - The turn structure follows CR 500–514: beginning (untap, upkeep, draw), precombat main, combat
@@ -929,6 +958,27 @@ creatures for building combat scenarios.
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.
 
+
+## Pai Gow
+
+A match against the CPU in `src/paigow/paigow.js` (pure functions over a plain match object), with
+its screen in `app/screens/paigow.js`, at `/paigow/` or from the title screen:
+1. Each side is dealt 15 different cards from the nonland LTR cards (`PAIGOW_POOL`).
+2. You split yours into five decks of three (tap a card to put it in the highlighted round,
+   hold it to read it, or Auto-fill). The CPU shares its cards out by a rough strength
+   (`arrangeCpuDecks`: rarity, mana value and size, dealt snake-wise), then shuffles the order of
+   its decks.
+3. Round N is your deck N against the CPU's deck N. Both players start with all three cards in
+   hand, 5 life, infinite mana and no emblems, and can't lose by drawing from an empty library.
+   A round is won, lost, or drawn when the board stalls (see *Variant rules*); 40 turns is a
+   backstop. Who goes first is a coin flip in round 1, then alternates.
+4. The first to win three rounds takes the match. If five rounds pass without that, more round
+   wins takes it, and otherwise it's a tie.
+
+The CPU is one of the campaign's non-boss opponents with the search AI (its portrait, banter
+and AI, thinking for at least a second). The match lives in memory: reloading the page starts a
+new one. As everywhere, the search AI assumes it knows its opponent's deck list, and with
+three-card decks that means it knows your hand.
 
 ## Campaign
 

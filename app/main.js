@@ -18,6 +18,7 @@ import { battleScreen } from './screens/battle.js';
 import { rewardScreen } from './screens/reward.js';
 import { resultScreen } from './screens/result.js';
 import { quickMatchScreen } from './screens/quickMatch.js';
+import { paigowScreen } from './screens/paigow.js';
 
 const SETTINGS_KEY = 'planeswalker.settings';
 const DEFAULT_SETTINGS = { sound: true, speed: 1, autoPass: true };
@@ -30,7 +31,11 @@ const SCREENS = {
   reward: rewardScreen,
   result: resultScreen,
   quickMatch: quickMatchScreen,
+  paigow: paigowScreen,
 };
+
+/** The first screen: Pai Gow at /paigow/ (paigow/index.html), otherwise the title. */
+const startScreen = () => (/\/paigow\/?$/.test(location.pathname) ? 'paigow' : 'title');
 
 /** localStorage, or a stand-in when it's unavailable (private mode, blocked). */
 function safeStorage() {
@@ -117,7 +122,7 @@ function boot() {
   // No pinch or double-tap zoom on iOS.
   document.addEventListener('gesturestart', (event) => event.preventDefault());
   document.addEventListener('dblclick', (event) => event.preventDefault());
-  app.go('title');
+  app.go(startScreen());
   if ('serviceWorker' in navigator && !['localhost', '127.0.0.1'].includes(location.hostname)) {
     wait(2000).then(() => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }

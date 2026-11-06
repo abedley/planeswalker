@@ -560,15 +560,15 @@ export class BoardView {
       }
       reconcile(strip.lands, els);
       const player = state.players.find((p) => p.id === pid);
-      const floating = Object.fromEntries(Object.entries(player.manaPool).filter(([, n]) => n > 0));
-      // Mana that can be any color (some of it only for some spells), as a rainbow pip.
-      const any = (player.specialMana ?? []).reduce((sum, m) => sum + m.amount, 0);
+      const floating = Object.fromEntries(Object.entries(player.manaPool).filter(([type, n]) => type !== 'any' && n > 0));
+      // Mana that can be any color (some of it only for some spells), as a rainbow pip; infinite mana (Pai Gow) as ∞.
+      const any = state.infiniteMana ? '∞' : (player.specialMana ?? []).reduce((sum, m) => sum + m.amount, 0);
       const poolKey = `${JSON.stringify(floating)}|${any}`;
       if (strip.pool.dataset.key !== poolKey) {
         strip.pool.dataset.key = poolKey;
         strip.pool.replaceChildren(
           Object.keys(floating).length ? manaPips(floating) : '',
-          any ? h('span.pip-any', { title: 'Mana of any color' }, String(any)) : '',
+          any ? h('span.pip-any', { title: state.infiniteMana ? 'Infinite mana' : 'Mana of any color' }, String(any)) : '',
         );
       }
     }
@@ -1054,8 +1054,9 @@ export class BoardView {
   }
 
   /** Victory or defeat. */
-  finale(won, speed = 1) {
+  finale(won, speed = 1, { drawn = false } = {}) {
     this.#app.sound(won ? 'victory' : 'defeat');
+    if (drawn) return banner(this.#parts.fx, 'Draw', 'defeat', { speed, hold: 1400 });
     return banner(this.#parts.fx, won ? 'Victory' : 'Defeat', won ? 'victory' : 'defeat', { speed, hold: 1400 });
   }
 

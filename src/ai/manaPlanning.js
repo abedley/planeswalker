@@ -3,6 +3,7 @@
  * reach, and which source to tap next. Shared by the AIs.
  */
 import { ACTION } from '../engine/actions.js';
+import { INFINITE_MANA_MAX_X } from '../engine/Game.js';
 import { isCreature, manaValue, countOf, spellCost } from '../cards/cards.js';
 import { manaPoolTotal, MANA_TYPES } from '../engine/mana.js';
 
@@ -70,7 +71,27 @@ export function neededColors(cost, pool) {
 }
 
 /** The mana in the pool plus what the untapped sources could add. */
-export const manaAvailable = (pool, sources) => manaPoolTotal(pool) + sources.reduce((sum, s) => sum + (s.amount ?? 1), 0);
+export const manaAvailable = (pool, sources) => manaPoolTotal(pool) + (pool.any ?? 0) + sources.reduce((sum, s) => sum + (s.amount ?? 1), 0);
+
+/** The largest {X} the game offers: with infinite mana, INFINITE_MANA_MAX_X. */
+export const capX = (state, x) => (state.infiniteMana ? Math.min(x, INFINITE_MANA_MAX_X) : x);
+
+/**
+ * With infinite mana nothing stops an ability being activated again and again (pumps, equip), so the
+ * AIs leave alone any ability they've already activated AI_ACTIVATIONS_PER_TURN times this turn. Not a
+ * rule: only what the AI considers.
+ */
+export const AI_ACTIVATIONS_PER_TURN = 5;
+
+/** `actions` without the activations the AI won't consider any more this turn (see AI_ACTIVATIONS_PER_TURN). */
+export function guardActivations(state, actions) {
+  if (!state.infiniteMana) return actions;
+  return actions.filter((a) => {
+    if (a.type !== ACTION.ACTIVATE_ABILITY) return true;
+    const tally = state.players.find((p) => p.id === a.playerId)?.turnTally;
+    return (tally?.activations?.[`${a.cardId}:${a.abilityId}`] ?? 0) < AI_ACTIVATIONS_PER_TURN;
+  });
+}
 
 /** Whether the pool plus the untapped sources could pay a cost (approximately, per color). */
 export function canReach(cost, pool, sources) {

@@ -54,7 +54,7 @@ export const pumped = (creature, trick) => ({
 export function openMana(state, playerId) {
   const player = state.players.find((p) => p.id === playerId);
   const lands = state.battlefield.filter((p) => p.controllerId === playerId && isLand(p) && !p.tapped).length;
-  return lands + manaPoolTotal(player.manaPool);
+  return lands + manaPoolTotal(player.manaPool) + (player.manaPool.any ?? 0);
 }
 
 /**

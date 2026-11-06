@@ -675,7 +675,7 @@ Options that change the rules, all off unless asked (Pai Gow uses them all):
 - `turnLimit`: the game is a draw when that turn ends.
 - The state's `drawWarning` says when the current turn could end in a draw: `'stall'` when the
   last turn changed nothing lasting (so this one ending without a change too is a stall), and
-  `'turnLimit'` on the last turn; otherwise null. The board shows it as a warning above the lane.
+  `'turnLimit'` on the last turn; otherwise null. The board shows it at the top right, under Fast forward.
 
 A drawn game has `winnerId: null` and `gameEnded { winnerId: null, reason: 'stall' | 'turnLimit' }`;
 the state's `endReason` says why a game ended (`'playerLost'` otherwise). The AI scores a draw

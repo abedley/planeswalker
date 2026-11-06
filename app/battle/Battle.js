@@ -124,7 +124,8 @@ export class Battle {
     this.el.append(h('button.menu-btn', { 'aria-label': 'Menu', onclick: () => this.#menu() }, icon('gear')));
     if (fastForward) {
       this.#fastForwardBtn = h('button.ff-btn', { hidden: true, onclick: () => this.#fastForward() }, icon('bolt'), h('span', 'Fast forward'));
-      this.el.append(this.#fastForwardBtn);
+      // At the top right, above the draw warning (BoardView's top actions).
+      this.#view.parts.topActions.prepend(this.#fastForwardBtn);
     }
     this.#intro = { meInfo, oppInfo, subtitle, setup };
     // Re-measure whenever the board changes size. iOS fires `resize` on rotation before

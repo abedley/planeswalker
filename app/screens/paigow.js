@@ -35,10 +35,24 @@ function miniCard(app, cardId, { onTap = null, full = false } = {}) {
   return el;
 }
 
-const opponentLine = (app, match) => {
+/** The opponent, for the header: their portrait and name. */
+const opponentBadge = (match) => {
   const opponent = paigowOpponent(match.opponentId);
-  return h('div.pg-opp', crest(personInfo(opponent), { size: 'sm' }), h('span', 'vs ', h('b', opponent.name)));
+  return h('div.pg-head-opp', h('span', opponent.name), crest(personInfo(opponent), { size: 'sm' }));
 };
+
+/** A placed card, small: its art and name. Tap for `onTap`, hold to read it. */
+function slotChip(app, cardId, { onTap }) {
+  const card = { ...app.definitions[cardId], cardId, id: cardId };
+  const art = card.image?.art;
+  const el = h('button.pg-chip', {
+    type: 'button', 'aria-label': card.name, dataset: { card: cardId },
+    style: art ? { backgroundImage: `url("${art}")` } : {},
+  }, h('span', card.name));
+  onPress(el, { onTap, onLong: () => app.overlays.inspect(card) });
+  el.addEventListener('contextmenu', (event) => event.preventDefault());
+  return el;
+}
 
 function buildView(app, match) {
   const { decks: count, deckSize } = PAIGOW_RULES;
@@ -49,10 +63,10 @@ function buildView(app, match) {
 
   const deckOf = (i) => indexes.filter((n) => placed.get(n) === i);
   const free = (i) => deckOf(i).length < deckSize;
-  const rows = h('div.pg-rows');
+  const board = h('div.pg-board');
   const tray = h('div.pg-tray');
   const trayTitle = h('h4');
-  const start = h('button.btn.primary.big', { onclick: () => play() }, 'Start match');
+  const start = h('button.btn.primary.pg-start', { onclick: () => play() }, 'Start match');
   const autoFill = h('button.btn', { onclick: () => fill() }, 'Auto-fill');
   const clear = h('button.btn.ghost', { onclick: () => { placed.clear(); selected = 0; render(); } }, 'Clear');
 
@@ -85,17 +99,17 @@ function buildView(app, match) {
   };
 
   const render = () => {
-    rows.replaceChildren(...[...Array(count).keys()].map((i) => {
+    // The five decks side by side, the selected one (where a tapped card goes) highlighted.
+    board.replaceChildren(...[...Array(count).keys()].map((i) => {
       const cards = deckOf(i);
-      return h('div.pg-row', { class: i === selected ? 'selected' : '', onclick: (event) => {
-        if (event.target.closest('.pg-card')) return;
+      return h('div.pg-col', { class: i === selected ? 'selected' : '', onclick: (event) => {
+        if (event.target.closest('.pg-chip:not(.empty)')) return;
         selected = i;
         render();
       } },
-      h('div.pg-row-label', h('span', 'Round'), h('b', String(i + 1))),
-      h('div.pg-slots',
-        ...cards.map((n) => miniCard(app, match.cards[n], { onTap: () => unplace(n), full: true })),
-        ...Array.from({ length: deckSize - cards.length }, () => h('div.pg-slot'))));
+      h('div.pg-col-label', `Round ${i + 1}`),
+      ...cards.map((n) => slotChip(app, match.cards[n], { onTap: () => unplace(n) })),
+      ...Array.from({ length: deckSize - cards.length }, () => h('div.pg-chip.empty')));
     }));
     const left = indexes.filter((n) => !placed.has(n));
     trayTitle.textContent = left.length ? `Your booster · ${left.length} left` : 'All cards placed';
@@ -107,13 +121,9 @@ function buildView(app, match) {
   render();
 
   const el = h('div',
-    header({ title: 'Pai Gow', onBack: () => app.go('title') }),
-    h('div.pg-body',
-      opponentLine(app, match),
-      h('p.pg-help', 'You opened an LTR booster. Make five decks of three. Each round you start with your deck in hand, 5 life and infinite mana. First to win three rounds takes the match. Tap a card to put it in the highlighted round (tap it again to take it back); hold a card to read it.'),
-      h('section.pg-tray-wrap', trayTitle, tray),
-      rows),
-    h('div.cta', h('div.row', clear, autoFill), start));
+    header({ title: 'Pai Gow', onBack: () => app.go('title'), right: opponentBadge(match) }),
+    h('div.pg-builder', board, h('section.pg-tray-wrap', trayTitle, tray)),
+    h('div.cta.pg-build-cta', h('div.row', clear, autoFill, start)));
   return { el };
 }
 
@@ -149,7 +159,7 @@ function scoreView(app, match, final) {
         h('div.pg-score-side', crest(personInfo(null, 'You'), { size: 'sm' }), h('span', 'You')),
         h('div.pg-score-num', `${won} – ${lost}`, drawn ? h('small', `${drawn} ${drawn === 1 ? 'draw' : 'draws'}`) : null),
         h('div.pg-score-side', crest(personInfo(opponent), { size: 'sm' }), h('span', opponent.name))),
-      round !== null ? h('p.pg-help.center', playerStartsRound(match, round) ? 'You go first.' : `${opponent.name} goes first.`) : null,
+      round !== null ? h('p.pg-help', playerStartsRound(match, round) ? 'You go first.' : `${opponent.name} goes first.`) : null,
       roundRows),
     h('div.cta', final
       ? [h('button.btn.primary.big', { onclick: () => app.go('paigow', {}) }, 'New match'), h('button.btn.ghost', { onclick: () => app.go('title') }, 'Title')]

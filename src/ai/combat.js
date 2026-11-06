@@ -10,7 +10,7 @@
  * thousands of times a second.
  */
 import {
-  isCreature, isLand, hasKeyword, cantAttack, manaValue, anthemApplies, canBlockCreature, KEYWORD, AFFECTED,
+  isCreature, isLand, hasKeyword, cantAttack, manaValue, anthemApplies, canBlockCreature, KEYWORD, AFFECTED, COUNTER,
 } from '../cards/cards.js';
 import { legalizeBlocks } from '../engine/blockRules.js';
 // blocking.js imports this module too, so neither may use the other's exports while
@@ -41,6 +41,8 @@ export function creatureValue(creature) {
   if (cantAttack(creature)) value -= 1.5 * power;
   // Pacified (can't attack or block): little more than a body to sacrifice.
   if (has(creature, KEYWORD.CANT_ATTACK) && has(creature, KEYWORD.CANT_BLOCK)) value -= toughness;
+  // Bewitching Leechcraft: with no +1/+1 counter to remove, it stays tapped, as good as pacified.
+  if (has(creature, KEYWORD.UNTAPS_BY_REMOVING_COUNTER) && !(creature.counters?.[COUNTER.PLUS_ONE] > 0)) value -= 1.5 * power + toughness;
   return value;
 }
 

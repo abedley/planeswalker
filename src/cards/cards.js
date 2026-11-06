@@ -449,7 +449,9 @@ export const isHarmfulEffect = (effect) => HARMFUL_EFFECTS.has(effect.type)
 export const isCurse = (card) => isAura(card) && (card.staticAbilities ?? []).some((e) => {
   const size = (e.power ?? 0) + (e.toughness ?? 0);
   const keywords = e.keywords ?? [];
-  return size < 0 || keywords.includes(KEYWORD.CANT_ATTACK) || (size <= 0 && keywords.includes(KEYWORD.CANT_BLOCK));
+  return size < 0 || keywords.includes(KEYWORD.CANT_ATTACK) || (size <= 0 && keywords.includes(KEYWORD.CANT_BLOCK))
+    // Bewitching Leechcraft: it stays tapped.
+    || keywords.includes(KEYWORD.UNTAPS_BY_REMOVING_COUNTER);
 });
 
 /**

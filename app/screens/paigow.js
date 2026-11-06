@@ -41,11 +41,12 @@ const opponentLine = (app, match) => {
 
 function buildView(app, match) {
   const { decks: count, deckSize } = PAIGOW_RULES;
-  /** Each card's deck (0–4), or none while it's in the tray. */
+  /** Each card's deck (0–4), by its place in `match.cards` (a booster can hold two of a card), or none while it's in the tray. */
   const placed = new Map();
   let selected = 0;
+  const indexes = match.cards.map((_, n) => n);
 
-  const deckOf = (i) => match.cards.filter((id) => placed.get(id) === i);
+  const deckOf = (i) => indexes.filter((n) => placed.get(n) === i);
   const free = (i) => deckOf(i).length < deckSize;
   const rows = h('div.pg-rows');
   const tray = h('div.pg-tray');
@@ -54,31 +55,31 @@ function buildView(app, match) {
   const autoFill = h('button.btn', { onclick: () => fill() }, 'Auto-fill');
   const clear = h('button.btn.ghost', { onclick: () => { placed.clear(); selected = 0; render(); } }, 'Clear');
 
-  const place = (cardId) => {
+  const place = (n) => {
     const target = free(selected) ? selected : [...Array(count).keys()].find(free);
     if (target === undefined) return;
-    placed.set(cardId, target);
+    placed.set(n, target);
     app.sound('select');
     // Keep filling the same deck until it's full, then move on to the next one with room.
     if (!free(target)) selected = [...Array(count).keys()].find(free) ?? target;
     render();
   };
-  const unplace = (cardId) => {
-    selected = placed.get(cardId);
-    placed.delete(cardId);
+  const unplace = (n) => {
+    selected = placed.get(n);
+    placed.delete(n);
     render();
   };
   const fill = () => {
-    for (const cardId of match.cards) {
-      if (placed.has(cardId)) continue;
+    for (const n of indexes) {
+      if (placed.has(n)) continue;
       const target = [...Array(count).keys()].find(free);
       if (target === undefined) break;
-      placed.set(cardId, target);
+      placed.set(n, target);
     }
     render();
   };
   const play = () => {
-    const decks = [...Array(count).keys()].map(deckOf);
+    const decks = [...Array(count).keys()].map((i) => deckOf(i).map((n) => match.cards[n]));
     app.go('battle', { mode: 'paigow', match: setDecks(match, decks) });
   };
 
@@ -92,12 +93,12 @@ function buildView(app, match) {
       } },
       h('div.pg-row-label', h('span', 'Round'), h('b', String(i + 1))),
       h('div.pg-slots',
-        ...cards.map((id) => miniCard(app, id, { onTap: () => unplace(id), full: true })),
+        ...cards.map((n) => miniCard(app, match.cards[n], { onTap: () => unplace(n), full: true })),
         ...Array.from({ length: deckSize - cards.length }, () => h('div.pg-slot'))));
     }));
-    const left = match.cards.filter((id) => !placed.has(id));
-    trayTitle.textContent = left.length ? `Your cards · ${left.length} left` : 'All cards placed';
-    tray.replaceChildren(...left.map((id) => miniCard(app, id, { onTap: () => place(id), full: true })));
+    const left = indexes.filter((n) => !placed.has(n));
+    trayTitle.textContent = left.length ? `Your booster · ${left.length} left` : 'All cards placed';
+    tray.replaceChildren(...left.map((n) => miniCard(app, match.cards[n], { onTap: () => place(n), full: true })));
     start.disabled = left.length > 0;
     autoFill.disabled = left.length === 0;
     clear.disabled = placed.size === 0;
@@ -108,7 +109,7 @@ function buildView(app, match) {
     header({ title: 'Pai Gow', onBack: () => app.go('title') }),
     h('div.pg-body',
       opponentLine(app, match),
-      h('p.pg-help', 'Make five decks of three. Each round you start with your deck in hand, 5 life and infinite mana. First to win three rounds takes the match. Tap a card to put it in the highlighted round (tap it again to take it back); hold a card to read it.'),
+      h('p.pg-help', 'You opened an LTR booster. Make five decks of three. Each round you start with your deck in hand, 5 life and infinite mana. First to win three rounds takes the match. Tap a card to put it in the highlighted round (tap it again to take it back); hold a card to read it.'),
       h('section.pg-tray-wrap', trayTitle, tray),
       rows),
     h('div.cta', h('div.row', clear, autoFill), start));

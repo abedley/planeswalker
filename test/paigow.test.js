@@ -4,13 +4,13 @@ import {
   Game, GAME_STATUS, DECISION, INFINITE_MANA_MAX_X,
 } from '../src/engine/Game.js';
 import { ACTION, passPriority } from '../src/engine/actions.js';
-import { CARDS, isLand } from '../src/cards/cards.js';
+import { CARDS } from '../src/cards/cards.js';
 import { BasicAIController } from '../src/ai/BasicAIController.js';
 import { AI_ACTIVATIONS_PER_TURN } from '../src/ai/manaPlanning.js';
 import { playout } from '../src/ai/simulate.js';
 import { CAMPAIGN } from '../src/campaign/realCampaign.js';
 import {
-  PAIGOW_POOL, PAIGOW_RULES, createMatch, setDecks, validDecks, recordRound, roundSetup, nextRound, outcome, score,
+  PAIGOW_POOL, POOL_BY_RARITY, PAIGOW_RULES, openBooster, createMatch, setDecks, validDecks, recordRound, roundSetup, nextRound, outcome, score,
   arrangeCpuDecks, playerStartsRound, ROUND_RESULT, MATCH_OUTCOME, PLAYER_ID, CPU_ID,
 } from '../src/paigow/paigow.js';
 import { seededRandom } from '../src/engine/random.js';
@@ -147,20 +147,60 @@ test('the AI stops pumping after a few activations and finishes its turn', () =>
   assert.ok(most <= AI_ACTIVATIONS_PER_TURN, `activated ${most} times`);
 });
 
-test('the pool is every nonland LTR card', () => {
-  assert.ok(PAIGOW_POOL.length > 200);
-  assert.ok(PAIGOW_POOL.every((id) => CARDS[id].set === 'ltr' && !isLand(CARDS[id])));
+test('the pool is every LTR card in the game', () => {
+  assert.ok(PAIGOW_POOL.length > 240);
+  assert.ok(PAIGOW_POOL.every((id) => CARDS[id].set === 'ltr'));
+  assert.equal(Object.values(POOL_BY_RARITY).flat().length, PAIGOW_POOL.length);
 });
 
-test('a match deals 15 different cards to each side and five CPU decks of three', () => {
+test('a booster: 10 different commons, 3 different uncommons, a rare or mythic, and any LTR card', () => {
+  const rarity = (id) => CARDS[id].rarity;
+  const wildcards = new Map();
+  let mythics = 0;
+  const packs = 3000;
+  for (let seed = 1; seed <= packs; seed++) {
+    const pack = openBooster(seededRandom(seed));
+    assert.equal(pack.length, 15);
+    const commons = pack.slice(0, 10);
+    const uncommons = pack.slice(10, 13);
+    assert.ok(commons.every((id) => rarity(id) === 'common'));
+    assert.equal(new Set(commons).size, 10);
+    assert.ok(uncommons.every((id) => rarity(id) === 'uncommon'));
+    assert.equal(new Set(uncommons).size, 3);
+    assert.ok(['rare', 'mythic'].includes(rarity(pack[13])));
+    if (rarity(pack[13]) === 'mythic') mythics += 1;
+    assert.ok(PAIGOW_POOL.includes(pack[14]));
+    wildcards.set(pack[14], (wildcards.get(pack[14]) ?? 0) + 1);
+  }
+  // Each rare twice as likely as each mythic: about one mythic in seven packs.
+  const { rare, mythic, common } = POOL_BY_RARITY;
+  const expected = mythic.length / (2 * rare.length + mythic.length);
+  assert.ok(Math.abs(mythics / packs - expected) < 0.025, `mythics ${mythics / packs} vs ${expected}`);
+  // The wildcard: every card equally likely, so its rarities follow the pool's.
+  const wildCommons = [...wildcards].filter(([id]) => rarity(id) === 'common').reduce((sum, [, n]) => sum + n, 0);
+  assert.ok(Math.abs(wildCommons / packs - common.length / PAIGOW_POOL.length) < 0.03);
+  assert.ok(wildcards.size > PAIGOW_POOL.length * 0.9, `${wildcards.size} different wildcards`);
+});
+
+test('a match opens a booster for each side and makes five CPU decks of three', () => {
   const match = createMatch(CAMPAIGN, { seed: 42 });
-  assert.equal(new Set(match.cards).size, PAIGOW_RULES.cardsDealt);
+  assert.equal(match.cards.length, PAIGOW_RULES.cardsDealt);
   assert.ok(match.cards.every((id) => PAIGOW_POOL.includes(id)));
   assert.equal(match.cpuDecks.length, 5);
   assert.ok(match.cpuDecks.every((deck) => deck.length === 3));
-  assert.equal(new Set(match.cpuDecks.flat()).size, 15);
+  assert.equal(match.cpuDecks.flat().length, 15);
   assert.equal(CAMPAIGN.opponents[match.opponentId].ai.kind, 'search');
   assert.deepEqual(createMatch(CAMPAIGN, { seed: 42 }), match);
+});
+
+test('a booster with two of a card can still be split into decks', () => {
+  const base = createMatch(CAMPAIGN, { seed: 1 });
+  const match = { ...base, cards: [...base.cards.slice(0, 14), base.cards[0]] };
+  const decks = [0, 1, 2, 3, 4].map((i) => match.cards.slice(i * 3, i * 3 + 3));
+  assert.equal(validDecks(match, decks), true);
+  const wrong = decks.map((deck) => [...deck]);
+  wrong[4][2] = base.cards[1];
+  assert.equal(validDecks(match, wrong), false);
 });
 
 test('the CPU spreads its strongest cards across its decks', () => {

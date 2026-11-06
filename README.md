@@ -963,7 +963,12 @@ phase records whether players get priority and can provide a `skip` rule.
 
 A match against the CPU in `src/paigow/paigow.js` (pure functions over a plain match object), with
 its screen in `app/screens/paigow.js`, at `/paigow/` or from the title screen:
-1. Each side is dealt 15 different cards from the nonland LTR cards (`PAIGOW_POOL`).
+1. Each side opens an LTR booster (`openBooster`), as the set's Draft Booster (LTR came before
+   Play Boosters): 10 different commons, 3 different uncommons, a rare or mythic (each rare twice
+   as likely as each mythic, so about one pack in seven has a mythic), and, in place of the basic
+   land, any LTR card at all, each equally likely (it can repeat a card already in the pack).
+   The pool (`PAIGOW_POOL`) is every LTR card in the game, the set's few nonbasic lands
+   included; the 8 left out of the game can't be opened. No foils or special editions.
 2. You split yours into five decks of three (tap a card to put it in the highlighted round,
    hold it to read it, or Auto-fill). The CPU shares its cards out by a rough strength
    (`arrangeCpuDecks`: rarity, mana value and size, dealt snake-wise), then shuffles the order of

@@ -1,8 +1,8 @@
 /**
  * Pai Gow: a best-of-five match against the CPU with tiny decks.
  *
- * Each side is dealt 15 random cards from The Lord of the Rings: Tales of Middle-earth (no lands) and
- * splits them into five decks of three. Round N pits deck N against deck N: both players start with all
+ * Each side opens a booster of The Lord of the Rings: Tales of Middle-earth (see openBooster) and
+ * splits its 15 cards into five decks of three. Round N pits deck N against deck N: both players start with all
  * three cards in hand, 5 life and infinite mana, no emblems, and can't lose by drawing from an empty
  * library. A round is won, lost or drawn (a stalled board, see Game's `stallDraw`). The first to win
  * three rounds takes the match; if five rounds pass without that, the one with more wins does, and
@@ -10,7 +10,7 @@
  *
  * Everything here is pure: a match is a plain object, and each function returns a new one.
  */
-import { CARDS, isLand, isCreature, manaValue } from '../cards/cards.js';
+import { CARDS, isCreature, manaValue } from '../cards/cards.js';
 import { GAME_LIMITS } from '../engine/Game.js';
 import { seededRandom, shuffle } from '../engine/random.js';
 import { AI_KIND } from '../campaign/campaign.js';
@@ -26,14 +26,24 @@ export const PAIGOW_RULES = Object.freeze({
   turnLimit: 40,
 });
 
+/**
+ * A booster, as LTR's Draft Booster (LTR came before Play Boosters): 10 different commons, 3 different
+ * uncommons and a rare or mythic, and in place of the basic land, any LTR card at all.
+ */
+export const BOOSTER = Object.freeze({ commons: 10, uncommons: 3, rares: 1, wildcards: 1 });
+
 export const PLAYER_ID = 'player';
 export const CPU_ID = 'cpu';
 
 export const ROUND_RESULT = Object.freeze({ WON: 'won', LOST: 'lost', DRAWN: 'drawn' });
 export const MATCH_OUTCOME = Object.freeze({ WON: 'won', LOST: 'lost', TIE: 'tie' });
 
-/** Every card that can be dealt: the nonland LTR cards. */
-export const PAIGOW_POOL = Object.freeze(Object.keys(CARDS).filter((id) => CARDS[id].set === 'ltr' && !isLand(CARDS[id])).sort());
+/** Every card that can be opened: the LTR cards in the game (a few that need rules it lacks are left out). */
+export const PAIGOW_POOL = Object.freeze(Object.keys(CARDS).filter((id) => CARDS[id].set === 'ltr').sort());
+
+/** The pool by rarity: `common`, `uncommon`, `rare`, `mythic`. */
+export const POOL_BY_RARITY = Object.freeze(Object.fromEntries(['common', 'uncommon', 'rare', 'mythic']
+  .map((rarity) => [rarity, Object.freeze(PAIGOW_POOL.filter((id) => CARDS[id].rarity === rarity))])));
 
 const RARITY = { common: 1, uncommon: 2, rare: 3, mythic: 4 };
 
@@ -44,9 +54,21 @@ export function cardStrength(cardId) {
   return 2 * (RARITY[card.rarity] ?? 1) + manaValue(card.manaCost ?? {}) + stats;
 }
 
-/** `count` different cards from the pool. */
-export function dealCards(random, count = PAIGOW_RULES.cardsDealt) {
-  return shuffle([...PAIGOW_POOL], random).slice(0, count);
+/**
+ * A booster's 15 cards, in the order they'd be in the pack: the commons, the uncommons, the rare or
+ * mythic (each rare twice as likely as each mythic, as on a print sheet, so a mythic is about one
+ * pack in seven), and last the wildcard, every LTR card equally likely (it may repeat one already in
+ * the pack).
+ */
+export function openBooster(random) {
+  const { common, uncommon, rare, mythic } = POOL_BY_RARITY;
+  const rareSlot = [...rare, ...rare, ...mythic];
+  return [
+    ...shuffle([...common], random).slice(0, BOOSTER.commons),
+    ...shuffle([...uncommon], random).slice(0, BOOSTER.uncommons),
+    rareSlot[Math.floor(random() * rareSlot.length)],
+    PAIGOW_POOL[Math.floor(random() * PAIGOW_POOL.length)],
+  ];
 }
 
 /**
@@ -71,13 +93,13 @@ export function cpuCandidates(content) {
 }
 
 /**
- * A new match: both hands of 15 dealt, the CPU's decks arranged, its persona picked from `content`'s
+ * A new match: a booster opened for each side, the CPU's decks arranged, its persona picked from `content`'s
  * opponents, and who goes first in round 1 decided (then it alternates).
  */
 export function createMatch(content, { seed = Math.floor(Math.random() * 2 ** 32) } = {}) {
   const random = seededRandom(seed);
-  const cards = dealCards(random);
-  const cpuCards = dealCards(random);
+  const cards = openBooster(random);
+  const cpuCards = openBooster(random);
   const candidates = cpuCandidates(content);
   const opponentId = candidates[Math.floor(random() * candidates.length)];
   return {
@@ -91,7 +113,7 @@ export function createMatch(content, { seed = Math.floor(Math.random() * 2 ** 32
   };
 }
 
-/** Whether `decks` is a legal split of the match's cards: five decks of three, using each card once. */
+/** Whether `decks` is a legal split of the match's cards: five decks of three, using each card (each copy) once. */
 export function validDecks(match, decks) {
   if (!Array.isArray(decks) || decks.length !== PAIGOW_RULES.decks) return false;
   if (decks.some((deck) => !Array.isArray(deck) || deck.length !== PAIGOW_RULES.deckSize)) return false;

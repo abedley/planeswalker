@@ -19,8 +19,7 @@ export function titleScreen(app) {
       h('div.menu',
         live ? h('button.btn.primary.big', { onclick: () => app.go('runMap') }, 'Continue run') : null,
         h(`button.btn.big${live ? '' : '.primary'}`, { onclick: newRun }, 'New run'),
-        h('button.btn.big', { onclick: () => app.go('quickMatch') }, 'Quick match'),
-        h('button.btn.big', { onclick: () => app.go('paigow') }, 'Pai Gow'))),
+        h('button.btn.big', { onclick: () => app.go('quickMatch') }, 'Quick match'))),
     h('footer.title-foot',
       h('button.icon-btn', { onclick: () => app.overlays.settings(), 'aria-label': 'Settings' }, icon('gear')),
       h('a.debug-link', { href: 'debug/' }, 'Engine debugger')));

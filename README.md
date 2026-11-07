@@ -108,11 +108,10 @@ eleven {G} creatures, one per keyword) can be picked in the debugger.
 ladder of ever harder CPU opponents up to a boss, earning cards and planeswalker powers with each
 win. The framework is in `src/campaign/`, with example content; see *Campaign* below.
 
-**Pai Gow** (at `/paigow/`, or from the title screen): you're dealt 15 random LTR cards and split
-them into five decks of three, then play a best of five against the CPU; see *Pai Gow* below.
+**Pai Gow**, where you split 15 LTR cards into five decks of three for a best of five, is its own
+game now: [Istari](https://github.com/abedley/istari), on a copy of this engine.
 
 - `index.html` + `app/`: **the game**, a single-page app for phones held upright (see *The app*)
-- `paigow/index.html`: the same app, opening on Pai Gow
 - `debug/`: engine debugger, which lets you play both sides, watch every event, and inspect state
 
 ## Running locally
@@ -654,9 +653,9 @@ has none unless asked:
 
 Limits survive `serialize()`, `clone()` and `getPlayerView()`, so the AI's simulations obey them.
 
-### Variant rules (Pai Gow)
+### Variant rules
 
-Options that change the rules, all off unless asked (Pai Gow uses them all):
+Options that change the rules, all off unless asked (Istari's Pai Gow uses them all):
 - `openingHandSize`: cards in an opening hand (default 7).
 - `deckingLoss: false`: drawing from an empty library doesn't lose the game (the
   `drawFromEmptyLibrary` event still happens).
@@ -675,7 +674,7 @@ Options that change the rules, all off unless asked (Pai Gow uses them all):
 - `turnLimit`: the game is a draw when that turn ends.
 - The state's `drawWarning` says when the current turn could end in a draw: `'stall'` when the
   last turn changed nothing lasting (so this one ending without a change too is a stall), and
-  `'turnLimit'` on the last turn; otherwise null. The board shows it at the top right, under Fast forward.
+  `'turnLimit'` on the last turn; otherwise null. The board shows it at the top right.
 
 A drawn game has `winnerId: null` and `gameEnded { winnerId: null, reason: 'stall' | 'turnLimit' }`;
 the state's `endReason` says why a game ended (`'playerLost'` otherwise). The AI scores a draw
@@ -961,42 +960,6 @@ creatures for building combat scenarios.
 The turn structure is defined as data in `src/engine/turnStructure.js`. Each step or main
 phase records whether players get priority and can provide a `skip` rule.
 
-
-## Pai Gow
-
-A match against the CPU in `src/paigow/paigow.js` (pure functions over a plain match object), with
-its screen in `app/screens/paigow.js`, at `/paigow/` or from the title screen:
-1. Each side opens an LTR booster (`openBooster`), as the set's Draft Booster (LTR came before
-   Play Boosters): 10 different commons, 3 different uncommons, a rare or mythic (each rare twice
-   as likely as each mythic, so about one pack in seven has a mythic), and, in place of the basic
-   land, any LTR card at all, each equally likely (it can repeat a card already in the pack).
-   The pool (`PAIGOW_POOL`) is every LTR card in the game, the set's few nonbasic lands
-   included; the 8 left out of the game can't be opened. No foils or special editions.
-2. You split yours into five decks of three (tap a card to put it in the highlighted round,
-   hold it to read it, or Auto-fill). The CPU shares its cards out by a rough strength
-   (`arrangeCpuDecks`: rarity, mana value and size, dealt snake-wise), then shuffles the order of
-   its decks.
-3. Round N is your deck N against the CPU's deck N. Both players start with all three cards in
-   hand, 5 life, infinite mana and no emblems, and can't lose by drawing from an empty library.
-   A round is won, lost, or drawn when the board stalls (see *Variant rules*); 40 turns is a
-   backstop. Who goes first is a coin flip in round 1, then alternates.
-4. **Fast forward:** once a player is out of actions (no cards in hand, no creatures, and no
-   abilities but mana abilities, `outOfActions` in `src/paigow/fastForward.js`), a *Fast forward*
-   button plays the round out at once. `planFastForward` tries a few basic-AI lines for both sides
-   on copies of the game (lookahead or basic attacks, swarming or not), keeps the one best for the
-   side that still has actions (a win, then a draw, then a loss; sooner is better), and replays
-   it on the real game, so the board shows how it ends. If you're the one with actions, the AI
-   plays them for you.
-5. The first to win three rounds takes the match. If five rounds pass without that, more round
-   wins takes it, and otherwise it's a tie.
-
-The CPU is one of Pai Gow's own opponents (`PAIGOW_OPPONENTS` in `src/paigow/personas.js`),
-picked at random: Gandalf, Tom Bombadil, Sauron, Saruman, Théoden, Denethor, Elrond and
-Galadriel. Each has a portrait from their LTR card's art, their own lines, and the search AI with
-their own thinking time (1 to 2.5 seconds) and style (Sauron and Théoden race, Saruman, Denethor
-and Elrond grind). The match lives in memory: reloading the page starts a
-new one. As everywhere, the search AI assumes it knows its opponent's deck list, and with
-three-card decks that means it knows your hand.
 
 ## Campaign
 

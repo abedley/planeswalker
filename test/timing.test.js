@@ -18,7 +18,7 @@ const CARDS = {
 
 /**
  * A game where p2 cast `p2Board` on turn 1 and it's now p1's turn 2 main phase with `p1Hand`
- * (infinite mana, no libraries, as in Pai Gow).
+ * (infinite mana, no libraries, as in Istari's Pai Gow).
  */
 function setup({ p1Hand, p2Board = [], p2Life }) {
   const game = new Game({

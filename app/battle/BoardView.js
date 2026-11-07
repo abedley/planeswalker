@@ -123,8 +123,8 @@ export class BoardView {
     const prompt = h('div.prompt');
     // Whose turn it is: a badge in the middle of the board (and the active side lights up).
     const turnBadge = h('div.turn-badge', h('span.tb-who'), h('span.tb-n'));
-    // Pai Gow's stall rule: a warning when this turn could end the game in a draw, at the top right with
-    // the Battle's own buttons (Fast forward), left of the menu.
+    // The stall rule (a variant rule): a warning when this turn could end the game in a draw, at the top
+    // right, left of the menu.
     const drawWarning = h('div.draw-warn', { hidden: true, role: 'status' });
     const topActions = h('div.top-actions', drawWarning);
     const lane = h('div.lane', turnBadge, prompt, pips);
@@ -571,7 +571,7 @@ export class BoardView {
       reconcile(strip.lands, els);
       const player = state.players.find((p) => p.id === pid);
       const floating = Object.fromEntries(Object.entries(player.manaPool).filter(([type, n]) => type !== 'any' && n > 0));
-      // Mana that can be any color (some of it only for some spells), as a rainbow pip; infinite mana (Pai Gow) as ∞.
+      // Mana that can be any color (some of it only for some spells), as a rainbow pip; infinite mana (a variant rule) as ∞.
       const any = state.infiniteMana ? '∞' : (player.specialMana ?? []).reduce((sum, m) => sum + m.amount, 0);
       const poolKey = `${JSON.stringify(floating)}|${any}`;
       if (strip.pool.dataset.key !== poolKey) {
@@ -1072,7 +1072,7 @@ export class BoardView {
   }
 
   /** Victory or defeat. */
-  /** The result banner: Victory, Defeat or Draw, unless `text` says otherwise (Pai Gow's "Round won"). */
+  /** The result banner: Victory, Defeat or Draw, unless `text` says otherwise. */
   finale(won, speed = 1, { drawn = false, text = null } = {}) {
     this.#app.sound(won ? 'victory' : 'defeat');
     const label = text ?? (drawn ? 'Draw' : won ? 'Victory' : 'Defeat');
